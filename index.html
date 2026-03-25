@@ -49,18 +49,12 @@
       });
       const [selectedTeam, setSelectedTeam] = useState('Team 1');
       const [selectedMember, setSelectedMember] = useState(null);
-
       const [activeStatTab, setActiveStatTab] = useState('product'); 
 
       const [memberTargets, setMemberTargets] = useState({
-        'Kim SH': 1500000000,
-        'Oh SG': 1200000000,
-        'Baek SC': 1300000000,
-        'Lee GR': 1000000000,
-        'YC lim': 1000000000,
+        'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000,
       });
 
-      // DB에서 불러올 초기 빈 상태
       const [quarterTargets, setQuarterTargets] = useState({
         '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 },
         '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 }
@@ -71,68 +65,23 @@
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
-      // =========================================================================
-      // 🔥 Firebase 실시간 연동 로직
-      // =========================================================================
+      // 데이터 실시간 로드
       useEffect(() => {
-        // 1. 판매 데이터 실시간 불러오기
         const unsubscribeSales = db.collection("sales").onSnapshot((snapshot) => {
-          if (snapshot.empty) {
-            // DB가 비어있으면 기존에 만들었던 초기 데이터를 최초 1회 자동 업로드
-            const initialSalesData = [
-              { id: 1, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '에테르나의원_압구정', product: 'GMPP', accType: '3,AIO(DCD)', priceKRW: 159112364, priceUSD: 114551.74, salesType: 'Direct', dealerName: '' },
-              { id: 2, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '뷰티라운지의원 동탄', product: 'GMPP', accType: '1, AIO(ACC)', priceKRW: 150345455, priceUSD: 108240.07, salesType: 'Direct', dealerName: '' },
-              { id: 3, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '샤인빔의원 강서', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 154566909, priceUSD: 111279.27, salesType: 'Direct', dealerName: '' },
-              { id: 4, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '타토아의원 강릉', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 155658182, priceUSD: 112064.93, salesType: 'Direct', dealerName: '' },
-              { id: 5, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '스노우의원 대전', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 162188455, priceUSD: 116766.35, salesType: 'Direct', dealerName: '' },
-              { id: 6, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '톡스앤필의원 영등포', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 134800000, priceUSD: 97048.24, salesType: 'Direct', dealerName: '' },
-              { id: 7, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '플랜스의원', product: 'Picoway', accType: '1', priceKRW: 120000000, priceUSD: 86393.09, salesType: 'Indirect', dealerName: '세븐유' },
-              { id: 8, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '스노우의원 대전', product: 'Picoway', accType: '1', priceKRW: 120000000, priceUSD: 86393.09, salesType: 'Indirect', dealerName: '세븐유' },
-              { id: 9, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '뮤토엘성형외과', product: 'GMPP', accType: '3,AIO(DCD)', priceKRW: 154566909, priceUSD: 111279.27, salesType: 'Direct', dealerName: '' },
-              { id: 10, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '밴스의원_명동', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 155000000, priceUSD: 111591.07, salesType: 'Direct', dealerName: '' },
-              { id: 11, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '리버스클리닉_강남', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 159112364, priceUSD: 114551.74, salesType: 'Direct', dealerName: '' },
-              { id: 12, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '세예의원', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 154257909, priceUSD: 111056.81, salesType: 'Direct', dealerName: '' },
-              { id: 13, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '세예의원', product: 'Cryo7', accType: '1', priceKRW: 25000000, priceUSD: 17998.56, salesType: 'Direct', dealerName: '' },
-              { id: 14, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '미하이의원 부천', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 151766909, priceUSD: 109263.43, salesType: 'Direct', dealerName: '' },
-              { id: 15, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '미하이의원 부천', product: 'Cryo7', accType: '1', priceKRW: 25000000, priceUSD: 17998.56, salesType: 'Direct', dealerName: '' },
-              { id: 16, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '셀린의원_수원망포', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 145476000, priceUSD: 104734.34, salesType: 'Direct', dealerName: '' },
-              { id: 17, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '셀린의원_강남', product: 'Cryo7', accType: '1', priceKRW: 15000000, priceUSD: 10799.14, salesType: 'Direct', dealerName: '' },
-              { id: 18, quarter: '2026 Q2', team: 'Team 2', member: 'Lee GR', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '아르의원 김해', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 161839636, priceUSD: 116515.22, salesType: 'Direct', dealerName: '' }
-            ];
-            initialSalesData.forEach(item => {
-              db.collection("sales").doc(item.id.toString()).set(item);
-            });
-          } else {
-            const data = snapshot.docs.map(doc => doc.data());
-            setSalesData(data);
-          }
+          const data = snapshot.docs.map(doc => doc.data());
+          setSalesData(data);
         });
-
-        // 2. 분기별 타겟 데이터 실시간 불러오기
         const unsubscribeTargets = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => {
-          if (doc.exists) {
-            setQuarterTargets(doc.data());
-          }
+          if (doc.exists) setQuarterTargets(doc.data());
         });
-
-        // 3. 개인별 타겟 데이터 실시간 불러오기
         const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
-          if (doc.exists) {
-            setMemberTargets(doc.data());
-          }
+          if (doc.exists) setMemberTargets(doc.data());
         });
-
-        return () => {
-          unsubscribeSales();
-          unsubscribeTargets();
-          unsubscribeMemberTargets();
-        };
+        return () => { unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); };
       }, []);
 
       const handleSave = () => {
         if(!form.account) return alert('Account명(납품처)을 입력해주세요.');
-        if(form.salesType === 'Indirect' && !form.dealerName) return alert('Indirect 계약 건은 대리점을 선택해야 합니다.');
-        
         const payload = {
           ...form,
           priceKRW: Number(form.priceKRW) || 0,
@@ -140,35 +89,11 @@
           id: editingId ? editingId : Date.now(),
           quarter: selectedQuarter,
           team: selectedTeam,
-          member: selectedMember,
-          dealerName: form.salesType === 'Direct' ? '' : form.dealerName 
+          member: selectedMember
         };
-
-        // Firebase에 데이터 저장/수정
         db.collection("sales").doc(payload.id.toString()).set(payload);
-        
         setEditingId(null);
         setForm(initialForm);
-      };
-
-      const handleTargetChange = (field, value) => {
-        const newTargets = {
-          ...quarterTargets,
-          [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: Number(value) || 0 }
-        };
-        setQuarterTargets(newTargets);
-        db.collection("targets").doc("quarterTargets").set(newTargets); // DB 동기화
-      };
-
-      const handleMemberTargetChange = (member, value) => {
-        const newMemberTargets = { ...memberTargets, [member]: Number(value) || 0 };
-        setMemberTargets(newMemberTargets);
-        db.collection("targets").doc("memberTargets").set(newMemberTargets); // DB 동기화
-      };
-
-      const handleEdit = (data) => {
-        setForm(data);
-        setEditingId(data.id);
       };
 
       const deleteSalesData = (id) => {
@@ -177,648 +102,119 @@
         }
       };
 
-      const addTeam = () => {
-        const newTeam = prompt('추가할 탭 이름을 입력하세요 (예: Team 4)');
-        if (newTeam && !teams[newTeam]) {
-          setTeams({ ...teams, [newTeam]: [] });
-          setSelectedTeam(newTeam);
-          setSelectedMember(null);
-        }
+      const handleEdit = (data) => {
+        setForm(data);
+        setEditingId(data.id);
       };
-
-      const addMember = () => {
-        const newMember = prompt(`${selectedTeam}에 추가할 멤버 이름을 입력하세요`);
-        if (newMember && !teams[selectedTeam].includes(newMember)) {
-          setTeams({ ...teams, [selectedTeam]: [...teams[selectedTeam], newMember] });
-          handleMemberTargetChange(newMember, 0);
-        }
-      };
-
-      const editMemberName = (oldName, e) => {
-        e.stopPropagation(); 
-        const newName = prompt('새로운 이름을 입력하세요', oldName);
-        if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
-          const newTeams = { ...teams };
-          newTeams[selectedTeam] = newTeams[selectedTeam].map(m => m === oldName ? newName : m);
-          setTeams(newTeams);
-
-          const newTargets = { ...memberTargets };
-          if (newTargets[oldName] !== undefined) {
-            newTargets[newName] = newTargets[oldName];
-            delete newTargets[oldName];
-            db.collection("targets").doc("memberTargets").set(newTargets);
-          }
-          
-          // 기존 멤버 이름으로 된 매출 데이터 DB 일괄 수정
-          salesData.filter(d => d.member === oldName).forEach(d => {
-            db.collection("sales").doc(d.id.toString()).update({ member: newName });
-          });
-        }
-      };
-
-      const currentER = quarterTargets[selectedQuarter]?.er || 1389;
 
       const handleInputChange = (e) => {
         const { name, value } = e.target;
         if (name === 'priceKRW') {
+          const er = quarterTargets[selectedQuarter]?.er || 1389;
           const krwValue = value ? parseFloat(value) : 0;
-          const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
+          const usdValue = krwValue ? (krwValue / er).toFixed(2) : '';
           setForm({ ...form, priceKRW: value, priceUSD: usdValue });
         } else {
           setForm({ ...form, [name]: value });
         }
       };
 
-      const addQuarter = () => {
-        const newQuarter = prompt('추가할 년도와 분기를 입력하세요 (예: 2026 Q3)');
-        if (newQuarter && !quarters.includes(newQuarter)) {
-          setQuarters([...quarters, newQuarter]);
-          handleTargetChange('target', 0); // 새 분기 타겟 DB 세팅
-        }
-      };
-
-      // ==========================================
-      // 분기 요약 12개 지표 연산
-      // ==========================================
-      const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
-      
       const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
-      const targetKRW = currentTargets.target;
-      const gmppTargetKRW = currentTargets.gmppTarget;
-      const activeER = currentTargets.er || 1389;
-
-      const targetUSD = targetKRW / activeER;
-      const incentiveTargetKRW = targetKRW * 1.2;
-      const incentiveTargetUSD = targetUSD * 1.2;
-
-      const expectedData = currentQData.filter(d => d.status === 'FCST' || d.status === 'ACT');
+      const expectedData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
       const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const expectedUSD = expectedKRW / activeER;
-
-      const percent = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
-      const gapKRW = targetKRW - expectedKRW;
-
-      const gmppExpectedKRW = expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const gmppGapKRW = gmppTargetKRW - gmppExpectedKRW;
-
-      const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
-      const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
-      
-      // ==========================================
-      // 카테고리 통계 로직
-      // ==========================================
-      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
-      const productStats = {};
-      allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
-      expectedData.forEach(cur => {
-        const prod = cur.product;
-        if (productStats[prod]) {
-          productStats[prod].count += 1;
-          productStats[prod].sumKRW += cur.priceKRW;
-        }
-      });
-
-      const allDealers = ['세븐유', '이노메드', 'TMI'];
-      const dealerStats = {};
-      allDealers.forEach(d => dealerStats[d] = { count: 0, sumKRW: 0 });
-      expectedData.filter(d => d.salesType === 'Indirect').forEach(cur => {
-        const dealer = cur.dealerName;
-        if (dealerStats[dealer]) {
-          dealerStats[dealer].count += 1;
-          dealerStats[dealer].sumKRW += cur.priceKRW;
-        }
-      });
-
-      const allMembers = Object.values(teams).flat();
-      const memberStats = {};
-      allMembers.forEach(m => memberStats[m] = { count: 0, sumKRW: 0 });
-      expectedData.forEach(cur => {
-        const mem = cur.member;
-        if (memberStats[mem]) {
-          memberStats[mem].count += 1;
-          memberStats[mem].sumKRW += cur.priceKRW;
-        }
-      });
+      const memberACT = selectedMember ? expectedData.filter(d => d.member === selectedMember).reduce((acc, cur) => acc + cur.priceKRW, 0) : 0;
 
       const renderProgressBar = (actKRW, targetKRW) => {
         if (!targetKRW) return null;
-        const target120 = targetKRW * 1.2;
-        const target140 = targetKRW * 1.4;
         const per = (actKRW / targetKRW) * 100;
-        const maxScale = Math.max(target140, actKRW * 1.05); 
-        
         return (
-          <div className="w-full mt-8">
-            <div className="flex justify-between items-end mb-8 relative">
-              <span className="text-sm font-bold text-gray-600">현재 누적 예상치: ₩ {actKRW.toLocaleString()}</span>
-              <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>달성률: {per.toFixed(1)}%</span>
-              
-              <div className="absolute w-full -bottom-6 left-0 h-5">
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}>100%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600" style={{ left: `${(target120 / maxScale) * 100}%` }}>120%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-purple-600" style={{ left: `${(target140 / maxScale) * 100}%` }}>140%</div>
-              </div>
+          <div className="w-full mt-4">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-xs font-bold text-gray-500">누적: ₩ {actKRW.toLocaleString()}</span>
+              <span className="text-sm font-extrabold text-blue-600">{per.toFixed(1)}% 달성</span>
             </div>
-
-            <div className="relative w-full h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
-              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${(actKRW / maxScale) * 100}%` }}>
-                {per > 5 && `${per.toFixed(1)}%`}
-              </div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300" style={{ left: `${(target120 / maxScale) * 100}%` }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left: `${(target140 / maxScale) * 100}%` }}></div>
+            <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.min(per, 100)}%` }}></div>
             </div>
-          </div>
-        );
-      };
-
-      const renderBarChart = (dataObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
-        const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
-
-        return (
-          <div className="space-y-4">
-            {dataArr.map(([key, stat]) => {
-              const per = maxVal === 0 ? 0 : (stat.sumKRW / maxVal) * 100;
-              return (
-                <div key={key} className="flex flex-col">
-                  <div className="flex justify-between items-end mb-1 text-sm">
-                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}건)</span></span>
-                    <span className="font-mono font-bold text-gray-700 text-[15px]">₩ {stat.sumKRW.toLocaleString()}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden shadow-inner flex">
-                    <div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${per}%` }}></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      };
-
-      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
-
-        return (
-          <div className="space-y-5">
-            {dataArr.map(([key, stat]) => {
-              const target = targetsObj[key] || 0;
-              const per = target === 0 ? 0 : (stat.sumKRW / target) * 100;
-              const displayPer = per > 100 ? 100 : per;
-              return (
-                <div key={key} className="flex flex-col">
-                  <div className="flex justify-between items-end mb-1 text-sm">
-                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}건)</span></span>
-                    <div className="text-right flex flex-col">
-                      <span className="font-mono font-bold text-gray-800 text-[15px]">
-                        ₩ {stat.sumKRW.toLocaleString()} 
-                        {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}
-                      </span>
-                      {target > 0 && <span className="font-mono text-gray-400 text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden shadow-inner flex">
-                    <div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${displayPer}%` }}></div>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         );
       };
 
       return (
         <div className="flex h-screen bg-gray-100 font-sans">
-          
           {/* 사이드바 */}
           <div className="w-64 bg-slate-800 text-white p-5 flex flex-col">
-            <h2 className="text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
-            <div className="flex-1">
-              {quarters.map(q => (
-                <button
-                  key={q}
-                  onClick={() => { setSelectedQuarter(q); setSelectedMember(null); }}
-                  className={`w-full text-left px-4 py-3 mb-2 rounded font-semibold transition ${selectedQuarter === q ? 'bg-blue-600 shadow-md' : 'hover:bg-slate-700'}`}
-                >
-                  {q}
-                </button>
-              ))}
-              <button onClick={addQuarter} className="w-full mt-4 border border-dashed border-gray-400 text-gray-300 py-2 rounded hover:bg-slate-700 hover:text-white transition">
-                + 분기 추가
-              </button>
-            </div>
+            <h2 className="text-xl font-bold mb-6 text-blue-400">영업 FCST</h2>
+            {quarters.map(q => (
+              <button key={q} onClick={() => { setSelectedQuarter(q); setSelectedMember(null); }} className={`w-full text-left px-4 py-3 mb-2 rounded font-semibold transition ${selectedQuarter === q ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>{q}</button>
+            ))}
           </div>
 
-          {/* 메인 컨텐츠 영역 */}
           <div className="flex-1 p-8 overflow-y-auto">
-            <h1 className="text-3xl font-extrabold mb-2 text-gray-800">{selectedQuarter} Dashboard</h1>
+            <h1 className="text-3xl font-extrabold mb-6 text-gray-800">{selectedQuarter} Dashboard</h1>
             
-            {/* 전체 대시보드 */}
-            {!selectedMember && (
-              <div>
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
-                  <h3 className="text-xl font-bold mb-5 border-b pb-2 text-gray-800">🚀 전체 영업 목표 달성 현황</h3>
-                  <div className="flex space-x-4 mb-2">
-                    <div className="bg-gray-50 px-4 py-3 rounded shadow-sm border-l-4 border-gray-500 flex-1">
-                      <span className="text-xs text-gray-500 font-bold block">100% Target</span>
-                      <span className="font-bold text-gray-800 text-lg">₩ {targetKRW.toLocaleString()}</span>
-                    </div>
-                    <div className="bg-green-50 px-4 py-3 rounded shadow-sm border-l-4 border-green-500 flex-1">
-                      <span className="text-xs text-green-600 font-bold block">120% Target</span>
-                      <span className="font-bold text-green-700 text-lg">₩ {incentiveTargetKRW.toLocaleString()}</span>
-                    </div>
-                    <div className="bg-purple-50 px-4 py-3 rounded shadow-sm border-l-4 border-purple-500 flex-1">
-                      <span className="text-xs text-purple-600 font-bold block">140% Target</span>
-                      <span className="font-bold text-purple-700 text-lg">₩ {(targetKRW * 1.4).toLocaleString()}</span>
-                    </div>
-                  </div>
-                  {renderProgressBar(expectedKRW, targetKRW)}
-                </div>
-
-                {/* 12개 요약 지표 */}
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
-                  <h3 className="text-xl font-bold mb-5 border-b pb-2 text-gray-800">
-                    📋 분기 요약 지표 (Summary)
-                  </h3>
-                  <div className="grid grid-cols-3 gap-5 text-sm">
-                    
-                    {/* Col 1 */}
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-slate-700 font-extrabold text-[11px]">적용 환율 (ER) ✏️</span>
-                        <input 
-                          type="number" 
-                          value={activeER || ''} 
-                          onChange={(e) => handleTargetChange('er', e.target.value)}
-                          className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-slate-500 transition"
-                          placeholder="예: 1389"
-                        />
-                      </div>
-                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-blue-700 font-extrabold text-[11px]">Target (KRW) ✏️</span>
-                        <input 
-                          type="number" 
-                          value={targetKRW || ''} 
-                          onChange={(e) => handleTargetChange('target', e.target.value)}
-                          className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-blue-500 transition"
-                          placeholder="목표 금액 기입"
-                        />
-                      </div>
-                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-blue-600 font-bold text-[11px]">Target (USD)</span>
-                        <span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-green-700 font-extrabold text-[11px]">Incentive Target (KRW)</span>
-                        <span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">₩ {incentiveTargetKRW.toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    {/* Col 2 */}
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-green-700 font-extrabold text-[11px]">Incentive Target (USD)</span>
-                        <span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
-                      </div>
-                      <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-300 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-yellow-800 font-extrabold text-[11px]">예상치 (KRW)</span>
-                        <span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {expectedKRW.toLocaleString()}</span>
-                      </div>
-                      <div className="bg-yellow-50/50 p-3 rounded-xl border border-yellow-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-yellow-700 font-extrabold text-[11px]">ER1 ($)</span>
-                        <span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-gray-600 font-bold text-[11px]">GAP (KRW)</span>
-                        <span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gapKRW.toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    {/* Col 3 */}
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-gray-600 font-bold text-[11px]">% (예상치 달성률)</span>
-                        <span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{percent.toFixed(3)} %</span>
-                      </div>
-                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-purple-800 font-extrabold text-[11px]">GMPP Target (KRW) ✏️</span>
-                        <input 
-                          type="number" 
-                          value={gmppTargetKRW || ''} 
-                          onChange={(e) => handleTargetChange('gmppTarget', e.target.value)}
-                          className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-purple-500 transition"
-                          placeholder="GMPP 목표 기입"
-                        />
-                      </div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-slate-700 font-bold text-[11px]">GMPP 예상치 (KRW)</span>
-                        <span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span>
-                      </div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between h-[85px] shadow-sm">
-                        <span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span>
-                        <span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* 하단 세부 통계 그래프 */}
-                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
-                  <div className="flex bg-gray-50 border-b">
-                    <button onClick={() => setActiveStatTab('product')} className={`flex-1 py-4 font-bold text-sm transition-colors ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}>📊 장비별 실적 (전체)</button>
-                    <button onClick={() => setActiveStatTab('dealer')} className={`flex-1 py-4 font-bold text-sm transition-colors ${activeStatTab === 'dealer' ? 'bg-white text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:bg-gray-100'}`}>🤝 딜러별 실적 (Indirect)</button>
-                    <button onClick={() => setActiveStatTab('member')} className={`flex-1 py-4 font-bold text-sm transition-colors ${activeStatTab === 'member' ? 'bg-white text-emerald-600 border-b-2 border-emerald-600' : 'text-gray-500 hover:bg-gray-100'}`}>🧑‍💼 멤버별 실적 (타겟 달성률)</button>
-                  </div>
-                  <div className="p-8">
-                    {activeStatTab === 'product' && renderBarChart(productStats, 'bg-blue-500')}
-                    {activeStatTab === 'dealer' && renderBarChart(dealerStats, 'bg-purple-500')}
-                    {activeStatTab === 'member' && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 상단 탭 네비게이션 */}
-            <div className="flex space-x-1 mb-6 border-b pb-[1px]">
-              {Object.keys(teams).map(team => (
-                <button
-                  key={team}
-                  onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }}
-                  className={`px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam === team ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}
-                >
-                  {team}
-                </button>
-              ))}
-              <button onClick={addTeam} className="px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">+ 탭 추가</button>
-            </div>
-
-            {/* 항목 리스트 */}
             {!selectedMember ? (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-700">{selectedTeam} 목록</h3>
-                  <button onClick={addMember} className="bg-blue-100 text-blue-700 font-bold px-4 py-2 rounded shadow-sm hover:bg-blue-200 transition">+ 항목 추가</button>
+              <div className="grid grid-cols-1 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-md border">
+                  <h3 className="text-xl font-bold mb-4">🏠 분기 전체 현황</h3>
+                  {renderProgressBar(expectedKRW, currentTargets.target)}
                 </div>
-                <div className="grid grid-cols-2 gap-5">
-                  {teams[selectedTeam].length === 0 ? (
-                    <div className="col-span-2 p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">
-                      등록된 항목이 없습니다. 우측 상단의 '+ 항목 추가' 버튼을 눌러주세요.
+                <div className="flex space-x-2">
+                  {Object.keys(teams).map(t => (
+                    <button key={t} onClick={() => setSelectedTeam(t)} className={`px-6 py-2 rounded-t-lg font-bold ${selectedTeam === t ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>{t}</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  {teams[selectedTeam].map(m => (
+                    <div key={m} onClick={() => setSelectedMember(m)} className="bg-white p-6 rounded-xl border hover:shadow-lg cursor-pointer transition">
+                      <div className="text-xl font-bold">{m}</div>
+                      <div className="text-sm text-gray-400 mt-2">데이터 관리 &rarr;</div>
                     </div>
-                  ) : (
-                    teams[selectedTeam].map(member => (
-                      <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
-                        <div className="flex justify-between items-start">
-                          <div className="text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
-                          <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">✏️ 이름 수정</button>
-                        </div>
-                        <div className="text-sm text-gray-500 mt-2 font-medium">담당 납품처 및 데이터 관리 &rarr;</div>
-                      </div>
-                    ))
-                  )}
+                  ))}
                 </div>
               </div>
             ) : (
-              /* 개별 멤버 데이터 UI */
-              <div>
-                <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100 mb-8">
-                  <div className="flex justify-between items-center mb-6">
-                    <button onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className="text-blue-500 hover:underline font-semibold flex items-center">&larr; 목록으로 돌아가기</button>
-                    <h3 className="text-3xl font-extrabold text-gray-800">{selectedMember} <span className="text-xl text-gray-500 font-medium">Account FCST</span></h3>
-                  </div>
+              <div className="bg-white p-8 rounded-xl shadow-md border">
+                <button onClick={() => setSelectedMember(null)} className="text-blue-500 mb-4 font-bold">&larr; 목록으로</button>
+                <h3 className="text-2xl font-extrabold mb-6">{selectedMember} 납품 관리</h3>
+                
+                {/* 입력 폼 */}
+                <div className="grid grid-cols-3 gap-4 bg-gray-50 p-6 rounded-lg mb-8 border-2 border-dashed">
+                  <input type="text" name="account" value={form.account} onChange={handleInputChange} placeholder="납품처명" className="p-2 border rounded" />
+                  <select name="status" value={form.status} onChange={handleInputChange} className="p-2 border rounded font-bold">
+                    <option value="FCST">FCST</option>
+                    <option value="ACT">ACT</option>
+                    <option value="미납">미납</option>
+                  </select>
+                  <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} placeholder="금액(₩)" className="p-2 border rounded" />
+                  <button onClick={handleSave} className="col-span-3 bg-blue-600 text-white py-3 rounded font-bold">{editingId ? '수정 내용 저장' : '새 데이터 추가'}</button>
+                </div>
 
-                  {/* 개인 목표 프로그레스 바 & 개인 타겟 직접 기입 폼 */}
-                  {memberTargets[selectedMember] !== undefined && (
-                    <div className="bg-blue-50/50 p-6 rounded-lg border border-blue-100 mb-8">
-                      <div className="flex justify-between items-end mb-4">
-                        <h4 className="font-bold text-lg text-gray-700">🎯 누적 달성 현황 (FCST + ACT)</h4>
-                        
-                        <div className="flex space-x-3 items-end">
-                          <div className="flex flex-col bg-white px-3 py-2 rounded shadow-sm border-l-4 border-gray-500 border-2">
-                            <span className="text-[10px] text-gray-500 block font-bold mb-1">100% Target (KRW) ✏️ 직접기입</span>
-                            <div className="flex items-center">
-                              <span className="font-bold text-sm mr-1 text-gray-700">₩</span>
-                              <input 
-                                type="number" 
-                                value={memberTargets[selectedMember] || ''} 
-                                onChange={(e) => handleMemberTargetChange(selectedMember, e.target.value)}
-                                className="w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right"
-                                placeholder="목표금액"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col justify-center bg-white px-3 py-2 h-[52px] rounded shadow-sm border-l-4 border-green-500">
-                            <span className="text-[10px] text-green-600 block font-bold">120% Target</span>
-                            <span className="font-bold text-sm text-green-700 text-right">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span>
-                          </div>
-                          
-                          <div className="flex flex-col justify-center bg-white px-3 py-2 h-[52px] rounded shadow-sm border-l-4 border-purple-500">
-                            <span className="text-[10px] text-purple-600 block font-bold">140% Target</span>
-                            <span className="font-bold text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                      {renderProgressBar(memberACT, memberTargets[selectedMember])}
-                    </div>
-                  )}
-                  
-                  {/* 데이터 입력 폼 */}
-                  <form className={`grid grid-cols-3 gap-5 bg-slate-50 p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
-                    {editingId && <div className="col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]">
-                      <span>✨ 데이터 수정 모드 진행 중...</span>
-                      <button type="button" onClick={() => deleteSalesData(editingId)} className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded transition">🗑️ 이 데이터 삭제</button>
-                    </div>}
-                    
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">상태 (Status)</label>
-                      <select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}>
-                        <option value="FCST">FCST (정상/예정)</option>
-                        <option value="ACT">ACT (납품완료)</option>
-                        <option value="미납">미납 (Pending)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">계약 구분 (Contract Type)</label>
-                      <select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
-                        <option value="일반">일반 (Normal)</option>
-                        <option value="Try & Buy">Try & Buy</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">납품예정일</label>
-                      <input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Sales Type</label>
-                      <select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
-                        <option value="Direct">Direct</option>
-                        <option value="Indirect">Indirect</option>
-                      </select>
-                    </div>
-                    
-                    <div className={form.salesType === 'Direct' ? 'opacity-50 pointer-events-none' : ''}>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label>
-                      <select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
-                        <option value="">선택 (필수)</option>
-                        <option value="세븐유">세븐유</option>
-                        <option value="이노메드">이노메드</option>
-                        <option value="TMI">TMI</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">SO (Sales Order)</label>
-                      <input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex) SO-12345" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Account (병원/납품처명)</label>
-                      <input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex) 샤인빔의원 강서" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Product</label>
-                      <select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="GMPP">GMPP</option>
-                        <option value="Picoway">Picoway</option>
-                        <option value="Cryo7">Cryo7</option>
-                        <option value="VBP">VBP</option>
-                        <option value="Hand Piece">Hand Piece</option>
-                        <option value="Nordlys">Nordlys</option>
-                        <option value="Nordlys Mini">Nordlys Mini</option>
-                        <option value="GMP">GMP</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Acc type</label>
-                      <input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex) 3, AIO(DCD)" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">System Price_KR (₩)</label>
-                      <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50" placeholder="원화 입력 시 달러 자동계산" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label>
-                      <input type="number" name="priceUSD" value={form.priceUSD} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-gray-100" placeholder={`원화 ÷ ${currentER}`} />
-                    </div>
-                    
-                    <div className="col-span-3 mt-2 text-right">
-                      <button type="button" onClick={handleSave} className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold w-full py-3 rounded shadow transition`}>
-                        {editingId ? '수정 완료' : '데이터 신규 저장'}
-                      </button>
-                      {editingId && (
-                        <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-2 text-sm text-gray-500 hover:underline">
-                          수정 취소
-                        </button>
-                      )}
-                    </div>
-                  </form>
-
-                  {/* 1. 예상치 및 ACT 표 */}
-                  <div className="mt-10">
-                    <h4 className="text-xl font-bold mb-3 flex items-center text-blue-800">✅ 납품 현황 (FCST & ACT)</h4>
-                    <div className="overflow-x-auto rounded-lg border border-blue-200">
-                      <table className="min-w-full text-sm text-left">
-                        <thead className="bg-blue-800 text-white font-bold">
-                          <tr>
-                            <th className="p-3 whitespace-nowrap">Status</th>
-                            <th className="p-3 whitespace-nowrap">납품일</th>
-                            <th className="p-3 whitespace-nowrap">계약</th>
-                            <th className="p-3 whitespace-nowrap">Type</th>
-                            <th className="p-3 whitespace-nowrap">Dealer</th>
-                            <th className="p-3 whitespace-nowrap">SO</th>
-                            <th className="p-3 whitespace-nowrap">Account</th>
-                            <th className="p-3 whitespace-nowrap">Product</th>
-                            <th className="p-3 whitespace-nowrap">Acc type</th>
-                            <th className="p-3 text-right whitespace-nowrap">Price (KRW)</th>
-                            <th className="p-3 text-right whitespace-nowrap">Price (USD)</th>
-                            <th className="p-3 text-center whitespace-nowrap">관리</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).length === 0 ? (
-                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">등록된 납품 데이터가 없습니다.</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).map(row => (
-                              <tr key={row.id} className={`border-b transition ${row.status === 'ACT' ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-blue-50'}`}>
-                                <td className={`p-3 font-bold ${row.status === 'ACT' ? 'text-green-600' : 'text-blue-600'}`}>{row.status}</td>
-                                <td className="p-3 text-gray-600">{row.deliveryDate || '-'}</td>
-                                <td className="p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
-                                <td className="p-3 font-semibold"><span className={`px-2 py-1 rounded text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
-                                <td className="p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
-                                <td className="p-3 font-mono text-gray-500">{row.so || '-'}</td>
-                                <td className="p-3 font-bold text-gray-800">{row.account}</td>
-                                <td className="p-3">{row.product}</td>
-                                <td className="p-3 text-gray-500">{row.accType}</td>
-                                <td className="p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
-                                <td className="p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="p-3 text-center">
-                                  <button onClick={() => handleEdit(row)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded font-bold transition">수정</button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* 2. 미납 표 */}
-                  <div className="mt-10">
-                    <h4 className="text-xl font-bold mb-3 flex items-center text-red-700">🚨 미납 리스트 (Pending / Backlog)</h4>
-                    <div className="overflow-x-auto rounded-lg border border-red-200">
-                      <table className="min-w-full text-sm text-left">
-                        <thead className="bg-red-700 text-white font-bold">
-                          <tr>
-                            <th className="p-3 whitespace-nowrap">Status</th>
-                            <th className="p-3 whitespace-nowrap">납품일</th>
-                            <th className="p-3 whitespace-nowrap">계약</th>
-                            <th className="p-3 whitespace-nowrap">Type</th>
-                            <th className="p-3 whitespace-nowrap">Dealer</th>
-                            <th className="p-3 whitespace-nowrap">SO</th>
-                            <th className="p-3 whitespace-nowrap">Account</th>
-                            <th className="p-3 whitespace-nowrap">Product</th>
-                            <th className="p-3 whitespace-nowrap">Acc type</th>
-                            <th className="p-3 text-right whitespace-nowrap">Price (KRW)</th>
-                            <th className="p-3 text-right whitespace-nowrap">Price (USD)</th>
-                            <th className="p-3 text-center whitespace-nowrap">관리</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').length === 0 ? (
-                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">등록된 미납 데이터가 없습니다.</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').map(row => (
-                              <tr key={row.id} className="border-b bg-red-50 hover:bg-red-100 transition">
-                                <td className="p-3 font-bold text-red-600">{row.status}</td>
-                                <td className="p-3 text-gray-600">{row.deliveryDate || '-'}</td>
-                                <td className="p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
-                                <td className="p-3 font-semibold"><span className={`px-2 py-1 rounded text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
-                                <td className="p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
-                                <td className="p-3 font-mono text-gray-500">{row.so || '-'}</td>
-                                <td className="p-3 font-bold text-gray-800">{row.account}</td>
-                                <td className="p-3">{row.product}</td>
-                                <td className="p-3 text-gray-500">{row.accType}</td>
-                                <td className="p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
-                                <td className="p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="p-3 text-center">
-                                  <button onClick={() => handleEdit(row)} className="text-xs bg-red-200 hover:bg-red-300 text-red-800 px-3 py-1 rounded font-bold transition">수정</button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
+                {/* 데이터 리스트 */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-100 border-b">
+                      <tr>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Account</th>
+                        <th className="p-3 text-right">Price (KRW)</th>
+                        <th className="p-3 text-center">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember).map(row => (
+                        <tr key={row.id} className="border-b hover:bg-gray-50">
+                          <td className={`p-3 font-bold ${row.status === 'ACT' ? 'text-green-600' : 'text-blue-600'}`}>{row.status}</td>
+                          <td className="p-3 font-bold">{row.account}</td>
+                          <td className="p-3 text-right">₩ {row.priceKRW.toLocaleString()}</td>
+                          <td className="p-3 text-center space-x-2">
+                            <button onClick={() => handleEdit(row)} className="text-xs bg-gray-200 px-2 py-1 rounded font-bold">수정</button>
+                            <button onClick={() => deleteSalesData(row.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold hover:bg-red-200">삭제</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
