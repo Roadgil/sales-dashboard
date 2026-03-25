@@ -35,6 +35,27 @@
     const { useState, useEffect } = React;
 
     const App = () => {
+      // =========================================================================
+      // 🔒 비밀번호 설정 부분 (원하시는 비밀번호로 변경하세요!)
+      // =========================================================================
+      const SECRET_PASSWORD = "candelakoreasales"; 
+
+      // 인증 상태 관리 (기억되어 있으면 바로 true)
+      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
+      const [pwdInput, setPwdInput] = useState('');
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pwdInput === SECRET_PASSWORD) {
+          localStorage.setItem('adminAuth', 'true'); // 브라우저에 인증 기록 저장
+          setIsLoggedIn(true);
+        } else {
+          alert('비밀번호가 틀렸습니다. 다시 확인해주세요!');
+          setPwdInput('');
+        }
+      };
+
+      // 대시보드 상태 관리
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
       
@@ -66,33 +87,12 @@
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
+      // 데이터 로드 로직
       useEffect(() => {
+        if (!isLoggedIn) return; // 로그인 안 되어 있으면 데이터 안 불러옴
+
         const unsubscribeSales = db.collection("sales").onSnapshot((snapshot) => {
-          if (snapshot.empty) {
-            const initialSalesData = [
-              { id: 1, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '에테르나의원_압구정', product: 'GMPP', accType: '3,AIO(DCD)', priceKRW: 159112364, priceUSD: 114551.74, salesType: 'Direct', dealerName: '' },
-              { id: 2, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '뷰티라운지의원 동탄', product: 'GMPP', accType: '1, AIO(ACC)', priceKRW: 150345455, priceUSD: 108240.07, salesType: 'Direct', dealerName: '' },
-              { id: 3, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '샤인빔의원 강서', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 154566909, priceUSD: 111279.27, salesType: 'Direct', dealerName: '' },
-              { id: 4, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '타토아의원 강릉', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 155658182, priceUSD: 112064.93, salesType: 'Direct', dealerName: '' },
-              { id: 5, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '스노우의원 대전', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 162188455, priceUSD: 116766.35, salesType: 'Direct', dealerName: '' },
-              { id: 6, quarter: '2026 Q2', team: 'Team 1', member: 'Kim SH', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '톡스앤필의원 영등포', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 134800000, priceUSD: 97048.24, salesType: 'Direct', dealerName: '' },
-              { id: 7, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '플랜스의원', product: 'Picoway', accType: '1', priceKRW: 120000000, priceUSD: 86393.09, salesType: 'Indirect', dealerName: '세븐유' },
-              { id: 8, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '스노우의원 대전', product: 'Picoway', accType: '1', priceKRW: 120000000, priceUSD: 86393.09, salesType: 'Indirect', dealerName: '세븐유' },
-              { id: 9, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '뮤토엘성형외과', product: 'GMPP', accType: '3,AIO(DCD)', priceKRW: 154566909, priceUSD: 111279.27, salesType: 'Direct', dealerName: '' },
-              { id: 10, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '밴스의원_명동', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 155000000, priceUSD: 111591.07, salesType: 'Direct', dealerName: '' },
-              { id: 11, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '리버스클리닉_강남', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 159112364, priceUSD: 114551.74, salesType: 'Direct', dealerName: '' },
-              { id: 12, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '세예의원', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 154257909, priceUSD: 111056.81, salesType: 'Direct', dealerName: '' },
-              { id: 13, quarter: '2026 Q2', team: 'Team 1', member: 'Oh SG', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '세예의원', product: 'Cryo7', accType: '1', priceKRW: 25000000, priceUSD: 17998.56, salesType: 'Direct', dealerName: '' },
-              { id: 14, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '미하이의원 부천', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 151766909, priceUSD: 109263.43, salesType: 'Direct', dealerName: '' },
-              { id: 15, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '미하이의원 부천', product: 'Cryo7', accType: '1', priceKRW: 25000000, priceUSD: 17998.56, salesType: 'Direct', dealerName: '' },
-              { id: 16, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '셀린의원_수원망포', product: 'GMPP', accType: '2, AIO(ACC)', priceKRW: 145476000, priceUSD: 104734.34, salesType: 'Direct', dealerName: '' },
-              { id: 17, quarter: '2026 Q2', team: 'Team 2', member: 'Baek SC', status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '셀린의원_강남', product: 'Cryo7', accType: '1', priceKRW: 15000000, priceUSD: 10799.14, salesType: 'Direct', dealerName: '' },
-              { id: 18, quarter: '2026 Q2', team: 'Team 2', member: 'Lee GR', status: 'FCST', contractType: 'Try & Buy', deliveryDate: '', so: '', account: '아르의원 김해', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 161839636, priceUSD: 116515.22, salesType: 'Direct', dealerName: '' }
-            ];
-            initialSalesData.forEach(item => {
-              db.collection("sales").doc(item.id.toString()).set(item);
-            });
-          } else {
+          if (!snapshot.empty) {
             const data = snapshot.docs.map(doc => doc.data());
             setSalesData(data);
           }
@@ -111,7 +111,7 @@
           unsubscribeTargets();
           unsubscribeMemberTargets();
         };
-      }, []);
+      }, [isLoggedIn]);
 
       const handleSave = () => {
         if(!form.account) return alert('Account명(납품처)을 입력해주세요.');
@@ -133,7 +133,6 @@
         setForm(initialForm);
       };
 
-      // 삭제 기능 추가
       const deleteSalesData = (id) => {
         if (window.confirm("이 납품 데이터를 정말 삭제하시겠습니까?")) {
           db.collection("sales").doc(id.toString()).delete();
@@ -222,6 +221,35 @@
       };
 
       // ==========================================
+      // 로그인 화면 UI (인증 안된 경우 렌더링)
+      // ==========================================
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans">
+            <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <h2 className="text-2xl font-extrabold text-slate-800 mb-2">영업 납품처 Dashboard</h2>
+              <p className="text-slate-500 text-sm mb-8">접근 권한이 필요합니다. 비밀번호를 입력해주세요.</p>
+              
+              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
+                <input 
+                  type="password" 
+                  value={pwdInput} 
+                  onChange={(e) => setPwdInput(e.target.value)} 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono text-center text-lg tracking-widest"
+                  placeholder="Password"
+                  autoFocus
+                />
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
+                  접속하기
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      // ==========================================
       // 분기 요약 12개 지표 연산
       // ==========================================
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
@@ -249,7 +277,7 @@
       const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
       
       // ==========================================
-      // 카테고리 통계 로직 (모든 항목 노출)
+      // 카테고리 통계 로직
       // ==========================================
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productStats = {};
@@ -316,7 +344,6 @@
         );
       };
 
-      // 🚨 버그 수정: 그래프 정렬 시 객체 구조에 맞게 b.sumKRW 로 수정
       const renderBarChart = (dataObj, colorClass) => {
         const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
         const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
@@ -392,6 +419,13 @@
                 + 분기 추가
               </button>
             </div>
+            
+            {/* 로그아웃 버튼 (테스트용) */}
+            <button 
+              onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} 
+              className="mt-auto border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">
+              로그아웃
+            </button>
           </div>
 
           {/* 메인 컨텐츠 영역 */}
@@ -745,7 +779,6 @@
                                 <td className="p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="p-3 text-center space-x-1">
                                   <button onClick={() => handleEdit(row)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded font-bold transition">수정</button>
-                                  {/* 삭제 버튼 추가 */}
                                   <button onClick={() => deleteSalesData(row.id)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">삭제</button>
                                 </td>
                               </tr>
@@ -796,7 +829,6 @@
                                 <td className="p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="p-3 text-center space-x-1">
                                   <button onClick={() => handleEdit(row)} className="text-xs bg-red-200 hover:bg-red-300 text-red-800 px-2 py-1 rounded font-bold transition">수정</button>
-                                  {/* 삭제 버튼 추가 */}
                                   <button onClick={() => deleteSalesData(row.id)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">삭제</button>
                                 </td>
                               </tr>
