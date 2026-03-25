@@ -6,7 +6,6 @@
   <title>영업 납품처 FCST Dashboard</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,21 +14,77 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useMemo } = React;
 
     const App = () => {
-      // 1. 년도/분기 상태
+      // 기본 상태 관리
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q1');
-      
-      // 3 & 4. 팀 및 팀원 상태
       const [selectedTeam, setSelectedTeam] = useState('Team 1');
       const [selectedMember, setSelectedMember] = useState(null);
 
       const teams = {
         'Team 1': ['Kim SH', 'Oh SG'],
         'Team 2': ['Baek SC', 'Lee GR'],
-        'Team 3': ['Member A', 'Member B'] // 임시 데이터
+        'Team 3': ['Member A', 'Member B']
+      };
+
+      // 개인별 목표(Target) 임시 데이터 (나중에 DB 연동 시 동적 할당)
+      const memberTargets = {
+        'Kim SH': 1500000000,
+        'Oh SG': 1200000000,
+        'Baek SC': 1300000000,
+        'Lee GR': 1000000000,
+      };
+
+      // 전체 대시보드 목표
+      const dashboardTargetKRW = 7255198319; 
+
+      // 6. 장비별 단가/데이터베이스 임시 저장소 (샘플 데이터 포함)
+      const [salesData, setSalesData] = useState([
+        { id: 1, quarter: '2026 Q1', team: 'Team 1', member: 'Kim SH', account: '에테르나의원_압구정', product: 'GMPP', accType: '3, AIO(DCD)', priceKRW: 159112364, priceUSD: 114551, cumulativeUSD: 114551, salesType: 'Direct', dealerName: '' },
+        { id: 2, quarter: '2026 Q1', team: 'Team 1', member: 'Kim SH', account: '테스트의원_강남', product: 'Picoway', accType: '1', priceKRW: 120000000, priceUSD: 90000, cumulativeUSD: 204551, salesType: 'Indirect', dealerName: 'Dealer A' }
+      ]);
+
+      // 2. 폼 입력 상태 및 수정(Edit) 관리
+      const initialForm = { account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', cumulativeUSD: '', salesType: 'Direct', dealerName: '' };
+      const [form, setForm] = useState(initialForm);
+      const [editingId, setEditingId] = useState(null);
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setForm({ ...form, [name]: value });
+      };
+
+      // 2. 데이터 저장 및 수정 완료 핸들러
+      const handleSave = () => {
+        if(!form.account) return alert('Account명을 입력해주세요.');
+        
+        const payload = {
+          ...form,
+          priceKRW: Number(form.priceKRW) || 0,
+          priceUSD: Number(form.priceUSD) || 0,
+          cumulativeUSD: Number(form.cumulativeUSD) || 0,
+          id: editingId ? editingId : Date.now(),
+          quarter: selectedQuarter,
+          team: selectedTeam,
+          member: selectedMember,
+          dealerName: form.salesType === 'Direct' ? '' : form.dealerName 
+        };
+
+        if (editingId) {
+          setSalesData(salesData.map(d => d.id === editingId ? payload : d));
+          setEditingId(null);
+        } else {
+          setSalesData([...salesData, payload]);
+        }
+        setForm(initialForm);
+      };
+
+      // 2. 데이터 수정 폼으로 불러오기
+      const handleEdit = (data) => {
+        setForm(data);
+        setEditingId(data.id);
       };
 
       const addQuarter = () => {
@@ -39,26 +94,51 @@
         }
       };
 
+      // --- 대시보드 동적 연산 로직 ---
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
+      
+      // 1. Direct / Indirect 비중 연산
+      const totalACT = currentQData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const directACT = currentQData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const indirectACT = currentQData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const directPercent = totalACT === 0 ? 0 : ((directACT / totalACT) * 100).toFixed(1);
+      const indirectPercent = totalACT === 0 ? 0 : ((indirectACT / totalACT) * 100).toFixed(1);
+
+      // 4. 딜러별 토탈 연산
+      const dealerStats = currentQData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => {
+        const dealer = cur.dealerName || 'Unknown';
+        if (!acc[dealer]) acc[dealer] = { sumKRW: 0, sumUSD: 0 };
+        acc[dealer].sumKRW += cur.priceKRW;
+        acc[dealer].sumUSD += cur.priceUSD;
+        return acc;
+      }, {});
+
+      // 6. 장비별 판매대수/금액 연산
+      const productStats = currentQData.reduce((acc, cur) => {
+        const prod = cur.product;
+        if (!acc[prod]) acc[prod] = { count: 0, sumKRW: 0 };
+        acc[prod].count += 1;
+        acc[prod].sumKRW += cur.priceKRW;
+        return acc;
+      }, {});
+
       return (
         <div className="flex h-screen bg-gray-100 font-sans">
           
-          {/* 사이드바 */}
+          {/* 왼쪽 사이드바 */}
           <div className="w-64 bg-slate-800 text-white p-5 flex flex-col">
-            <h2 className="text-xl font-bold mb-6">영업 납품처 FCST</h2>
+            <h2 className="text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
             <div className="flex-1">
               {quarters.map(q => (
                 <button
                   key={q}
                   onClick={() => { setSelectedQuarter(q); setSelectedMember(null); }}
-                  className={`w-full text-left px-4 py-3 mb-2 rounded ${selectedQuarter === q ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
+                  className={`w-full text-left px-4 py-3 mb-2 rounded font-semibold transition ${selectedQuarter === q ? 'bg-blue-600 shadow-md' : 'hover:bg-slate-700'}`}
                 >
                   {q}
                 </button>
               ))}
-              <button 
-                onClick={addQuarter}
-                className="w-full mt-4 border border-dashed border-gray-400 text-gray-300 py-2 rounded hover:bg-slate-700 hover:text-white"
-              >
+              <button onClick={addQuarter} className="w-full mt-4 border border-dashed border-gray-400 text-gray-300 py-2 rounded hover:bg-slate-700 hover:text-white transition">
                 + 분기 추가
               </button>
             </div>
@@ -66,33 +146,94 @@
 
           {/* 메인 컨텐츠 영역 */}
           <div className="flex-1 p-8 overflow-y-auto">
-            <h1 className="text-3xl font-bold mb-8">{selectedQuarter} Dashboard</h1>
-
-            {/* 분기별 페이지 요약표 */}
+            <h1 className="text-3xl font-extrabold mb-2 text-gray-800">{selectedQuarter} Dashboard</h1>
+            
+            {/* 5. 100% 120% 140% 타겟 UI (대시보드 메인) */}
             {!selectedMember && (
-              <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-                <h3 className="text-xl font-bold mb-4 border-b pb-2">분기 요약 지표 (Summary)</h3>
+              <div className="flex space-x-4 mb-8">
+                <div className="bg-white px-4 py-2 rounded shadow-sm border-l-4 border-blue-500">
+                  <span className="text-xs text-gray-500 font-bold block">100% Target</span>
+                  <span className="font-bold text-gray-800">₩ {dashboardTargetKRW.toLocaleString()}</span>
+                </div>
+                <div className="bg-white px-4 py-2 rounded shadow-sm border-l-4 border-green-500">
+                  <span className="text-xs text-gray-500 font-bold block">120% Target</span>
+                  <span className="font-bold text-green-700">₩ {(dashboardTargetKRW * 1.2).toLocaleString()}</span>
+                </div>
+                <div className="bg-white px-4 py-2 rounded shadow-sm border-l-4 border-purple-500">
+                  <span className="text-xs text-gray-500 font-bold block">140% Target</span>
+                  <span className="font-bold text-purple-700">₩ {(dashboardTargetKRW * 1.4).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 분기별 페이지 요약표 (대시보드 화면) */}
+            {!selectedMember && (
+              <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
+                <h3 className="text-xl font-bold mb-4 border-b pb-2 flex justify-between items-end">
+                  분기 요약 지표 (Summary) 
+                  <span className="text-sm font-normal text-gray-500">* 로직 추후 반영 예정 (3번)</span>
+                </h3>
                 <div className="grid grid-cols-3 gap-6">
+                  {/* 상단 3번 로직용 표 (기존 유지) */}
                   <div className="col-span-2 grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">Incentive Target (KRW)</span>₩ 6,045,998,599</div>
-                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">Incentive Target (USD)</span>$ 4,353,084.17</div>
-                    <div className="bg-blue-50 p-3 rounded"><span className="text-blue-600 block">Target (KRW)</span>₩ 7,255,198,319</div>
-                    <div className="bg-blue-50 p-3 rounded"><span className="text-blue-600 block">Target (USD)</span>$ 5,223,701.00</div>
-                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">예상치 (\)</span>₩ 2,326,821,819</div>
-                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">GAP</span>₩ 4,928,376,500</div>
-                    <div className="bg-green-50 p-3 rounded font-bold"><span className="text-green-600 block">ACT (\)</span>₩ 4,102,858,549</div>
-                    <div className="bg-green-50 p-3 rounded font-bold"><span className="text-green-600 block">ACT ($)</span>$ 2,954,034.52</div>
-                    <div className="bg-yellow-50 p-3 rounded"><span className="text-yellow-700 block">% 달성률</span>32.071%</div>
-                    <div className="bg-yellow-50 p-3 rounded"><span className="text-yellow-700 block">RT%</span>56.55%</div>
+                    <div className="bg-gray-50 p-3 rounded shadow-inner"><span className="text-gray-500 block text-xs">Incentive Target (KRW)</span>₩ 6,045,998,599</div>
+                    <div className="bg-gray-50 p-3 rounded shadow-inner"><span className="text-gray-500 block text-xs">Incentive Target (USD)</span>$ 4,353,084.17</div>
+                    <div className="bg-blue-50 p-3 rounded shadow-inner"><span className="text-blue-600 block font-bold text-xs">Target (KRW)</span>₩ 7,255,198,319</div>
+                    <div className="bg-blue-50 p-3 rounded shadow-inner"><span className="text-blue-600 block font-bold text-xs">Target (USD)</span>$ 5,223,701.00</div>
+                    <div className="bg-gray-50 p-3 rounded shadow-inner"><span className="text-gray-500 block text-xs">예상치 (\)</span>₩ 2,326,821,819</div>
+                    <div className="bg-gray-50 p-3 rounded shadow-inner"><span className="text-gray-500 block text-xs">GAP</span>₩ 4,928,376,500</div>
+                    <div className="bg-green-50 p-3 rounded shadow-inner font-bold"><span className="text-green-600 block text-xs">ACT (\) (자동합산)</span>₩ {totalACT.toLocaleString()}</div>
+                    <div className="bg-green-50 p-3 rounded shadow-inner font-bold"><span className="text-green-600 block text-xs">ACT ($)</span>$ 2,954,034.52</div>
+                    <div className="bg-yellow-50 p-3 rounded shadow-inner"><span className="text-yellow-700 block text-xs font-bold">% 달성률</span>32.071%</div>
+                    <div className="bg-yellow-50 p-3 rounded shadow-inner"><span className="text-yellow-700 block text-xs font-bold">RT%</span>56.55%</div>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded border">
-                    <h4 className="font-bold mb-3">장비별 예상 수량 (Total: 23)</h4>
-                    <ul className="text-sm space-y-2">
-                      <li className="flex justify-between border-b pb-1"><span>Picoway</span> <span>2</span></li>
-                      <li className="flex justify-between border-b pb-1"><span>GMPP</span> <span>18</span></li>
-                      <li className="flex justify-between border-b pb-1"><span>Cryo7</span> <span>3</span></li>
-                      <li className="flex justify-between border-b pb-1"><span>VBP / Nordlys / Profound</span> <span>0</span></li>
+                  {/* 1. Direct / Indirect 비율 UI */}
+                  <div className="bg-slate-50 p-4 rounded-lg border flex flex-col justify-center">
+                    <h4 className="font-bold text-gray-700 mb-3 text-center">Sales Type Ratio</h4>
+                    <div className="flex h-6 w-full bg-gray-200 rounded-full overflow-hidden mb-2 shadow-inner">
+                      <div style={{width: `${directPercent}%`}} className="bg-blue-500 flex justify-center items-center text-white text-xs font-bold transition-all">
+                        {directPercent > 10 && `Direct`}
+                      </div>
+                      <div style={{width: `${indirectPercent}%`}} className="bg-purple-500 flex justify-center items-center text-white text-xs font-bold transition-all">
+                        {indirectPercent > 10 && `Indirect`}
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm mt-2 px-1">
+                      <span className="text-blue-600 font-bold">Direct: {directPercent}%</span>
+                      <span className="text-purple-600 font-bold">Indirect: {indirectPercent}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6 mt-6">
+                  {/* 6. 장비별 판매대수 / 금액 */}
+                  <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                    <h4 className="font-bold bg-gray-100 p-3 border-b text-gray-700">장비별 예상 실적 (Product Stats)</h4>
+                    <ul className="text-sm p-4 space-y-3">
+                      {Object.keys(productStats).length === 0 ? <li className="text-gray-400">데이터가 없습니다.</li> : 
+                        Object.entries(productStats).map(([prod, stat]) => (
+                          <li key={prod} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                            <span className="font-semibold text-gray-800">{prod} <span className="text-blue-600 ml-1">({stat.count}대)</span></span>
+                            <span className="text-gray-600 font-mono">₩ {stat.sumKRW.toLocaleString()}</span>
+                          </li>
+                        ))
+                      }
+                    </ul>
+                  </div>
+
+                  {/* 4. 딜러별 매출 (Dealer Totals) */}
+                  <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                    <h4 className="font-bold bg-purple-50 p-3 border-b text-purple-800">딜러별 실적 요약 (Dealer Totals)</h4>
+                    <ul className="text-sm p-4 space-y-3">
+                      {Object.keys(dealerStats).length === 0 ? <li className="text-gray-400">Indirect 데이터가 없습니다.</li> : 
+                        Object.entries(dealerStats).map(([dealer, stat]) => (
+                          <li key={dealer} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                            <span className="font-semibold text-gray-800">{dealer}</span>
+                            <span className="text-gray-600 font-mono">₩ {stat.sumKRW.toLocaleString()}</span>
+                          </li>
+                        ))
+                      }
                     </ul>
                   </div>
                 </div>
@@ -100,12 +241,12 @@
             )}
 
             {/* 팀 네비게이션 */}
-            <div className="flex space-x-2 mb-6 border-b pb-2">
+            <div className="flex space-x-1 mb-6 border-b pb-[1px]">
               {Object.keys(teams).map(team => (
                 <button
                   key={team}
-                  onClick={() => { setSelectedTeam(team); setSelectedMember(null); }}
-                  className={`px-6 py-2 font-bold rounded-t-lg ${selectedTeam === team ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                  onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }}
+                  className={`px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam === team ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}
                 >
                   {team}
                 </button>
@@ -115,88 +256,144 @@
             {/* 팀원 리스트 */}
             {!selectedMember ? (
               <div>
-                <h3 className="text-lg font-bold mb-4">{selectedTeam} Members</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <h3 className="text-xl font-bold mb-4 text-gray-700">{selectedTeam} Members</h3>
+                <div className="grid grid-cols-2 gap-5">
                   {teams[selectedTeam].map(member => (
                     <div 
                       key={member}
                       onClick={() => setSelectedMember(member)}
-                      className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg hover:border-blue-500 border border-transparent transition"
+                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group"
                     >
-                      <div className="text-xl font-bold text-gray-800">{member}</div>
-                      <div className="text-sm text-gray-500 mt-2">담당 납품처 입력 및 확인하기 &rarr;</div>
+                      <div className="text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
+                      <div className="text-sm text-gray-500 mt-2 font-medium">담당 납품처 입력 및 확인하기 &rarr;</div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              /* 팀원별 입력 폼 */
-              <div className="bg-white p-6 rounded-lg shadow">
+              /* 팀원별 Account 입력 UI */
+              <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                 <button 
-                  onClick={() => setSelectedMember(null)}
-                  className="text-blue-500 mb-4 hover:underline"
+                  onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }}
+                  className="text-blue-500 mb-6 hover:underline font-semibold flex items-center"
                 >
                   &larr; 팀 리스트로 돌아가기
                 </button>
-                <h3 className="text-2xl font-bold mb-6">{selectedMember}의 납품처 정보 (Account FCST)</h3>
                 
-                <form className="grid grid-cols-2 gap-4 bg-gray-50 p-5 rounded border">
+                <div className="flex justify-between items-end mb-6">
+                  <h3 className="text-3xl font-extrabold text-gray-800">{selectedMember} <span className="text-xl text-gray-500 font-medium">Account FCST</span></h3>
+                  
+                  {/* 5. 개인 타겟 100/120/140 UI */}
+                  {memberTargets[selectedMember] && (
+                    <div className="flex space-x-3">
+                      <div className="bg-gray-50 px-3 py-1 rounded border"><span className="text-xs text-gray-500 block">100% Target</span><span className="font-bold text-sm">₩ {memberTargets[selectedMember].toLocaleString()}</span></div>
+                      <div className="bg-green-50 px-3 py-1 rounded border border-green-200"><span className="text-xs text-green-600 block">120% Target</span><span className="font-bold text-sm text-green-700">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
+                      <div className="bg-purple-50 px-3 py-1 rounded border border-purple-200"><span className="text-xs text-purple-600 block">140% Target</span><span className="font-bold text-sm text-purple-700">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 데이터 폼 */}
+                <form className={`grid grid-cols-3 gap-5 bg-slate-50 p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
+                  {editingId && <div className="col-span-3 text-blue-600 font-bold mb-[-10px]">✨ 데이터 수정 모드 진행 중...</div>}
+                  
+                  {/* 1. Direct / Indirect 추가 */}
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">Account (병원/납품처명)</label>
-                    <input type="text" className="w-full p-2 border rounded" placeholder="ex) 샤인빔의원 강서" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Sales Type</label>
+                    <select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
+                      <option value="Direct">Direct</option>
+                      <option value="Indirect">Indirect</option>
+                    </select>
+                  </div>
+                  
+                  {/* 4. Indirect 일 경우 딜러명 활성화 */}
+                  <div className={form.salesType === 'Direct' ? 'opacity-50 pointer-events-none' : ''}>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Dealer Name (Indirect)</label>
+                    <input type="text" name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder={form.salesType === 'Direct' ? 'Direct는 비활성화' : '딜러/대리점명 입력'} />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Account (병원/납품처명)</label>
+                    <input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex) 샤인빔의원 강서" />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">Product</label>
-                    <select className="w-full p-2 border rounded">
-                      <option>GMPP</option>
-                      <option>Picoway</option>
-                      <option>Cryo7</option>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Product</label>
+                    <select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="GMPP">GMPP</option>
+                      <option value="Picoway">Picoway</option>
+                      <option value="Cryo7">Cryo7</option>
+                      <option value="VBP">VBP</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">Acc type</label>
-                    <input type="text" className="w-full p-2 border rounded" placeholder="ex) 3, AIO(DCD)" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Acc type</label>
+                    <input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex) 3, AIO(DCD)" />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">System Price_KR (₩)</label>
-                    <input type="number" className="w-full p-2 border rounded" placeholder="원화 금액 입력" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">System Price_KR (₩)</label>
+                    <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="숫자만 입력" />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">System Price_USD ($)</label>
-                    <input type="number" className="w-full p-2 border rounded" placeholder="달러 금액 입력 (자동계산 가능)" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label>
+                    <input type="number" name="priceUSD" value={form.priceUSD} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="숫자만 입력" />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">USD_Cumulative</label>
-                    <input type="number" className="w-full p-2 border rounded" placeholder="누적 달러" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">USD_Cumulative</label>
+                    <input type="number" name="cumulativeUSD" value={form.cumulativeUSD} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="누적 달러" />
                   </div>
-                  <div className="col-span-2 mt-4 text-right">
-                    <button type="button" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
-                      데이터 저장
+                  <div className="col-span-1 mt-6 text-right">
+                    <button type="button" onClick={handleSave} className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold w-full py-2 rounded shadow transition`}>
+                      {editingId ? '수정 완료' : '데이터 신규 저장'}
                     </button>
+                    {editingId && (
+                      <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-2 text-sm text-gray-500 hover:underline">
+                        수정 취소
+                      </button>
+                    )}
                   </div>
                 </form>
 
-                <div className="mt-8 overflow-x-auto">
+                {/* 입력된 데이터 리스트 표 */}
+                <div className="mt-10 overflow-x-auto rounded-lg border border-gray-200">
                   <table className="min-w-full text-sm text-left">
-                    <thead className="bg-gray-100 text-gray-600 font-bold border-b">
+                    <thead className="bg-gray-800 text-white font-bold">
                       <tr>
-                        <th className="p-3">Account</th>
-                        <th className="p-3">Product</th>
-                        <th className="p-3">Acc type</th>
-                        <th className="p-3">Price (KRW)</th>
-                        <th className="p-3">Price (USD)</th>
-                        <th className="p-3">Cumulative</th>
+                        <th className="p-3 whitespace-nowrap">Type</th>
+                        <th className="p-3 whitespace-nowrap">Dealer</th>
+                        <th className="p-3 whitespace-nowrap">Account</th>
+                        <th className="p-3 whitespace-nowrap">Product</th>
+                        <th className="p-3 whitespace-nowrap">Acc type</th>
+                        <th className="p-3 text-right whitespace-nowrap">Price (KRW)</th>
+                        <th className="p-3 text-right whitespace-nowrap">Price (USD)</th>
+                        <th className="p-3 text-center whitespace-nowrap">관리</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-b hover:bg-gray-50">
-                        <td className="p-3">에테르나의원_압구정</td>
-                        <td className="p-3">GMPP</td>
-                        <td className="p-3">3, AIO(DCD)</td>
-                        <td className="p-3">159,112,364</td>
-                        <td className="p-3">114,551.73</td>
-                        <td className="p-3">114,551.73</td>
-                      </tr>
+                      {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember).length === 0 ? (
+                        <tr><td colSpan="8" className="p-6 text-center text-gray-400">등록된 데이터가 없습니다.</td></tr>
+                      ) : (
+                        salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember).map(row => (
+                          <tr key={row.id} className="border-b hover:bg-blue-50 transition">
+                            <td className="p-3 font-semibold">
+                              <span className={`px-2 py-1 rounded text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                {row.salesType}
+                              </span>
+                            </td>
+                            <td className="p-3 text-gray-600">{row.dealerName || '-'}</td>
+                            <td className="p-3 font-bold text-gray-800">{row.account}</td>
+                            <td className="p-3">{row.product}</td>
+                            <td className="p-3 text-gray-500">{row.accType}</td>
+                            <td className="p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                            <td className="p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString()}</td>
+                            <td className="p-3 text-center">
+                              {/* 2. 데이터 수정 버튼 */}
+                              <button onClick={() => handleEdit(row)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded font-bold transition">
+                                수정
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
