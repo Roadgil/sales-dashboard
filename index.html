@@ -115,7 +115,8 @@
 
       const handleSave = () => {
         if(!form.account) return alert('Account명(납품처)을 입력해주세요.');
-        if(form.salesType === 'Indirect' && !form.dealerName) return alert('Indirect 계약 건은 대리점을 선택해야 합니다.');
+        if(!form.dealerName) return alert('대리점(Dealer Name) 항목을 선택해주세요. (Direct일 경우 "없음" 선택 가능)');
+        if(form.salesType === 'Indirect' && form.dealerName === '없음') return alert('Indirect 계약 건은 "없음"을 선택할 수 없습니다. 대리점을 지정해주세요.');
         
         const payload = {
           ...form,
@@ -125,7 +126,8 @@
           quarter: selectedQuarter,
           team: selectedTeam,
           member: selectedMember,
-          dealerName: form.salesType === 'Direct' ? '' : form.dealerName 
+          // 변경: Direct여도 dealerName에 선택한 값을 그대로 저장하도록 수정
+          dealerName: form.dealerName 
         };
 
         db.collection("sales").doc(payload.id.toString()).set(payload);
@@ -250,7 +252,7 @@
       }
 
       // ==========================================
-      // 분기 요약 12개 지표 연산
+      // 분기 요약 및 추가 연산 (Direct vs Indirect)
       // ==========================================
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
       
@@ -275,6 +277,12 @@
 
       const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
       const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+
+      // ✨ Direct vs Indirect 합산 로직
+      const directKRW = expectedData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const indirectKRW = expectedData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
+      const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
       
       // ==========================================
       // 카테고리 통계 로직
@@ -454,7 +462,7 @@
                   {renderProgressBar(expectedKRW, targetKRW)}
                 </div>
 
-                {/* 12개 요약 지표 */}
+                {/* 12개 요약 지표 및 Sales Type 비율 */}
                 <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
                   <h3 className="text-xl font-bold mb-5 border-b pb-2 text-gray-800">
                     📋 분기 요약 지표 (Summary)
@@ -538,8 +546,21 @@
                         <span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span>
                       </div>
                     </div>
-
                   </div>
+
+                  {/* ✨ 새롭게 추가된 Direct / Indirect 비율 UI */}
+                  <div className="mt-6 border-t border-slate-200 pt-5">
+                    <h4 className="text-[13px] font-bold text-slate-600 mb-2">🔄 Sales Type 비중 (Direct vs Indirect)</h4>
+                    <div className="flex justify-between text-xs font-bold mb-1">
+                      <span className="text-blue-600">Direct: ₩ {directKRW.toLocaleString()} ({directPer.toFixed(1)}%)</span>
+                      <span className="text-purple-600">Indirect: ₩ {indirectKRW.toLocaleString()} ({indirectPer.toFixed(1)}%)</span>
+                    </div>
+                    <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
+                      <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${directPer}%` }}></div>
+                      <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${indirectPer}%` }}></div>
+                    </div>
+                  </div>
+
                 </div>
 
                 {/* 하단 세부 통계 그래프 */}
@@ -678,10 +699,12 @@
                       </select>
                     </div>
                     
-                    <div className={form.salesType === 'Direct' ? 'opacity-50 pointer-events-none' : ''}>
+                    {/* ✨ 딜러 네임 선택칸 변경 (항상 활성화 & '없음' 추가) */}
+                    <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label>
                       <select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">선택 (필수)</option>
+                        <option value="없음">없음 (None)</option>
                         <option value="세븐유">세븐유</option>
                         <option value="이노메드">이노메드</option>
                         <option value="TMI">TMI</option>
