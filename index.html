@@ -36,18 +36,17 @@
 
     const App = () => {
       // =========================================================================
-      // 🔒 비밀번호 설정 부분 (원하시는 비밀번호로 변경하세요!)
+      // 🔒 비밀번호 설정 부분
       // =========================================================================
       const SECRET_PASSWORD = "candelakoreasales"; 
 
-      // 인증 상태 관리 (기억되어 있으면 바로 true)
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
 
       const handleLogin = (e) => {
         e.preventDefault();
         if (pwdInput === SECRET_PASSWORD) {
-          localStorage.setItem('adminAuth', 'true'); // 브라우저에 인증 기록 저장
+          localStorage.setItem('adminAuth', 'true'); 
           setIsLoggedIn(true);
         } else {
           alert('비밀번호가 틀렸습니다. 다시 확인해주세요!');
@@ -55,7 +54,6 @@
         }
       };
 
-      // 대시보드 상태 관리
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
       
@@ -87,9 +85,8 @@
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
-      // 데이터 로드 로직
       useEffect(() => {
-        if (!isLoggedIn) return; // 로그인 안 되어 있으면 데이터 안 불러옴
+        if (!isLoggedIn) return; 
 
         const unsubscribeSales = db.collection("sales").onSnapshot((snapshot) => {
           if (!snapshot.empty) {
@@ -115,8 +112,7 @@
 
       const handleSave = () => {
         if(!form.account) return alert('Account명(납품처)을 입력해주세요.');
-        if(!form.dealerName) return alert('대리점(Dealer Name) 항목을 선택해주세요. (Direct일 경우 "없음" 선택 가능)');
-        if(form.salesType === 'Indirect' && form.dealerName === '없음') return alert('Indirect 계약 건은 "없음"을 선택할 수 없습니다. 대리점을 지정해주세요.');
+        if(!form.dealerName) return alert('Dealer Name 항목을 선택해주세요.');
         
         const payload = {
           ...form,
@@ -126,7 +122,6 @@
           quarter: selectedQuarter,
           team: selectedTeam,
           member: selectedMember,
-          // 변경: Direct여도 dealerName에 선택한 값을 그대로 저장하도록 수정
           dealerName: form.dealerName 
         };
 
@@ -209,6 +204,9 @@
           const krwValue = value ? parseFloat(value) : 0;
           const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
           setForm({ ...form, priceKRW: value, priceUSD: usdValue });
+        } else if (name === 'salesType') {
+          // ✨ Sales Type이 바뀔 때 기존에 선택된 딜러/병원 값이 꼬이지 않도록 초기화해 줍니다.
+          setForm({ ...form, [name]: value, dealerName: '' });
         } else {
           setForm({ ...form, [name]: value });
         }
@@ -222,9 +220,6 @@
         }
       };
 
-      // ==========================================
-      // 로그인 화면 UI (인증 안된 경우 렌더링)
-      // ==========================================
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans">
@@ -251,9 +246,6 @@
         );
       }
 
-      // ==========================================
-      // 분기 요약 및 추가 연산 (Direct vs Indirect)
-      // ==========================================
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
       
       const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
@@ -278,15 +270,11 @@
       const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
       const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
 
-      // ✨ Direct vs Indirect 합산 로직
       const directKRW = expectedData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
       const indirectKRW = expectedData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
       const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
       const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
       
-      // ==========================================
-      // 카테고리 통계 로직
-      // ==========================================
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productStats = {};
       allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
@@ -428,7 +416,6 @@
               </button>
             </div>
             
-            {/* 로그아웃 버튼 (테스트용) */}
             <button 
               onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} 
               className="mt-auto border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">
@@ -462,7 +449,6 @@
                   {renderProgressBar(expectedKRW, targetKRW)}
                 </div>
 
-                {/* 12개 요약 지표 및 Sales Type 비율 */}
                 <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
                   <h3 className="text-xl font-bold mb-5 border-b pb-2 text-gray-800">
                     📋 분기 요약 지표 (Summary)
@@ -548,7 +534,7 @@
                     </div>
                   </div>
 
-                  {/* ✨ 새롭게 추가된 Direct / Indirect 비율 UI */}
+                  {/* Direct / Indirect 비율 UI */}
                   <div className="mt-6 border-t border-slate-200 pt-5">
                     <h4 className="text-[13px] font-bold text-slate-600 mb-2">🔄 Sales Type 비중 (Direct vs Indirect)</h4>
                     <div className="flex justify-between text-xs font-bold mb-1">
@@ -563,7 +549,6 @@
 
                 </div>
 
-                {/* 하단 세부 통계 그래프 */}
                 <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
                   <div className="flex bg-gray-50 border-b">
                     <button onClick={() => setActiveStatTab('product')} className={`flex-1 py-4 font-bold text-sm transition-colors ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}>📊 장비별 실적 (전체)</button>
@@ -579,7 +564,6 @@
               </div>
             )}
 
-            {/* 상단 탭 네비게이션 */}
             <div className="flex space-x-1 mb-6 border-b pb-[1px]">
               {Object.keys(teams).map(team => (
                 <button
@@ -593,7 +577,6 @@
               <button onClick={addTeam} className="px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">+ 탭 추가</button>
             </div>
 
-            {/* 항목 리스트 */}
             {!selectedMember ? (
               <div>
                 <div className="flex justify-between items-center mb-4">
@@ -619,7 +602,6 @@
                 </div>
               </div>
             ) : (
-              /* 개별 멤버 데이터 UI */
               <div>
                 <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100 mb-8">
                   <div className="flex justify-between items-center mb-6">
@@ -627,7 +609,6 @@
                     <h3 className="text-3xl font-extrabold text-gray-800">{selectedMember} <span className="text-xl text-gray-500 font-medium">Account FCST</span></h3>
                   </div>
 
-                  {/* 개인 목표 프로그레스 바 & 개인 타겟 직접 기입 폼 */}
                   {memberTargets[selectedMember] !== undefined && (
                     <div className="bg-blue-50/50 p-6 rounded-lg border border-blue-100 mb-8">
                       <div className="flex justify-between items-end mb-4">
@@ -663,7 +644,6 @@
                     </div>
                   )}
                   
-                  {/* 데이터 입력 폼 */}
                   <form className={`grid grid-cols-3 gap-5 bg-slate-50 p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
                     {editingId && <div className="col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]">
                       <span>✨ 데이터 수정 모드 진행 중...</span>
@@ -699,12 +679,16 @@
                       </select>
                     </div>
                     
-                    {/* ✨ 딜러 네임 선택칸 변경 (항상 활성화 & '없음' 추가) */}
+                    {/* ✨ Dealer Name: Sales Type에 따라 스마트하게 옵션 변경 */}
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label>
                       <select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">선택 (필수)</option>
-                        <option value="없음">없음 (None)</option>
+                        {form.salesType === 'Direct' ? (
+                          <option value="병원">병원</option>
+                        ) : (
+                          <option value="기타">기타</option>
+                        )}
                         <option value="세븐유">세븐유</option>
                         <option value="이노메드">이노메드</option>
                         <option value="TMI">TMI</option>
@@ -762,7 +746,6 @@
                     </div>
                   </form>
 
-                  {/* 1. 예상치 및 ACT 표 */}
                   <div className="mt-10">
                     <h4 className="text-xl font-bold mb-3 flex items-center text-blue-800">✅ 납품 현황 (FCST & ACT)</h4>
                     <div className="overflow-x-auto rounded-lg border border-blue-200">
@@ -812,7 +795,6 @@
                     </div>
                   </div>
 
-                  {/* 2. 미납 표 */}
                   <div className="mt-10">
                     <h4 className="text-xl font-bold mb-3 flex items-center text-red-700">🚨 미납 리스트 (Pending / Backlog)</h4>
                     <div className="overflow-x-auto rounded-lg border border-red-200">
