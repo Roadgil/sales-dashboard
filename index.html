@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>영업 납품처 FCST Dashboard</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const App = () => {
+      // 1. 년도/분기 상태
+      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q1');
+      
+      // 3 & 4. 팀 및 팀원 상태
+      const [selectedTeam, setSelectedTeam] = useState('Team 1');
+      const [selectedMember, setSelectedMember] = useState(null);
+
+      const teams = {
+        'Team 1': ['Kim SH', 'Oh SG'],
+        'Team 2': ['Baek SC', 'Lee GR'],
+        'Team 3': ['Member A', 'Member B'] // 임시 데이터
+      };
+
+      const addQuarter = () => {
+        const newQuarter = prompt('추가할 년도와 분기를 입력하세요 (예: 2026 Q3)');
+        if (newQuarter && !quarters.includes(newQuarter)) {
+          setQuarters([...quarters, newQuarter]);
+        }
+      };
+
+      return (
+        <div className="flex h-screen bg-gray-100 font-sans">
+          
+          {/* 사이드바 */}
+          <div className="w-64 bg-slate-800 text-white p-5 flex flex-col">
+            <h2 className="text-xl font-bold mb-6">영업 납품처 FCST</h2>
+            <div className="flex-1">
+              {quarters.map(q => (
+                <button
+                  key={q}
+                  onClick={() => { setSelectedQuarter(q); setSelectedMember(null); }}
+                  className={`w-full text-left px-4 py-3 mb-2 rounded ${selectedQuarter === q ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
+                >
+                  {q}
+                </button>
+              ))}
+              <button 
+                onClick={addQuarter}
+                className="w-full mt-4 border border-dashed border-gray-400 text-gray-300 py-2 rounded hover:bg-slate-700 hover:text-white"
+              >
+                + 분기 추가
+              </button>
+            </div>
+          </div>
+
+          {/* 메인 컨텐츠 영역 */}
+          <div className="flex-1 p-8 overflow-y-auto">
+            <h1 className="text-3xl font-bold mb-8">{selectedQuarter} Dashboard</h1>
+
+            {/* 분기별 페이지 요약표 */}
+            {!selectedMember && (
+              <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+                <h3 className="text-xl font-bold mb-4 border-b pb-2">분기 요약 지표 (Summary)</h3>
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="col-span-2 grid grid-cols-2 gap-4 text-sm">
+                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">Incentive Target (KRW)</span>₩ 6,045,998,599</div>
+                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">Incentive Target (USD)</span>$ 4,353,084.17</div>
+                    <div className="bg-blue-50 p-3 rounded"><span className="text-blue-600 block">Target (KRW)</span>₩ 7,255,198,319</div>
+                    <div className="bg-blue-50 p-3 rounded"><span className="text-blue-600 block">Target (USD)</span>$ 5,223,701.00</div>
+                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">예상치 (\)</span>₩ 2,326,821,819</div>
+                    <div className="bg-gray-50 p-3 rounded"><span className="text-gray-500 block">GAP</span>₩ 4,928,376,500</div>
+                    <div className="bg-green-50 p-3 rounded font-bold"><span className="text-green-600 block">ACT (\)</span>₩ 4,102,858,549</div>
+                    <div className="bg-green-50 p-3 rounded font-bold"><span className="text-green-600 block">ACT ($)</span>$ 2,954,034.52</div>
+                    <div className="bg-yellow-50 p-3 rounded"><span className="text-yellow-700 block">% 달성률</span>32.071%</div>
+                    <div className="bg-yellow-50 p-3 rounded"><span className="text-yellow-700 block">RT%</span>56.55%</div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h4 className="font-bold mb-3">장비별 예상 수량 (Total: 23)</h4>
+                    <ul className="text-sm space-y-2">
+                      <li className="flex justify-between border-b pb-1"><span>Picoway</span> <span>2</span></li>
+                      <li className="flex justify-between border-b pb-1"><span>GMPP</span> <span>18</span></li>
+                      <li className="flex justify-between border-b pb-1"><span>Cryo7</span> <span>3</span></li>
+                      <li className="flex justify-between border-b pb-1"><span>VBP / Nordlys / Profound</span> <span>0</span></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 팀 네비게이션 */}
+            <div className="flex space-x-2 mb-6 border-b pb-2">
+              {Object.keys(teams).map(team => (
+                <button
+                  key={team}
+                  onClick={() => { setSelectedTeam(team); setSelectedMember(null); }}
+                  className={`px-6 py-2 font-bold rounded-t-lg ${selectedTeam === team ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                >
+                  {team}
+                </button>
+              ))}
+            </div>
+
+            {/* 팀원 리스트 */}
+            {!selectedMember ? (
+              <div>
+                <h3 className="text-lg font-bold mb-4">{selectedTeam} Members</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {teams[selectedTeam].map(member => (
+                    <div 
+                      key={member}
+                      onClick={() => setSelectedMember(member)}
+                      className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg hover:border-blue-500 border border-transparent transition"
+                    >
+                      <div className="text-xl font-bold text-gray-800">{member}</div>
+                      <div className="text-sm text-gray-500 mt-2">담당 납품처 입력 및 확인하기 &rarr;</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* 팀원별 입력 폼 */
+              <div className="bg-white p-6 rounded-lg shadow">
+                <button 
+                  onClick={() => setSelectedMember(null)}
+                  className="text-blue-500 mb-4 hover:underline"
+                >
+                  &larr; 팀 리스트로 돌아가기
+                </button>
+                <h3 className="text-2xl font-bold mb-6">{selectedMember}의 납품처 정보 (Account FCST)</h3>
+                
+                <form className="grid grid-cols-2 gap-4 bg-gray-50 p-5 rounded border">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Account (병원/납품처명)</label>
+                    <input type="text" className="w-full p-2 border rounded" placeholder="ex) 샤인빔의원 강서" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Product</label>
+                    <select className="w-full p-2 border rounded">
+                      <option>GMPP</option>
+                      <option>Picoway</option>
+                      <option>Cryo7</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Acc type</label>
+                    <input type="text" className="w-full p-2 border rounded" placeholder="ex) 3, AIO(DCD)" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">System Price_KR (₩)</label>
+                    <input type="number" className="w-full p-2 border rounded" placeholder="원화 금액 입력" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">System Price_USD ($)</label>
+                    <input type="number" className="w-full p-2 border rounded" placeholder="달러 금액 입력 (자동계산 가능)" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">USD_Cumulative</label>
+                    <input type="number" className="w-full p-2 border rounded" placeholder="누적 달러" />
+                  </div>
+                  <div className="col-span-2 mt-4 text-right">
+                    <button type="button" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+                      데이터 저장
+                    </button>
+                  </div>
+                </form>
+
+                <div className="mt-8 overflow-x-auto">
+                  <table className="min-w-full text-sm text-left">
+                    <thead className="bg-gray-100 text-gray-600 font-bold border-b">
+                      <tr>
+                        <th className="p-3">Account</th>
+                        <th className="p-3">Product</th>
+                        <th className="p-3">Acc type</th>
+                        <th className="p-3">Price (KRW)</th>
+                        <th className="p-3">Price (USD)</th>
+                        <th className="p-3">Cumulative</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b hover:bg-gray-50">
+                        <td className="p-3">에테르나의원_압구정</td>
+                        <td className="p-3">GMPP</td>
+                        <td className="p-3">3, AIO(DCD)</td>
+                        <td className="p-3">159,112,364</td>
+                        <td className="p-3">114,551.73</td>
+                        <td className="p-3">114,551.73</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
