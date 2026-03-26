@@ -38,7 +38,7 @@
       // =========================================================================
       // 🔒 비밀번호 설정 부분
       // =========================================================================
-      const SECRET_PASSWORD = "candelakoreasales"; 
+      const SECRET_PASSWORD = "candelakorea2026"; 
 
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
@@ -160,7 +160,6 @@
       const handleEdit = (data) => {
         setForm(data);
         setEditingId(data.id);
-        // 모바일 환경에서 수정 버튼 누르면 상단으로 스크롤
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
@@ -220,20 +219,50 @@
       const addQuarter = () => {
         const newQuarter = prompt('추가할 년도와 분기를 입력하세요 (예: 2026 Q3)');
         if (newQuarter && !quarters.includes(newQuarter)) {
-          setQuarters([...quarters, newQuarter].sort()); // 추가 시 정렬
+          setQuarters([...quarters, newQuarter].sort()); 
           handleTargetChange('target', 0); 
         }
       };
 
-      // 📅 연도별 분기 그룹화 로직
+      // ✨ [추가] 엑셀(CSV) 추출 함수
+      const exportToCSV = () => {
+        if (salesData.length === 0) return alert("추출할 데이터가 없습니다.");
+
+        // 1. 헤더 설정
+        const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
+        
+        // 2. 데이터 매핑
+        const rows = salesData.map(d => [
+          d.quarter, d.team, d.member, d.status, d.contractType, d.deliveryDate, 
+          d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, 
+          d.priceKRW, d.priceUSD
+        ]);
+        
+        // 3. CSV 문자열 생성 (따옴표 처리로 데이터 내 쉼표 방어)
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        
+        // 4. 한글 깨짐 방지 BOM(\uFEFF) 추가 및 파일 다운로드 실행
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const today = new Date().toISOString().slice(0,10);
+        link.setAttribute('download', `FCST_Sales_Data_${today}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
       const groupedQuarters = quarters.reduce((acc, q) => {
-        const [year, quarter] = q.split(' '); // "2026 Q1" -> ["2026", "Q1"]
+        const [year, quarter] = q.split(' '); 
         if (!acc[year]) acc[year] = [];
         acc[year].push(quarter);
         return acc;
       }, {});
 
-      // 로그인 화면 UI
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
@@ -260,9 +289,6 @@
         );
       }
 
-      // ==========================================
-      // 데이터 연산
-      // ==========================================
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
       
       const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
@@ -292,7 +318,6 @@
       const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
       const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
       
-      // 통계 객체 생성
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productStats = {};
       allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
@@ -306,7 +331,6 @@
 
       const allDealers = ['세븐유', '이노메드', 'TMI', '병원', '기타'];
       
-      // 🤝 딜러별 실적 (Indirect)
       const dealerIndirectStats = {};
       allDealers.forEach(d => dealerIndirectStats[d] = { count: 0, sumKRW: 0 });
       expectedData.filter(d => d.salesType === 'Indirect').forEach(cur => {
@@ -317,7 +341,6 @@
         }
       });
 
-      // 🏢 딜러별 실적 (Direct) - ✨ 신규 추가됨!
       const dealerDirectStats = {};
       allDealers.forEach(d => dealerDirectStats[d] = { count: 0, sumKRW: 0 });
       expectedData.filter(d => d.salesType === 'Direct').forEach(cur => {
@@ -372,7 +395,6 @@
       };
 
       const renderBarChart = (dataObj, colorClass) => {
-        // sumKRW가 0인 항목은 제외하지 않고 모두 표시 (count순 정렬 시 0도 나타남)
         const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
         const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
 
@@ -469,11 +491,19 @@
               </button>
             </div>
             
-            <button 
-              onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} 
-              className="mt-8 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">
-              로그아웃
-            </button>
+            {/* 📥 엑셀 다운로드 버튼 추가 */}
+            <div className="mt-8 border-t border-slate-600 pt-4">
+              <button onClick={exportToCSV} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                엑셀 (CSV) 추출
+              </button>
+              
+              <button 
+                onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} 
+                className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">
+                로그아웃
+              </button>
+            </div>
           </div>
 
           {/* 메인 컨텐츠 영역 */}
@@ -507,7 +537,6 @@
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">
                     📋 분기 요약 지표 (Summary)
                   </h3>
-                  {/* 반응형 그리드 (모바일 1열 -> PC 3열) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
                     
                     {/* Col 1 */}
@@ -589,7 +618,6 @@
                     </div>
                   </div>
 
-                  {/* Direct / Indirect 비율 UI */}
                   <div className="mt-6 border-t border-slate-200 pt-5">
                     <h4 className="text-[13px] font-bold text-slate-600 mb-2">🔄 Sales Type 비중 (Direct vs Indirect)</h4>
                     <div className="flex flex-col md:flex-row justify-between text-xs md:text-sm font-bold mb-2 md:mb-1">
@@ -604,7 +632,6 @@
 
                 </div>
 
-                {/* 하단 세부 통계 그래프 (탭 메뉴) - ✨ 딜러(Direct) 탭 추가 */}
                 <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
                   <div className="grid grid-cols-2 md:flex bg-gray-50 border-b">
                     <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-blue-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>📊 장비별 전체</button>
@@ -620,7 +647,6 @@
                   </div>
                 </div>
                 
-                {/* 상단 탭 네비게이션 (모바일 가로 스크롤) */}
                 <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar">
                   {Object.keys(teams).map(team => (
                     <button
@@ -634,7 +660,6 @@
                   <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">+ 탭 추가</button>
                 </div>
 
-                {/* 항목 리스트 */}
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg md:text-xl font-bold text-gray-700">{selectedTeam} 목록</h3>
                   <button onClick={addMember} className="text-xs md:text-sm bg-blue-100 text-blue-700 font-bold px-3 md:px-4 py-2 rounded shadow-sm hover:bg-blue-200 transition">+ 항목 추가</button>
@@ -660,7 +685,6 @@
             ) : (
               /* 개별 멤버 데이터 UI */
               <div>
-                {/* ✨ 명확한 뒤로가기 버튼 추가 */}
                 <button 
                   onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} 
                   className="mb-4 flex items-center bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-slate-800 transition"
@@ -744,7 +768,6 @@
                       </select>
                     </div>
                     
-                    {/* ✨ Dealer Name: Sales Type에 따라 스마트하게 옵션 변경 */}
                     <div>
                       <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label>
                       <select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
@@ -813,7 +836,6 @@
 
                   <div className="mt-10">
                     <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-800">✅ 납품 현황 (FCST & ACT)</h4>
-                    {/* 모바일에서 테이블 좌우 스크롤 되도록 구현 */}
                     <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-800 text-white font-bold">
