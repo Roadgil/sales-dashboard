@@ -26,7 +26,6 @@
     .text-red { color: #dc2626 !important; font-weight: bold; }
     .text-blue { color: #2563eb !important; font-weight: bold; }
     .font-bold { font-weight: bold !important; }
-    /* 스크롤바 디자인 */
     ::-webkit-scrollbar { height: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
   </style>
@@ -59,12 +58,11 @@
       const [salesData, setSalesData] = useState([]);
       const [quarterTargets, setQuarterTargets] = useState({});
       const [memberTargets, setMemberTargets] = useState({});
-
-      const teams = {
+      const [teams, setTeams] = useState({
         'Team 1': ['Kim SH', 'Oh SG'],
         'Team 2': ['Baek SC', 'Lee GR'],
         'Team 3': ['YC lim']
-      };
+      });
 
       const handleLogin = (e) => {
         e.preventDefault();
@@ -77,17 +75,20 @@
 
       useEffect(() => {
         if (!isLoggedIn) return; 
-        db.collection("sales").onSnapshot((snap) => {
-          const data = snap.docs.map(doc => doc.data());
-          setSalesData(data);
-          
-          // 분기 리스트 자동 수집
-          const qSet = new Set(['2026 Q1', '2026 Q2']);
-          data.forEach(d => { if(d.quarter) qSet.add(d.quarter); });
-          setQuarters(Array.from(qSet).sort().reverse());
+        const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
+        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
+        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
+        
+        // ✨ 팀 구조 및 분기 자동 동기화
+        const unsubLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            if (data.teams) setTeams(data.teams);
+            if (data.quarters) setQuarters(data.quarters);
+          }
         });
-        db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
-        db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
+
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
       }, [isLoggedIn]);
 
       if (!isLoggedIn) {
@@ -239,21 +240,17 @@
                     <td className="text-blue">{formatP(r.progress)}</td>
                     <td className="bg-red-light text-red">{formatM(r.gap)}</td>
                     
-                    {/* M1 Weeks */}
                     {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
                     
-                    {/* M2 Weeks */}
                     {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
 
-                    {/* M3 Weeks */}
                     {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
                   </tr>
                 ))}
                 
-                {/* TOTAL ROW */}
                 <tr className="header-dark font-bold text-[13px]">
                   <td colSpan="2" className="text-center">TOTAL</td>
                   <td>{formatM(sumM1)}</td>
