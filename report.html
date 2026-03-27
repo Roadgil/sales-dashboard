@@ -64,6 +64,9 @@
         'Team 3': ['YC lim']
       });
 
+      // ✨ 상단 날짜 기입용 State (Firebase 연동)
+      const [weekHeaders, setWeekHeaders] = useState({});
+
       const handleLogin = (e) => {
         e.preventDefault();
         if (pwdInput === SECRET_PASSWORD) {
@@ -78,8 +81,6 @@
         const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
         const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
         const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
-        
-        // ✨ 팀 구조 및 분기 자동 동기화
         const unsubLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
             const data = doc.data();
@@ -87,9 +88,20 @@
             if (data.quarters) setQuarters(data.quarters);
           }
         });
+        // ✨ 날짜 헤더 불러오기
+        const unsubReport = db.collection("settings").doc("report").onSnapshot((doc) => {
+          if (doc.exists) setWeekHeaders(doc.data().weekHeaders || {});
+        });
 
-        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); unsubReport(); };
       }, [isLoggedIn]);
+
+      // ✨ 날짜 헤더 저장 함수
+      const handleWeekHeaderChange = (key, value) => {
+        const newHeaders = { ...weekHeaders, [key]: value };
+        setWeekHeaders(newHeaders);
+        db.collection("settings").doc("report").set({ weekHeaders: newHeaders }, { merge: true });
+      };
 
       if (!isLoggedIn) {
         return (
@@ -135,7 +147,8 @@
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
 
       let rows = [];
-      Object.entries(teams).forEach(([team, members]) => {
+      // ✨ Team 1, Team 2 오름차순으로 정렬
+      Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
           const mData = currentQData.filter(d => d.member === member);
           
@@ -145,9 +158,9 @@
           const valM1 = calcMonth(m1);
           const valM2 = calcMonth(m2);
           const valM3 = calcMonth(m3);
-          const valTBD = mData.filter(d => getMonthIdx(d.deliveryDate) === -1).reduce((a,b)=>a+toM(b.priceKRW),0);
-
-          const total = valM1 + valM2 + valM3 + valTBD;
+          
+          // ✨ TBD(미정) 제거
+          const total = valM1 + valM2 + valM3;
           const budget = toM(memberTargets[member] || 0);
           const gap = budget - total; 
           const progress = budget ? total / budget : 0;
@@ -157,7 +170,7 @@
           const weeksM3 = [calcWeek(m3,1), calcWeek(m3,2), calcWeek(m3,3), calcWeek(m3,4), calcWeek(m3,5)];
 
           rows.push({
-            team, member, valM1, valM2, valM3, valTBD, total, budget, gap, progress,
+            team, member, valM1, valM2, valM3, total, budget, gap, progress,
             weeksM1, weeksM2, weeksM3
           });
         });
@@ -167,7 +180,6 @@
       const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
       const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
       const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
-      const sumTBD = rows.reduce((a,b)=>a+b.valTBD,0);
       const sumTotal = rows.reduce((a,b)=>a+b.total,0);
       
       const currentTargets = quarterTargets[selectedQuarter] || {};
@@ -179,13 +191,14 @@
       const sumWeeksM2 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
       const sumWeeksM3 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
 
-      // Product 카운트
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productCounts = {};
       allProducts.forEach(p => productCounts[p] = { count: 0 });
       currentQData.forEach(d => {
         if(productCounts[d.product]) productCounts[d.product].count += 1;
       });
+
+      const ordinals = ["1st", "2nd", "3rd", "4th", "5th"];
 
       return (
         <div className="p-6 md:p-8">
@@ -211,19 +224,47 @@
                   <th rowSpan="2">{m1Name}</th>
                   <th rowSpan="2">{m2Name}</th>
                   <th rowSpan="2">{m3Name}</th>
-                  <th rowSpan="2" className="text-slate-400">TBD(미정)</th>
+                  {/* ✨ TBD 열 삭제됨 */}
                   <th rowSpan="2" className="bg-yellow">Q Total</th>
                   <th rowSpan="2" className="bg-blue">Q Budget</th>
                   <th rowSpan="2">%</th>
                   <th rowSpan="2" className="bg-red-light text-red">Gap</th>
-                  <th colSpan="6" className="header-dark">{m1Name} Progress</th>
-                  <th colSpan="6" className="header-dark bg-slate-700">{m2Name} Progress</th>
-                  <th colSpan="6" className="header-dark bg-slate-600">{m3Name} Progress</th>
+                  
+                  {/* ✨ Progress 열이 추가되어 colSpan을 7로 늘림 */}
+                  <th colSpan="7" className="header-dark">{m1Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
                 </tr>
                 <tr>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th><th className="bg-yellow text-slate-800">Total</th>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th><th className="bg-yellow text-slate-800">Total</th>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th><th className="bg-yellow text-slate-800">Total</th>
+                  {/* ✨ M1 Progress 헤더 (날짜 기입 인풋 추가) */}
+                  {[1, 2].map(w => (
+                    <th key={'h1'+w} className="font-normal px-1 py-1 min-w-[60px]">
+                      <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
+                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
+                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
+
+                  {/* ✨ M2 Progress 헤더 */}
+                  {[1, 2].map(w => (
+                    <th key={'h2'+w} className="font-normal px-1 py-1 min-w-[60px]">
+                      <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
+                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
+                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
+
+                  {/* ✨ M3 Progress 헤더 */}
+                  {[1, 2].map(w => (
+                    <th key={'h3'+w} className="font-normal px-1 py-1 min-w-[60px]">
+                      <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
+                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
+                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
                 </tr>
               </thead>
               <tbody>
@@ -234,42 +275,55 @@
                     <td className={r.valM1 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM1)}</td>
                     <td className={r.valM2 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM2)}</td>
                     <td className={r.valM3 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM3)}</td>
-                    <td className={r.valTBD ? 'text-red-400 font-bold' : 'text-slate-300'}>{formatM(r.valTBD)}</td>
+                    {/* TBD 렌더링 삭제됨 */}
                     <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
                     <td className="bg-blue">{formatM(r.budget)}</td>
                     <td className="text-blue">{formatP(r.progress)}</td>
                     <td className="bg-red-light text-red">{formatM(r.gap)}</td>
                     
+                    {/* M1 Weeks & Progress */}
                     {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
+                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM1 / r.budget : 0)}</td>
                     
+                    {/* M2 Weeks & Progress */}
                     {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
+                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM2 / r.budget : 0)}</td>
 
+                    {/* M3 Weeks & Progress */}
                     {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
+                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM3 / r.budget : 0)}</td>
                   </tr>
                 ))}
                 
+                {/* TOTAL ROW */}
                 <tr className="header-dark font-bold text-[13px]">
                   <td colSpan="2" className="text-center">TOTAL</td>
                   <td>{formatM(sumM1)}</td>
                   <td>{formatM(sumM2)}</td>
                   <td>{formatM(sumM3)}</td>
-                  <td>{formatM(sumTBD)}</td>
+                  {/* TBD 렌더링 삭제됨 */}
                   <td className="text-yellow-300">{formatM(sumTotal)}</td>
                   <td className="text-blue-300">{formatM(sumBudget)}</td>
                   <td className="text-green-300">{formatP(sumProgress)}</td>
                   <td className="text-red-300">{formatM(sumGap)}</td>
 
+                  {/* M1 Total & Progress */}
                   {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM1)}</td>
+                  <td className="text-green-300">{formatP(sumBudget ? sumM1 / sumBudget : 0)}</td>
                   
+                  {/* M2 Total & Progress */}
                   {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM2)}</td>
+                  <td className="text-green-300">{formatP(sumBudget ? sumM2 / sumBudget : 0)}</td>
 
+                  {/* M3 Total & Progress */}
                   {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM3)}</td>
+                  <td className="text-green-300">{formatP(sumBudget ? sumM3 / sumBudget : 0)}</td>
                 </tr>
               </tbody>
             </table>
