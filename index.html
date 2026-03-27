@@ -12,6 +12,65 @@
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    /* 스크롤바 세팅 */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* ✨ 대표님 보고용 엑셀 리포트 전용 CSS */
+    .excel-container { 
+        width: 100%; 
+        overflow-x: auto; 
+        background: white; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        margin-bottom: 30px;
+    }
+    .excel-table { 
+        border-collapse: collapse; 
+        width: max-content; 
+        min-width: 100%;
+        white-space: nowrap; 
+    }
+    .excel-table th, .excel-table td { 
+        border: 1px solid #cbd5e1; 
+        padding: 5px 6px; 
+        font-size: 11px; 
+        text-align: right; 
+        vertical-align: middle;
+    }
+    .excel-table th { background-color: #f8fafc; color: #334155; font-weight: bold; text-align: center; }
+    .excel-table .header-dark { background-color: #1e293b !important; color: white !important; border-color: #334155 !important; }
+    
+    .bg-yellow { background-color: #fef9c3 !important; }
+    .bg-blue { background-color: #e0f2fe !important; }
+    .bg-red-light { background-color: #fee2e2 !important; }
+    .text-red { color: #dc2626 !important; font-weight: bold; }
+    .text-blue { color: #2563eb !important; font-weight: bold; }
+    
+    /* 주차별 날짜 입력칸 (미니멀 다이어트) */
+    input.week-input {
+        width: 38px;
+        text-align: center;
+        font-size: 10px;
+        padding: 2px 1px;
+        margin: 0 auto 3px auto;
+        border: 1px solid #94a3b8;
+        border-radius: 2px;
+        display: block;
+        background-color: #ffffff;
+    }
+    input.week-input:focus { border-color: #2563eb; outline: none; background-color: #eff6ff; }
+    
+    .w-week { min-width: 44px; max-width: 44px; }
+    .w-total { min-width: 48px; max-width: 48px; background-color: #fffbeb !important; font-weight: bold;}
+    .w-prog { min-width: 45px; max-width: 45px; background-color: #f0fdf4 !important; font-weight: bold; color: #047857;}
+
+    ::-webkit-scrollbar { height: 12px; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+  </style>
 </head>
 <body className="bg-gray-100">
   <div id="root"></div>
@@ -40,6 +99,9 @@
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+      
+      // ✨ 화면 전환 상태 (dashboard vs report)
+      const [viewMode, setViewMode] = useState('dashboard');
 
       const handleLogin = (e) => {
         e.preventDefault();
@@ -79,35 +141,36 @@
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
+      // ✨ 리포트용 날짜 헤더 State
+      const [weekHeaders, setWeekHeaders] = useState({});
+
       useEffect(() => {
         if (!isLoggedIn) return; 
 
-        // 1. 판매 데이터 
         const unsubscribeSales = db.collection("sales").onSnapshot((snapshot) => {
           if (!snapshot.empty) setSalesData(snapshot.docs.map(doc => doc.data()));
         });
-        // 2. 분기 타겟
         const unsubscribeTargets = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => {
           if (doc.exists) setQuarterTargets(doc.data());
         });
-        // 3. 개인 타겟
         const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
           if (doc.exists) setMemberTargets(doc.data());
         });
-        // ✨ 4. 팀 구조 & 분기 리스트 (DB 저장 연동)
         const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
             const data = doc.data();
             if (data.teams) setTeams(data.teams);
             if (data.quarters) setQuarters(data.quarters);
           } else {
-            // DB에 없으면 최초 생성
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
         });
+        const unsubscribeReport = db.collection("settings").doc("report").onSnapshot((doc) => {
+          if (doc.exists) setWeekHeaders(doc.data().weekHeaders || {});
+        });
 
         return () => {
-          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeLayout();
+          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeLayout(); unsubscribeReport();
         };
       }, [isLoggedIn]);
 
@@ -159,7 +222,12 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
-      // ✨ 팀/멤버/분기 추가 시 DB 연동
+      const handleWeekHeaderChange = (key, value) => {
+        const newHeaders = { ...weekHeaders, [key]: value };
+        setWeekHeaders(newHeaders);
+        db.collection("settings").doc("report").set({ weekHeaders: newHeaders }, { merge: true });
+      };
+
       const addTeam = () => {
         const newTeam = prompt('추가할 탭 이름을 입력하세요 (예: Team 4)');
         if (newTeam && !teams[newTeam]) {
@@ -260,54 +328,22 @@
         );
       }
 
+      // ==========================================
+      // 공통 데이터 연산 (Dashboard & Report)
+      // ==========================================
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
       const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
       const targetKRW = currentTargets.target || 0;
       const gmppTargetKRW = currentTargets.gmppTarget || 0;
       const activeER = currentTargets.er || 1389;
 
-      const targetUSD = targetKRW / activeER;
-      const incentiveTargetKRW = targetKRW * 1.2;
-      const incentiveTargetUSD = targetUSD * 1.2;
-
       const expectedData = currentQData.filter(d => d.status === 'FCST' || d.status === 'ACT');
       const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
       const expectedUSD = expectedKRW / activeER;
 
-      const percent = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
-      const gapKRW = targetKRW - expectedKRW;
-
-      const gmppExpectedKRW = expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const gmppGapKRW = gmppTargetKRW - gmppExpectedKRW;
-
-      const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
-      const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
-
-      const directKRW = expectedData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const indirectKRW = expectedData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
-      const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
-      
-      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
-      const productStats = {};
-      allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
-      expectedData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += cur.priceKRW; }});
-
-      const allDealers = ['세븐유', '이노메드', 'TMI', '병원', '기타'];
-      
-      const dealerIndirectStats = {};
-      allDealers.forEach(d => dealerIndirectStats[d] = { count: 0, sumKRW: 0 });
-      expectedData.filter(d => d.salesType === 'Indirect').forEach(cur => { const dealer = cur.dealerName || '기타'; if (dealerIndirectStats[dealer]) { dealerIndirectStats[dealer].count += 1; dealerIndirectStats[dealer].sumKRW += cur.priceKRW; }});
-
-      const dealerDirectStats = {};
-      allDealers.forEach(d => dealerDirectStats[d] = { count: 0, sumKRW: 0 });
-      expectedData.filter(d => d.salesType === 'Direct').forEach(cur => { const dealer = cur.dealerName || '병원'; if (dealerDirectStats[dealer]) { dealerDirectStats[dealer].count += 1; dealerDirectStats[dealer].sumKRW += cur.priceKRW; }});
-
-      const allMembers = Object.values(teams).flat();
-      const memberStats = {};
-      allMembers.forEach(m => memberStats[m] = { count: 0, sumKRW: 0 });
-      expectedData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += cur.priceKRW; }});
-
+      // ==========================================
+      // Dashboard 전용 렌더링 함수들
+      // ==========================================
       const renderProgressBar = (actKRW, targetKRW) => {
         if (!targetKRW) return null;
         const target120 = targetKRW * 1.2;
@@ -336,8 +372,8 @@
       };
 
       const renderBarChart = (dataObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
-        const maxVal = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
+        const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
         return (
           <div className="space-y-4">
             {dataArr.map(([key, stat]) => {
@@ -357,7 +393,7 @@
       };
 
       const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
         return (
           <div className="space-y-5">
             {dataArr.map(([key, stat]) => {
@@ -380,13 +416,94 @@
         );
       };
 
+      // ==========================================
+      // Report 전용 데이터 및 연산
+      // ==========================================
+      const qStr = selectedQuarter.split(' ') || 'Q1';
+      let m1=1, m2=2, m3=3;
+      let m1Name='Jan', m2Name='Feb', m3Name='Mar';
+      if(qStr === 'Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
+      if(qStr === 'Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
+      if(qStr === 'Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
+
+      const getMonthIdx = (dStr) => {
+        if(!dStr) return -1;
+        const m = parseInt(dStr.split('-'), 10);
+        return isNaN(m) ? -1 : m;
+      };
+      
+      const getWeekIdx = (dStr) => {
+        if(!dStr) return 0;
+        const d = parseInt(dStr.split('-'), 10);
+        if(isNaN(d)) return 0;
+        if(d <= 7) return 1;
+        if(d <= 14) return 2;
+        if(d <= 21) return 3;
+        if(d <= 28) return 4;
+        return 5;
+      };
+
+      const toM = (val) => val / 1000000;
+      const formatM = (val) => {
+        if (!val || isNaN(val) || val === 0 || val === Infinity || val === -Infinity) return '-';
+        return Number(val).toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+      };
+      const formatP = (val) => {
+        if (!val || isNaN(val) || val === 0 || val === Infinity || val === -Infinity) return '-';
+        return (Number(val) * 100).toFixed(1) + '%';
+      };
+
+      let reportRows = [];
+      Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
+        members.forEach(member => {
+          const mData = expectedData.filter(d => d.member === member);
+          const calcMonth = (m) => mData.filter(d => getMonthIdx(d.deliveryDate) === m).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const calcWeek = (m, w) => mData.filter(d => getMonthIdx(d.deliveryDate) === m && getWeekIdx(d.deliveryDate) === w).reduce((a,b)=>a+toM(b.priceKRW),0);
+
+          const valM1 = calcMonth(m1);
+          const valM2 = calcMonth(m2);
+          const valM3 = calcMonth(m3);
+          
+          const total = valM1 + valM2 + valM3;
+          const budget = toM(memberTargets[member] || 0);
+          const gap = budget - total; 
+          const progress = budget ? total / budget : 0;
+
+          const weeksM1 = [calcWeek(m1,1), calcWeek(m1,2), calcWeek(m1,3), calcWeek(m1,4), calcWeek(m1,5)];
+          const weeksM2 = [calcWeek(m2,1), calcWeek(m2,2), calcWeek(m2,3), calcWeek(m2,4), calcWeek(m2,5)];
+          const weeksM3 = [calcWeek(m3,1), calcWeek(m3,2), calcWeek(m3,3), calcWeek(m3,4), calcWeek(m3,5)];
+
+          reportRows.push({ team, member, valM1, valM2, valM3, total, budget, gap, progress, weeksM1, weeksM2, weeksM3 });
+        });
+      });
+
+      const sumM1 = reportRows.reduce((a,b)=>a+b.valM1,0);
+      const sumM2 = reportRows.reduce((a,b)=>a+b.valM2,0);
+      const sumM3 = reportRows.reduce((a,b)=>a+b.valM3,0);
+      const sumTotal = reportRows.reduce((a,b)=>a+b.total,0);
+      
+      const repSumBudget = toM(targetKRW);
+      const repSumGap = repSumBudget - sumTotal;
+      const repSumProgress = repSumBudget ? sumTotal / repSumBudget : 0;
+
+      const sumWeeksM1 =.map(i => reportRows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
+      const sumWeeksM2 =.map(i => reportRows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
+      const sumWeeksM3 =.map(i => reportRows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
+
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productCounts = {};
+      allProducts.forEach(p => productCounts[p] = { count: 0 });
+      expectedData.forEach(d => { if(productCounts[d.product]) productCounts[d.product].count += 1; });
+
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
+          {/* 모바일 햄버거 */}
           <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
             <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
           </div>
 
+          {/* 사이드바 */}
           <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
             <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
             <div className="flex-1">
@@ -407,23 +524,178 @@
             </div>
             
             <div className="mt-8 border-t border-slate-600 pt-4">
-              <div className="mb-4">
-                <button onClick={() => window.open('report.html', '_blank')} className="w-full bg-slate-700 text-white font-extrabold py-3 rounded-lg hover:bg-slate-600 transition flex items-center justify-center shadow-lg border border-slate-500">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                  📊 대표님 보고용 리포트
-                </button>
-              </div>
-              <button onClick={exportToCSV} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                엑셀 (CSV) 추출
+              {/* ✨ 통합 뷰 스위치 버튼 */}
+              <button onClick={() => { setViewMode('dashboard'); setIsSidebarOpen(false); }} className={`w-full py-3 mb-2 rounded-lg font-extrabold transition flex items-center justify-center shadow-md ${viewMode === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                📝 데이터 입력 (Dash)
+              </button>
+              <button onClick={() => { setViewMode('report'); setIsSidebarOpen(false); }} className={`w-full py-3 mb-4 rounded-lg font-extrabold transition flex items-center justify-center shadow-md ${viewMode === 'report' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                📊 대표님 보고용
+              </button>
+
+              <button onClick={exportToCSV} className="w-full bg-slate-200 text-slate-800 font-bold py-3 rounded-lg hover:bg-slate-300 transition flex items-center justify-center shadow-sm">
+                엑셀 (CSV) 다운로드
               </button>
               <button onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">로그아웃</button>
             </div>
           </div>
 
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100">
-            {!selectedMember ? (
-              <div>
+            
+            {/* =========================================
+                화면 1. 대표님 보고용 (Report View)
+            ========================================= */}
+            {viewMode === 'report' ? (
+              <div className="animate-fade-in">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6">
+                  <div className="mb-4 md:mb-0">
+                    <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
+                    <p className="text-slate-500 text-sm font-bold mt-1">Candela Korea - Capital Sales Only <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded ml-2">(Unit: M₩)</span></p>
+                  </div>
+                </div>
+
+                <div className="excel-container">
+                  <table className="excel-table">
+                    <thead>
+                      <tr>
+                        <th rowSpan="2" className="text-left align-middle" style={{minWidth: '60px'}}>Team</th>
+                        <th rowSpan="2" className="text-left align-middle" style={{minWidth: '80px'}}>Sales Reps</th>
+                        <th rowSpan="2" className="text-center align-middle" style={{minWidth: '45px'}}>{m1Name}</th>
+                        <th rowSpan="2" className="text-center align-middle" style={{minWidth: '45px'}}>{m2Name}</th>
+                        <th rowSpan="2" className="text-center align-middle" style={{minWidth: '45px'}}>{m3Name}</th>
+                        
+                        <th rowSpan="2" className="bg-yellow text-center align-middle" style={{minWidth: '55px'}}>Q Total</th>
+                        <th rowSpan="2" className="bg-blue text-center align-middle" style={{minWidth: '55px'}}>Q Budget</th>
+                        <th rowSpan="2" className="text-center align-middle" style={{minWidth: '45px'}}>%</th>
+                        <th rowSpan="2" className="bg-red-light text-red text-center align-middle" style={{minWidth: '55px'}}>Gap</th>
+                        
+                        {/* M1, M2, M3 Progress 헤더 */}
+                        <th colSpan="7" className="header-dark">{m1Name} Progress</th>
+                        <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
+                        <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
+                      </tr>
+                      <tr>
+                        {/* M1: 1~5주차 + Total + Prog */}
+                        {.map(w => (
+                          <th key={'h1'+w} className="font-normal text-center align-middle bg-slate-50 w-week">
+                            <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                            <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
+                          </th>
+                        ))}
+                        <th className="w-total align-bottom text-center">Total</th>
+                        <th className="w-prog align-bottom text-center">Prog.</th>
+
+                        {/* M2: 1~5주차 + Total + Prog */}
+                        {.map(w => (
+                          <th key={'h2'+w} className="font-normal text-center align-middle bg-slate-50 w-week">
+                            <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                            <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
+                          </th>
+                        ))}
+                        <th className="w-total align-bottom text-center">Total</th>
+                        <th className="w-prog align-bottom text-center">Prog.</th>
+
+                        {/* M3: 1~5주차 + Total + Prog */}
+                        {.map(w => (
+                          <th key={'h3'+w} className="font-normal text-center align-middle bg-slate-50 w-week">
+                            <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                            <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
+                          </th>
+                        ))}
+                        <th className="w-total align-bottom text-center">Total</th>
+                        <th className="w-prog align-bottom text-center">Prog.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportRows.map((r, i) => (
+                        <tr key={i} className="hover:bg-slate-50 transition">
+                          <td className="text-left text-slate-500 font-bold">{r.team}</td>
+                          <td className="text-left font-bold text-[12px]">{r.member}</td>
+                          <td className={r.valM1 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM1)}</td>
+                          <td className={r.valM2 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM2)}</td>
+                          <td className={r.valM3 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM3)}</td>
+                          
+                          <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
+                          <td className="bg-blue font-bold text-slate-600">{formatM(r.budget)}</td>
+                          <td className="text-blue font-bold">{formatP(r.progress)}</td>
+                          <td className="bg-red-light text-red">{r.gap === 0 ? '' : formatM(r.gap)}</td>
+                          
+                          {/* M1 */}
+                          {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? 'text-slate-800 font-bold w-week' : 'w-week text-slate-300'}>{formatM(w)}</td>)}
+                          <td className="w-total text-slate-800">{formatM(r.valM1)}</td>
+                          <td className="w-prog">{formatP(r.budget ? r.valM1 / r.budget : 0)}</td>
+                          
+                          {/* M2 */}
+                          {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? 'text-slate-800 font-bold w-week' : 'w-week text-slate-300'}>{formatM(w)}</td>)}
+                          <td className="w-total text-slate-800">{formatM(r.valM2)}</td>
+                          <td className="w-prog">{formatP(r.budget ? r.valM2 / r.budget : 0)}</td>
+
+                          {/* M3 */}
+                          {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? 'text-slate-800 font-bold w-week' : 'w-week text-slate-300'}>{formatM(w)}</td>)}
+                          <td className="w-total text-slate-800">{formatM(r.valM3)}</td>
+                          <td className="w-prog">{formatP(r.budget ? r.valM3 / r.budget : 0)}</td>
+                        </tr>
+                      ))}
+                      
+                      {/* TOTAL ROW */}
+                      <tr className="header-dark font-bold text-[12px]">
+                        <td colSpan="2" className="text-center tracking-widest">TOTAL</td>
+                        <td>{formatM(sumM1)}</td>
+                        <td>{formatM(sumM2)}</td>
+                        <td>{formatM(sumM3)}</td>
+                        
+                        <td className="text-yellow-300 bg-yellow">{formatM(sumTotal)}</td>
+                        <td className="text-blue-300 bg-blue">{formatM(repSumBudget)}</td>
+                        <td className="text-green-300">{formatP(repSumProgress)}</td>
+                        <td className="text-red-300 bg-red-light">{formatM(repSumGap)}</td>
+
+                        {/* M1 Total & Prog */}
+                        {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx} className="w-week">{formatM(w)}</td>)}
+                        <td className="text-blue-800 w-total">{formatM(sumM1)}</td>
+                        <td className="w-prog">{formatP(repSumBudget ? sumM1 / repSumBudget : 0)}</td>
+                        
+                        {/* M2 Total & Prog */}
+                        {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx} className="w-week">{formatM(w)}</td>)}
+                        <td className="text-blue-800 w-total">{formatM(sumM2)}</td>
+                        <td className="w-prog">{formatP(repSumBudget ? sumM2 / repSumBudget : 0)}</td>
+
+                        {/* M3 Total & Prog */}
+                        {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx} className="w-week">{formatM(w)}</td>)}
+                        <td className="text-blue-800 w-total">{formatM(sumM3)}</td>
+                        <td className="w-prog">{formatP(repSumBudget ? sumM3 / repSumBudget : 0)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="excel-container w-full md:w-1/3">
+                  <table className="excel-table w-full">
+                    <thead>
+                      <tr>
+                        <th colSpan="2" className="header-dark bg-slate-600">System Required (# of unit)</th>
+                      </tr>
+                      <tr>
+                        <th className="text-left w-1/2">Product</th>
+                        <th className="w-1/2">Sales Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([p, data]) => (
+                        <tr key={p}>
+                          <td className="text-left font-bold">{p}</td>
+                          <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} 대` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : 
+
+            /* =========================================
+                화면 2. 데이터 입력 (Dashboard View)
+            ========================================= */
+            !selectedMember ? (
+              <div className="animate-fade-in">
                 <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
                 
                 <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
@@ -439,6 +711,7 @@
                 <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">📋 분기 요약 지표 (Summary)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
+                    {/* ... (기존 Summary UI) ... */}
                     <div className="flex flex-col space-y-3">
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-extrabold text-[11px]">적용 환율 (ER) ✏️</span><input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-slate-500 transition" placeholder="예: 1389" /></div>
                       <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-700 font-extrabold text-[11px]">Target (KRW) ✏️</span><input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-blue-500 transition" placeholder="목표 금액 기입" /></div>
@@ -452,41 +725,24 @@
                       <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gapKRW.toLocaleString()}</span></div>
                     </div>
                     <div className="flex flex-col space-y-3">
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">% (예상치 달성률)</span><span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{percent.toFixed(3)} %</span></div>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">% (예상치 달성률)</span><span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{(targetKRW ? (expectedKRW / targetKRW) * 100 : 0).toFixed(3)} %</span></div>
                       <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-purple-800 font-extrabold text-[11px]">GMPP Target (KRW) ✏️</span><input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-purple-500 transition" placeholder="GMPP 목표 기입" /></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP 예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP 예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {(expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0)).toLocaleString()}</span></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {(gmppTargetKRW - expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0)).toLocaleString()}</span></div>
                     </div>
                   </div>
 
+                  {/* Direct vs Indirect */}
                   <div className="mt-6 border-t border-slate-200 pt-5">
                     <h4 className="text-[13px] font-bold text-slate-600 mb-2">🔄 Sales Type 비중 (Direct vs Indirect)</h4>
                     <div className="flex flex-col md:flex-row justify-between text-xs md:text-sm font-bold mb-2 md:mb-1">
-                      <span className="text-blue-600 mb-1 md:mb-0">Direct: ₩ {directKRW.toLocaleString()} ({directPer.toFixed(1)}%)</span>
-                      <span className="text-purple-600">Indirect: ₩ {indirectKRW.toLocaleString()} ({indirectPer.toFixed(1)}%)</span>
-                    </div>
-                    <div className="w-full h-3 md:h-4 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
-                      <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${directPer}%` }}></div>
-                      <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${indirectPer}%` }}></div>
+                      <span className="text-blue-600 mb-1 md:mb-0">Direct: ₩ {(expectedData.filter(d => d.salesType === 'Direct').reduce((a,b)=>a+b.priceKRW,0)).toLocaleString()}</span>
+                      <span className="text-purple-600">Indirect: ₩ {(expectedData.filter(d => d.salesType === 'Indirect').reduce((a,b)=>a+b.priceKRW,0)).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
-                  <div className="grid grid-cols-2 md:flex bg-gray-50 border-b">
-                    <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-blue-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>📊 장비별 전체</button>
-                    <button onClick={() => setActiveStatTab('dealerIndirect')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerIndirect' ? 'bg-white text-purple-600 border-purple-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🤝 딜러 (Indirect)</button>
-                    <button onClick={() => setActiveStatTab('dealerDirect')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerDirect' ? 'bg-white text-indigo-600 border-indigo-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🏢 딜러 (Direct)</button>
-                    <button onClick={() => setActiveStatTab('member')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'member' ? 'bg-white text-emerald-600 border-emerald-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🧑‍💼 멤버 달성률</button>
-                  </div>
-                  <div className="p-4 md:p-8">
-                    {activeStatTab === 'product' && renderBarChart(productStats, 'bg-blue-500')}
-                    {activeStatTab === 'dealerIndirect' && renderBarChart(dealerIndirectStats, 'bg-purple-500')}
-                    {activeStatTab === 'dealerDirect' && renderBarChart(dealerDirectStats, 'bg-indigo-500')}
-                    {activeStatTab === 'member' && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
-                  </div>
-                </div>
-                
+                {/* 하단 차트 및 팀 멤버 리스트 */}
                 <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar">
                   {Object.keys(teams).map(team => (
                     <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam === team ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
@@ -515,7 +771,7 @@
                 </div>
               </div>
             ) : (
-              <div>
+              <div className="animate-fade-in">
                 <button onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className="mb-4 flex items-center bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-slate-800 transition">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                   뒤로가기 (팀 목록)
@@ -542,7 +798,7 @@
                           <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-purple-500 flex-1 lg:flex-none"><span className="text-[10px] text-purple-600 block font-bold">140% Target</span><span className="font-bold text-xs md:text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
                         </div>
                       </div>
-                      {renderProgressBar(memberACT, memberTargets[selectedMember])}
+                      {renderProgressBar(salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).reduce((acc, cur) => acc + cur.priceKRW, 0), memberTargets[selectedMember])}
                     </div>
                   )}
                   
@@ -644,10 +900,5 @@
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
-  
-  <style>
-    .hide-scrollbar::-webkit-scrollbar { display: none; }
-    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
 </body>
 </html>
