@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대표님 보고용 리포트 (Sales Progress)</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    /* 엑셀 스타일의 깔끔한 테이블을 위한 CSS */
+    .excel-table th, .excel-table td {
+      border: 1px solid #cbd5e1;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+    }
+    .excel-table th {
+      background-color: #f1f5f9;
+      font-weight: bold;
+      text-align: center;
+      color: #334155;
+    }
+  </style>
+</head>
+<body className="bg-slate-100 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
+      authDomain: "sales-dashboard-d0d13.firebaseapp.com",
+      projectId: "sales-dashboard-d0d13",
+      storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
+      messagingSenderId: "870275096697",
+      appId: "1:870275096697:web:cd7373b77358681e21b4a8",
+      measurementId: "G-K5G6BMNBX9"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const { useState, useEffect } = React;
+
+    const ReportApp = () => {
+      const SECRET_PASSWORD = "team2026"; 
+      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
+      const [pwdInput, setPwdInput] = useState('');
+
+      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const [salesData, setSalesData] = useState([]);
+      const [quarterTargets, setQuarterTargets] = useState({});
+      const [memberTargets, setMemberTargets] = useState({});
+
+      const teams = {
+        'Team 1': ['Kim SH', 'Oh SG'],
+        'Team 2': ['Baek SC', 'Lee GR'],
+        'Team 3': ['YC lim']
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pwdInput === SECRET_PASSWORD) {
+          localStorage.setItem('adminAuth', 'true'); setIsLoggedIn(true);
+        } else {
+          alert('비밀번호 불일치!'); setPwdInput('');
+        }
+      };
+
+      useEffect(() => {
+        if (!isLoggedIn) return; 
+        const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
+        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
+        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); };
+      }, [isLoggedIn]);
+
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-900 px-4">
+            <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm text-center">
+              <h2 className="text-xl font-bold mb-4">📈 보고용 리포트 보안접속</h2>
+              <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded mb-4 text-center" placeholder="Password" />
+              <button type="submit" className="w-full bg-slate-800 text-white py-3 rounded font-bold">접속</button>
+            </form>
+          </div>
+        );
+      }
+
+      // ==========================================
+      // 데이터 분류 로직 (분기 -> 월별)
+      // ==========================================
+      const qNum = selectedQuarter.split(' '); // "Q1", "Q2"
+      const monthsMap = { 'Q1':, 'Q2':, 'Q3':, 'Q4': };
+      const targetMonths = monthsMap[qNum] ||;
+
+      const getMonthFromDate = (dateStr) => {
+        if(!dateStr) return 'TBD';
+        const m = parseInt(dateStr.split('-'), 10);
+        return isNaN(m) ? 'TBD' : m;
+      };
+
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
+      
+      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, er: 1389 };
+      const totalBudget = currentTargets.target || 0;
+      const totalActual = currentQData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const totalProgress = totalBudget ? (totalActual / totalBudget) * 100 : 0;
+      const totalGap = totalBudget - totalActual;
+
+      // 멤버별 데이터 집계
+      const generateMemberData = () => {
+        let rows = [];
+        Object.entries(teams).forEach(([teamName, members]) => {
+          members.forEach(member => {
+            const mData = currentQData.filter(d => d.member === member);
+            const m1 = mData.filter(d => getMonthFromDate(d.deliveryDate) === targetMonths).reduce((a,b)=>a+b.priceKRW,0);
+            const m2 = mData.filter(d => getMonthFromDate(d.deliveryDate) === targetMonths).reduce((a,b)=>a+b.priceKRW,0);
+            const m3 = mData.filter(d => getMonthFromDate(d.deliveryDate) === targetMonths).reduce((a,b)=>a+b.priceKRW,0);
+            const tbd = mData.filter(d => getMonthFromDate(d.deliveryDate) === 'TBD').reduce((a,b)=>a+b.priceKRW,0);
+            
+            const mTotal = m1 + m2 + m3 + tbd;
+            const mBudget = memberTargets[member] || 0;
+            const mProgress = mBudget ? (mTotal / mBudget) * 100 : 0;
+            const mGap = mBudget - mTotal;
+
+            rows.push({ team: teamName, member, m1, m2, m3, tbd, mTotal, mBudget, mProgress, mGap });
+          });
+        });
+        return rows;
+      };
+
+      const memberRows = generateMemberData();
+      
+      // 장비(Product) 판매 수량 집계
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productCounts = {};
+      allProducts.forEach(p => productCounts[p] = { count: 0, sum: 0 });
+      currentQData.forEach(d => {
+        if(productCounts[d.product]) {
+          productCounts[d.product].count += 1;
+          productCounts[d.product].sum += d.priceKRW;
+        }
+      });
+
+      return (
+        <div className="p-6 md:p-10 max-w-7xl mx-auto">
+          {/* 헤더 */}
+          <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b-4 border-slate-800 pb-4">
+            <div>
+              <h1 className="text-3xl font-extrabold text-slate-800 mb-1">Monthly Sales Progress Check</h1>
+              <p className="text-slate-500 font-bold">Candela Korea - Capital Sales Only (FCST & ACT)</p>
+            </div>
+            <div className="mt-4 md:mt-0 flex items-center space-x-3">
+              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="p-2 border border-slate-400 rounded-lg font-bold text-lg outline-none bg-white shadow-sm cursor-pointer">
+                {quarters.map(q => <option key={q} value={q}>{q}</option>)}
+              </select>
+              <button onClick={() => window.close()} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-bold transition">닫기</button>
+            </div>
+          </div>
+
+          {/* 서머리 지표 (대표님 보고용 최상단 요약) */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white p-5 rounded-xl shadow-md border-l-8 border-blue-800">
+              <span className="text-sm font-bold text-slate-500">Korea Budget (Target)</span>
+              <div className="text-2xl font-mono font-extrabold text-slate-800 mt-1">₩ {totalBudget.toLocaleString()}</div>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-md border-l-8 border-yellow-500">
+              <span className="text-sm font-bold text-slate-500">Actual (예상치)</span>
+              <div className="text-2xl font-mono font-extrabold text-slate-800 mt-1">₩ {totalActual.toLocaleString()}</div>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-md border-l-8 border-red-500">
+              <span className="text-sm font-bold text-slate-500">Remaining Gap</span>
+              <div className="text-2xl font-mono font-extrabold text-red-600 mt-1">₩ {totalGap.toLocaleString()}</div>
+            </div>
+            <div className="bg-slate-800 p-5 rounded-xl shadow-md flex flex-col justify-center items-center text-white">
+              <span className="text-sm font-bold text-slate-300 mb-1">Progress Rate</span>
+              <div className="text-3xl font-extrabold text-green-400">{totalProgress.toFixed(1)}%</div>
+            </div>
+          </div>
+
+          {/* 메인 엑셀형 테이블 */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-10 border border-slate-300">
+            <div className="bg-slate-700 text-white p-4">
+              <h3 className="font-bold text-lg">📈 {selectedQuarter} Revenue Progress By Brick (단위: KRW)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full excel-table text-right whitespace-nowrap">
+                <thead>
+                  <tr>
+                    <th className="text-left bg-slate-200">Team</th>
+                    <th className="text-left bg-slate-200">Sales Reps</th>
+                    <th>{targetMonths}월</th>
+                    <th>{targetMonths}월</th>
+                    <th>{targetMonths}월</th>
+                    <th>미정(TBD)</th>
+                    <th className="bg-yellow-50">Q Total</th>
+                    <th className="bg-blue-50">Q Budget</th>
+                    <th className="bg-red-50">Gap</th>
+                    <th className="bg-slate-800 text-white">Progress (%)</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono">
+                  {memberRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="text-left font-sans font-bold text-slate-600">{row.team}</td>
+                      <td className="text-left font-sans font-bold">{row.member}</td>
+                      <td className={row.m1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.m1.toLocaleString()}</td>
+                      <td className={row.m2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.m2.toLocaleString()}</td>
+                      <td className={row.m3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.m3.toLocaleString()}</td>
+                      <td className={row.tbd > 0 ? "text-red-400" : "text-slate-300"}>{row.tbd.toLocaleString()}</td>
+                      <td className="bg-yellow-50/50 font-bold">{row.mTotal.toLocaleString()}</td>
+                      <td className="bg-blue-50/50">{row.mBudget.toLocaleString()}</td>
+                      <td className="bg-red-50/50 text-red-500">{row.mGap.toLocaleString()}</td>
+                      <td className="font-bold text-center bg-slate-50 text-blue-600">{row.mProgress.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  {/* 총합계 줄 */}
+                  <tr className="bg-slate-800 text-white font-extrabold">
+                    <td colSpan="2" className="text-center">TOTAL</td>
+                    <td>{memberRows.reduce((a,b)=>a+b.m1,0).toLocaleString()}</td>
+                    <td>{memberRows.reduce((a,b)=>a+b.m2,0).toLocaleString()}</td>
+                    <td>{memberRows.reduce((a,b)=>a+b.m3,0).toLocaleString()}</td>
+                    <td>{memberRows.reduce((a,b)=>a+b.tbd,0).toLocaleString()}</td>
+                    <td className="text-yellow-300">{totalActual.toLocaleString()}</td>
+                    <td className="text-blue-300">{totalBudget.toLocaleString()}</td>
+                    <td className="text-red-300">{totalGap.toLocaleString()}</td>
+                    <td className="text-center text-green-300">{totalProgress.toFixed(1)}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 하단 시스템 요구 수량 (Product Breakdown) */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-300 w-full lg:w-1/2">
+            <div className="bg-slate-600 text-white p-3">
+              <h3 className="font-bold">📦 System Required (# of unit)</h3>
+            </div>
+            <table className="w-full excel-table text-right">
+              <thead>
+                <tr>
+                  <th className="text-left bg-slate-100">Product</th>
+                  <th className="bg-slate-100">Sales Count</th>
+                  <th className="bg-slate-100">Total Price (KRW)</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([product, data]) => (
+                  <tr key={product} className={data.count > 0 ? "bg-white" : "bg-slate-50 text-slate-400"}>
+                    <td className="text-left font-sans font-bold">{product}</td>
+                    <td className="font-bold">{data.count} 대</td>
+                    <td>{data.sum.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ReportApp />);
+  </script>
+</body>
+</html>
