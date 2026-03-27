@@ -36,7 +36,7 @@
 
     const App = () => {
       // =========================================================================
-      // 🔒 비밀번호 설정 부분
+      // 🔒 비밀번호 설정 (요청하신 비밀번호로 업데이트 완료!)
       // =========================================================================
       const SECRET_PASSWORD = "candelakoreasales"; 
 
@@ -224,27 +224,23 @@
         }
       };
 
-      // ✨ [추가] 엑셀(CSV) 추출 함수
+      // 엑셀(CSV) 추출 함수
       const exportToCSV = () => {
         if (salesData.length === 0) return alert("추출할 데이터가 없습니다.");
 
-        // 1. 헤더 설정
         const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
         
-        // 2. 데이터 매핑
         const rows = salesData.map(d => [
           d.quarter, d.team, d.member, d.status, d.contractType, d.deliveryDate, 
           d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, 
           d.priceKRW, d.priceUSD
         ]);
         
-        // 3. CSV 문자열 생성 (따옴표 처리로 데이터 내 쉼표 방어)
         const csvContent = [
           headers.join(','),
           ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
         ].join('\n');
         
-        // 4. 한글 깨짐 방지 BOM(\uFEFF) 추가 및 파일 다운로드 실행
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -491,8 +487,17 @@
               </button>
             </div>
             
-            {/* 📥 엑셀 다운로드 버튼 추가 */}
             <div className="mt-8 border-t border-slate-600 pt-4">
+              
+              {/* ✨ 리포트 열기 버튼 (이 부분이 추가된 부분입니다!) */}
+              <div className="mb-4">
+                <button onClick={() => window.open('report.html', '_blank')} className="w-full bg-slate-700 text-white font-extrabold py-3 rounded-lg hover:bg-slate-600 transition flex items-center justify-center shadow-lg border border-slate-500">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  📊 대표님 보고용 리포트
+                </button>
+              </div>
+
+              {/* 📥 엑셀 다운로드 버튼 */}
               <button onClick={exportToCSV} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 엑셀 (CSV) 추출
@@ -827,7 +832,7 @@
                         {editingId ? '수정 완료' : '데이터 신규 저장'}
                       </button>
                       {editingId && (
-                        <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-4 text-sm text-gray-500 hover:underline">
+                        <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-4 text-sm text-gray-500 hover:underline ml-3">
                           수정 취소
                         </button>
                       )}
