@@ -15,17 +15,44 @@
     body { background-color: #f1f5f9; font-family: 'Arial', sans-serif; }
     .excel-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;}
     .excel-table { border-collapse: collapse; white-space: nowrap; width: max-content; }
-    .excel-table th, .excel-table td { border: 1px solid #94a3b8; padding: 6px 12px; font-size: 12px; text-align: right; }
+    
+    /* ✨ 칸 너비 다이어트 및 패딩 축소 */
+    .excel-table th, .excel-table td { 
+        border: 1px solid #94a3b8; 
+        padding: 4px 6px; 
+        font-size: 11px; 
+        text-align: right; 
+    }
     .excel-table th { background-color: #dbeafe; color: #1e293b; font-weight: bold; text-align: center; }
     .excel-table .header-dark { background-color: #1e293b; color: white; border-color: #334155; }
     .text-left { text-align: left !important; }
     .text-center { text-align: center !important; }
+    
+    /* 컬러 포인트 */
     .bg-yellow { background-color: #fef9c3 !important; }
     .bg-blue { background-color: #e0f2fe !important; }
     .bg-red-light { background-color: #fee2e2 !important; }
     .text-red { color: #dc2626 !important; font-weight: bold; }
     .text-blue { color: #2563eb !important; font-weight: bold; }
     .font-bold { font-weight: bold !important; }
+    
+    /* ✨ 주차별 칸과 인풋 박스 최적화 */
+    .col-week { width: 38px; min-width: 38px; max-width: 45px; }
+    .col-total { width: 45px; font-weight: bold; background-color: #fef9c3 !important; color: #1e40af; }
+    .col-prog { width: 40px; font-weight: bold; color: #047857; background-color: #ecfdf5 !important; }
+    
+    input.week-input {
+        width: 100%;
+        text-align: center;
+        font-size: 10px;
+        padding: 1px 0;
+        margin-bottom: 2px;
+        border: 1px solid #cbd5e1;
+        border-radius: 2px;
+        color: #0f172a;
+    }
+    input.week-input:focus { border-color: #3b82f6; outline: none; }
+
     ::-webkit-scrollbar { height: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
   </style>
@@ -88,6 +115,7 @@
             if (data.quarters) setQuarters(data.quarters);
           }
         });
+        
         // ✨ 날짜 헤더 불러오기
         const unsubReport = db.collection("settings").doc("report").onSnapshot((doc) => {
           if (doc.exists) setWeekHeaders(doc.data().weekHeaders || {});
@@ -96,7 +124,7 @@
         return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); unsubReport(); };
       }, [isLoggedIn]);
 
-      // ✨ 날짜 헤더 저장 함수
+      // ✨ 날짜 헤더 저장 함수 (타이핑 시 파이어베이스로 실시간 전송)
       const handleWeekHeaderChange = (key, value) => {
         const newHeaders = { ...weekHeaders, [key]: value };
         setWeekHeaders(newHeaders);
@@ -128,6 +156,7 @@
         const m = parseInt(dStr.split('-')[1], 10);
         return isNaN(m) ? -1 : m;
       };
+      
       const getWeekIdx = (dStr) => {
         if(!dStr) return 0;
         const d = parseInt(dStr.split('-')[2], 10);
@@ -139,15 +168,15 @@
         return 5;
       };
 
-      // 백만원(M) 단위 변환
+      // 백만원(M) 단위 변환 (소수점 1자리까지)
       const toM = (val) => val / 1000000;
-      const formatM = (val) => val === 0 ? '-' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+      const formatM = (val) => val === 0 ? '' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
       const formatP = (val) => (val * 100).toFixed(1) + '%';
 
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
 
       let rows = [];
-      // ✨ Team 1, Team 2 오름차순으로 정렬
+      // ✨ Team 1부터 오름차순 정렬 로직 확실하게 적용
       Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
           const mData = currentQData.filter(d => d.member === member);
@@ -159,7 +188,7 @@
           const valM2 = calcMonth(m2);
           const valM3 = calcMonth(m3);
           
-          // ✨ TBD(미정) 제거
+          // ✨ TBD 삭제하고 M1+M2+M3 합계만 사용
           const total = valM1 + valM2 + valM3;
           const budget = toM(memberTargets[member] || 0);
           const gap = budget - total; 
@@ -176,7 +205,7 @@
         });
       });
 
-      // 합계 계산
+      // 총 합계 계산
       const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
       const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
       const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
@@ -219,92 +248,91 @@
             <table className="excel-table">
               <thead>
                 <tr>
-                  <th rowSpan="2" className="text-left w-16">Team</th>
-                  <th rowSpan="2" className="text-left w-24">Sales Reps</th>
-                  <th rowSpan="2">{m1Name}</th>
-                  <th rowSpan="2">{m2Name}</th>
-                  <th rowSpan="2">{m3Name}</th>
-                  {/* ✨ TBD 열 삭제됨 */}
-                  <th rowSpan="2" className="bg-yellow">Q Total</th>
-                  <th rowSpan="2" className="bg-blue">Q Budget</th>
-                  <th rowSpan="2">%</th>
-                  <th rowSpan="2" className="bg-red-light text-red">Gap</th>
+                  <th rowSpan="2" className="text-left w-16 align-middle">Team</th>
+                  <th rowSpan="2" className="text-left w-20 align-middle">Sales Reps</th>
+                  <th rowSpan="2" className="w-10 text-center align-middle">{m1Name}</th>
+                  <th rowSpan="2" className="w-10 text-center align-middle">{m2Name}</th>
+                  <th rowSpan="2" className="w-10 text-center align-middle">{m3Name}</th>
                   
-                  {/* ✨ Progress 열이 추가되어 colSpan을 7로 늘림 */}
+                  <th rowSpan="2" className="col-total text-center align-middle">Q Total</th>
+                  <th rowSpan="2" className="w-12 text-center bg-blue align-middle">Q Budget</th>
+                  <th rowSpan="2" className="w-12 text-center align-middle">%</th>
+                  <th rowSpan="2" className="w-14 text-center bg-red-light text-red align-middle">Gap</th>
+                  
+                  {/* ✨ Progress 섹션 헤더 (각각 7칸으로 확장됨) */}
                   <th colSpan="7" className="header-dark">{m1Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
                 </tr>
                 <tr>
-                  {/* ✨ M1 Progress 헤더 (날짜 기입 인풋 추가) */}
+                  {/* ✨ M1: 1~5주차 인풋 박스 + Total + Prog */}
                   {[1, 2].map(w => (
-                    <th key={'h1'+w} className="font-normal px-1 py-1 min-w-[60px]">
-                      <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
-                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    <th key={'h1'+w} className="font-normal col-week text-center align-middle">
+                      <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
+                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
                     </th>
                   ))}
-                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
-                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
+                  <th className="col-total align-bottom text-center">Total</th>
+                  <th className="col-prog align-bottom text-center">Prog.</th>
 
-                  {/* ✨ M2 Progress 헤더 */}
+                  {/* ✨ M2: 1~5주차 인풋 박스 + Total + Prog */}
                   {[1, 2].map(w => (
-                    <th key={'h2'+w} className="font-normal px-1 py-1 min-w-[60px]">
-                      <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
-                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    <th key={'h2'+w} className="font-normal col-week text-center align-middle">
+                      <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
+                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
                     </th>
                   ))}
-                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
-                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
+                  <th className="col-total align-bottom text-center">Total</th>
+                  <th className="col-prog align-bottom text-center">Prog.</th>
 
-                  {/* ✨ M3 Progress 헤더 */}
+                  {/* ✨ M3: 1~5주차 인풋 박스 + Total + Prog */}
                   {[1, 2].map(w => (
-                    <th key={'h3'+w} className="font-normal px-1 py-1 min-w-[60px]">
-                      <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="w-full text-center text-slate-800 p-0.5 border border-slate-300 rounded mb-1 text-[11px] outline-none focus:border-blue-500" placeholder="ex) 1~5" />
-                      <div className="font-bold">{ordinals[w-1]} w</div>
+                    <th key={'h3'+w} className="font-normal col-week text-center align-middle">
+                      <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
+                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
                     </th>
                   ))}
-                  <th className="bg-yellow text-slate-800 align-bottom">Total</th>
-                  <th className="bg-blue-100 text-blue-800 align-bottom">Progress</th>
+                  <th className="col-total align-bottom text-center">Total</th>
+                  <th className="col-prog align-bottom text-center">Prog.</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className="hover:bg-slate-50 transition">
                     <td className="text-left text-slate-500 font-bold">{r.team}</td>
-                    <td className="text-left font-bold">{r.member}</td>
-                    <td className={r.valM1 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM1)}</td>
-                    <td className={r.valM2 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM2)}</td>
-                    <td className={r.valM3 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM3)}</td>
-                    {/* TBD 렌더링 삭제됨 */}
-                    <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
-                    <td className="bg-blue">{formatM(r.budget)}</td>
-                    <td className="text-blue">{formatP(r.progress)}</td>
-                    <td className="bg-red-light text-red">{formatM(r.gap)}</td>
+                    <td className="text-left font-bold text-[12px]">{r.member}</td>
+                    <td className={r.valM1 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM1)}</td>
+                    <td className={r.valM2 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM2)}</td>
+                    <td className={r.valM3 ? 'text-slate-800 font-bold' : ''}>{formatM(r.valM3)}</td>
+                    <td className="col-total">{formatM(r.total)}</td>
+                    <td className="bg-blue font-bold text-slate-600">{formatM(r.budget)}</td>
+                    <td className="text-blue font-bold">{formatP(r.progress)}</td>
+                    <td className="bg-red-light text-red">{r.gap === 0 ? '' : formatM(r.gap)}</td>
                     
                     {/* M1 Weeks & Progress */}
-                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
-                    <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
-                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM1 / r.budget : 0)}</td>
+                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    <td className="col-total">{formatM(r.valM1)}</td>
+                    <td className="col-prog">{formatP(r.budget ? r.valM1 / r.budget : 0)}</td>
                     
                     {/* M2 Weeks & Progress */}
-                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
-                    <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
-                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM2 / r.budget : 0)}</td>
+                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    <td className="col-total">{formatM(r.valM2)}</td>
+                    <td className="col-prog">{formatP(r.budget ? r.valM2 / r.budget : 0)}</td>
 
                     {/* M3 Weeks & Progress */}
-                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
-                    <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
-                    <td className="bg-blue-50 text-blue-600 font-bold">{formatP(r.budget ? r.valM3 / r.budget : 0)}</td>
+                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    <td className="col-total">{formatM(r.valM3)}</td>
+                    <td className="col-prog">{formatP(r.budget ? r.valM3 / r.budget : 0)}</td>
                   </tr>
                 ))}
                 
                 {/* TOTAL ROW */}
-                <tr className="header-dark font-bold text-[13px]">
-                  <td colSpan="2" className="text-center">TOTAL</td>
+                <tr className="header-dark font-bold text-[12px]">
+                  <td colSpan="2" className="text-center tracking-widest">TOTAL</td>
                   <td>{formatM(sumM1)}</td>
                   <td>{formatM(sumM2)}</td>
                   <td>{formatM(sumM3)}</td>
-                  {/* TBD 렌더링 삭제됨 */}
+                  
                   <td className="text-yellow-300">{formatM(sumTotal)}</td>
                   <td className="text-blue-300">{formatM(sumBudget)}</td>
                   <td className="text-green-300">{formatP(sumProgress)}</td>
