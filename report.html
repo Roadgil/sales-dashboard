@@ -4,41 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>대표님 보고용 리포트 (Sales Progress)</title>
-  
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
   <style>
-    /* 엑셀 스타일의 깔끔한 테이블을 위한 CSS - 데이터가 많아졌으므로 폰트/패딩 축소 */
-    .excel-table th, .excel-table td {
-      border: 1px solid #cbd5e1;
-      padding: 0.25rem 0.4rem;
-      font-size: 0.75rem; /* 12px */
-    }
-    .excel-table th {
-      background-color: #f1f5f9;
-      font-weight: bold;
-      text-align: center;
-      color: #334155;
-    }
-    /* 인풋 창 디자인 */
-    .date-input {
-      width: 45px;
-      text-align: center;
-      border: 1px solid #94a3b8;
-      border-radius: 2px;
-      padding: 1px;
-      font-size: 0.65rem;
-      color: #334155;
-    }
+    body { background-color: #f1f5f9; font-family: 'Arial', sans-serif; }
+    .excel-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;}
+    .excel-table { border-collapse: collapse; white-space: nowrap; width: max-content; }
+    .excel-table th, .excel-table td { border: 1px solid #94a3b8; padding: 6px 12px; font-size: 12px; text-align: right; }
+    .excel-table th { background-color: #dbeafe; color: #1e293b; font-weight: bold; text-align: center; }
+    .excel-table .header-dark { background-color: #1e293b; color: white; border-color: #334155; }
+    .text-left { text-align: left !important; }
+    .text-center { text-align: center !important; }
+    .bg-yellow { background-color: #fef9c3 !important; }
+    .bg-blue { background-color: #e0f2fe !important; }
+    .bg-red-light { background-color: #fee2e2 !important; }
+    .text-red { color: #dc2626 !important; font-weight: bold; }
+    .text-blue { color: #2563eb !important; font-weight: bold; }
+    .font-bold { font-weight: bold !important; }
+    ::-webkit-scrollbar { height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
   </style>
 </head>
-<body className="bg-slate-100 font-sans">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
@@ -54,11 +46,10 @@
 
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-
     const { useState, useEffect } = React;
 
     const ReportApp = () => {
-      const SECRET_PASSWORD = "team2026"; 
+      const SECRET_PASSWORD = "candelakoreasales"; 
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
 
@@ -67,12 +58,11 @@
       const [salesData, setSalesData] = useState([]);
       const [quarterTargets, setQuarterTargets] = useState({});
       const [memberTargets, setMemberTargets] = useState({});
-
-      const teams = {
+      const [teams, setTeams] = useState({
         'Team 1': ['Kim SH', 'Oh SG'],
         'Team 2': ['Baek SC', 'Lee GR'],
         'Team 3': ['YC lim']
-      };
+      });
 
       const handleLogin = (e) => {
         e.preventDefault();
@@ -88,266 +78,270 @@
         const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
         const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
         const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
-        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); };
+        const unsubLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            if (data.teams) setTeams(data.teams);
+            if (data.quarters) setQuarters(data.quarters);
+          }
+        });
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
       }, [isLoggedIn]);
 
       if (!isLoggedIn) {
         return (
-          <div className="flex h-screen items-center justify-center bg-slate-900 px-4">
-            <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm text-center">
+          <div className="flex h-screen items-center justify-center bg-slate-800">
+            <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
               <h2 className="text-xl font-bold mb-4">📈 보고용 리포트 보안접속</h2>
-              <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded mb-4 text-center" placeholder="Password" />
-              <button type="submit" className="w-full bg-slate-800 text-white py-3 rounded font-bold">접속</button>
+              <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password" />
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition">접속하기</button>
             </form>
           </div>
         );
       }
 
-      // ==========================================
-      // 데이터 분류 로직 (분기 -> 월별 -> 주차별)
-      // ==========================================
-      const qNum = selectedQuarter.split(' '); // "Q1", "Q2" 추출
-      const monthsMap = { 'Q1':, 'Q2':, 'Q3':, 'Q4': };
-      const targetMonths = monthsMap[qNum] ||;
+      const qStr = selectedQuarter.split(' ') || 'Q1';
+      let m1=1, m2=2, m3=3;
+      let m1Name='Jan', m2Name='Feb', m3Name='Mar';
+      if(qStr === 'Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
+      if(qStr === 'Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
+      if(qStr === 'Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
 
-      const getMonthFromDate = (dateStr) => {
-        if(!dateStr) return null;
-        const m = parseInt(dateStr.split('-'), 10);
-        return isNaN(m) ? null : m;
+      const year = parseInt(selectedQuarter.split(' ') || '2026', 10);
+      
+      const getWeekRanges = (y, m) => {
+        const lastDay = new Date(y, m, 0).getDate();
+        return [
+          m + "/1~" + m + "/7",
+          m + "/8~" + m + "/14",
+          m + "/15~" + m + "/21",
+          m + "/22~" + m + "/28",
+          lastDay >= 29 ? m + "/29~" + m + "/" + lastDay : "-"
+        ];
       };
 
-      // 1일~7일(1w), 8일~14일(2w) 등 날짜 기반 주차 계산 함수
-      const getWeekOfMonth = (dateStr) => {
-        if(!dateStr) return 5; 
-        const parts = dateStr.split('-');
-        if(parts.length < 3) return 5;
-        const day = parseInt(parts, 10);
-        if (isNaN(day)) return 5;
-        if (day <= 7) return 1;
-        if (day <= 14) return 2;
-        if (day <= 21) return 3;
-        if (day <= 28) return 4;
+      const rangesM1 = getWeekRanges(year, m1);
+      const rangesM2 = getWeekRanges(year, m2);
+      const rangesM3 = getWeekRanges(year, m3);
+
+      const getMonthIdx = (dStr) => {
+        if(!dStr) return -1;
+        const m = parseInt(dStr.split('-'), 10);
+        return isNaN(m) ? -1 : m;
+      };
+      const getWeekIdx = (dStr) => {
+        if(!dStr) return 0;
+        const d = parseInt(dStr.split('-'), 10);
+        if(isNaN(d)) return 0;
+        if(d <= 7) return 1;
+        if(d <= 14) return 2;
+        if(d <= 21) return 3;
+        if(d <= 28) return 4;
         return 5;
       };
 
+      const toM = (val) => val / 1000000;
+      const formatM = (val) => val === 0 ? '-' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+      const formatP = (val) => (val * 100).toFixed(1) + '%';
+
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
-      
-      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, er: 1389 };
-      const totalBudget = currentTargets.target || 0;
-      const totalActual = currentQData.reduce((acc, cur) => acc + cur.priceKRW, 0);
-      const totalProgress = totalBudget ? (totalActual / totalBudget) * 100 : 0;
-      const totalGap = totalBudget - totalActual;
 
-      // 멤버별, 월별, 주차별 데이터 집계
-      const generateMemberData = () => {
-        let rows = [];
-        // Team 1, Team 2 오름차순 정렬
-        Object.keys(teams).sort().forEach(teamName => {
-          const members = teams[teamName];
-          members.forEach(member => {
-            const mData = currentQData.filter(d => d.member === member);
-            const mBudget = memberTargets[member] || 0;
+      let rows = [];
+      const sortedTeamNames = Object.keys(teams).sort();
+      sortedTeamNames.forEach(team => {
+        const members = teams[team] || [];
+        members.forEach(member => {
+          const mData = currentQData.filter(d => d.member === member);
+          
+          const calcMonth = (m) => mData.filter(d => getMonthIdx(d.deliveryDate) === m).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const calcWeek = (m, w) => mData.filter(d => getMonthIdx(d.deliveryDate) === m && getWeekIdx(d.deliveryDate) === w).reduce((a,b)=>a+toM(b.priceKRW),0);
 
-            const processMonth = (month) => {
-              const monthData = mData.filter(d => getMonthFromDate(d.deliveryDate) === month);
-              const w1 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 1).reduce((a,b)=>a+b.priceKRW,0);
-              const w2 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 2).reduce((a,b)=>a+b.priceKRW,0);
-              const w3 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 3).reduce((a,b)=>a+b.priceKRW,0);
-              const w4 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 4).reduce((a,b)=>a+b.priceKRW,0);
-              const w5 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 5).reduce((a,b)=>a+b.priceKRW,0);
-              
-              const total = w1 + w2 + w3 + w4 + w5;
-              // 각 월 Total / Q budget 퍼센트
-              const progress = mBudget ? (total / mBudget) * 100 : 0; 
-              return { w1, w2, w3, w4, w5, total, progress };
-            };
+          const valM1 = calcMonth(m1);
+          const valM2 = calcMonth(m2);
+          const valM3 = calcMonth(m3);
 
-            const month1 = processMonth(targetMonths);
-            const month2 = processMonth(targetMonths);
-            const month3 = processMonth(targetMonths);
+          const total = valM1 + valM2 + valM3;
+          const budget = toM(memberTargets[member] || 0);
+          const gap = budget - total; 
+          const progress = budget ? total / budget : 0;
 
-            const mTotal = month1.total + month2.total + month3.total;
-            const mProgress = mBudget ? (mTotal / mBudget) * 100 : 0;
-            const mGap = mBudget - mTotal;
+          const progM1 = budget ? valM1 / budget : 0;
+          const progM2 = budget ? valM2 / budget : 0;
+          const progM3 = budget ? valM3 / budget : 0;
 
-            rows.push({ team: teamName, member, mBudget, mTotal, mProgress, mGap, month1, month2, month3 });
+          const weeksM1 = [calcWeek(m1,1), calcWeek(m1,2), calcWeek(m1,3), calcWeek(m1,4), calcWeek(m1,5)];
+          const weeksM2 = [calcWeek(m2,1), calcWeek(m2,2), calcWeek(m2,3), calcWeek(m2,4), calcWeek(m2,5)];
+          const weeksM3 = [calcWeek(m3,1), calcWeek(m3,2), calcWeek(m3,3), calcWeek(m3,4), calcWeek(m3,5)];
+
+          rows.push({
+            team, member, valM1, valM2, valM3, total, budget, gap, progress,
+            weeksM1, weeksM2, weeksM3, progM1, progM2, progM3
           });
         });
-        return rows;
-      };
-
-      const memberRows = generateMemberData();
-      
-      // 장비(Product) 판매 수량 집계
-      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
-      const productCounts = {};
-      allProducts.forEach(p => productCounts[p] = { count: 0, sum: 0 });
-      currentQData.forEach(d => {
-        if(productCounts[d.product]) {
-          productCounts[d.product].count += 1;
-          productCounts[d.product].sum += d.priceKRW;
-        }
       });
 
-      // 합계 계산 헬퍼 함수
-      const getMonthTotal = (monthKey, field) => memberRows.reduce((sum, row) => sum + row[monthKey][field], 0);
+      const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
+      const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
+      const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
+      const sumTotal = rows.reduce((a,b)=>a+b.total,0);
+      
+      const currentTargets = quarterTargets[selectedQuarter] || {};
+      const sumBudget = toM(currentTargets.target || 0);
+      const sumGap = sumBudget - sumTotal;
+      const sumProgress = sumBudget ? sumTotal / sumBudget : 0;
+
+      const sumProgM1 = sumBudget ? sumM1 / sumBudget : 0;
+      const sumProgM2 = sumBudget ? sumM2 / sumBudget : 0;
+      const sumProgM3 = sumBudget ? sumM3 / sumBudget : 0;
+
+      const sumWeeksM1 =.map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
+      const sumWeeksM2 =.map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
+      const sumWeeksM3 =.map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
+
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productCounts = {};
+      allProducts.forEach(p => productCounts[p] = { count: 0 });
+      currentQData.forEach(d => {
+        if(productCounts[d.product]) productCounts[d.product].count += 1;
+      });
 
       return (
-        <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
-          {/* 헤더 */}
-          <div className="flex flex-col md:flex-row justify-between items-end mb-6 border-b-4 border-slate-800 pb-4">
+        <div className="p-6 md:p-8">
+          <div className="flex justify-between items-end mb-6">
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-800 mb-1">Monthly Sales Progress Check</h1>
-              <p className="text-slate-500 font-bold text-sm">Candela Korea - Capital Sales Only (FCST & ACT)</p>
+              <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
+              <p className="text-slate-500 text-sm font-bold mt-1">Candela Korea - Capital Sales Only <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded ml-2">(Unit: M₩)</span></p>
             </div>
-            <div className="mt-4 md:mt-0 flex items-center space-x-3">
-              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="p-2 border border-slate-400 rounded-lg font-bold text-sm outline-none bg-white shadow-sm cursor-pointer">
+            <div className="flex gap-3">
+              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer hover:border-blue-500 transition">
                 {quarters.map(q => <option key={q} value={q}>{q}</option>)}
               </select>
+              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">닫기</button>
             </div>
           </div>
 
-          {/* 메인 엑셀형 테이블 (가로 스크롤 허용) */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-300">
-            <div className="bg-slate-700 text-white p-3">
-              <h3 className="font-bold text-sm">📈 {selectedQuarter} Revenue Progress By Brick (단위: KRW)</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full excel-table text-right whitespace-nowrap">
-                <thead>
-                  {/* 헤더 1열: 주요 카테고리 */}
-                  <tr>
-                    <th rowSpan="3" className="bg-slate-200 align-middle min-w-[70px]">Team</th>
-                    <th rowSpan="3" className="bg-slate-200 align-middle min-w-[80px]">Sales Reps</th>
-                    {targetMonths.map(m => (
-                      <th key={`header-m-${m}`} colSpan="7" className="bg-slate-300 text-center text-sm font-extrabold text-slate-800">{m}월</th>
-                    ))}
-                    <th rowSpan="3" className="bg-yellow-100 align-middle">Q Total</th>
-                    <th rowSpan="3" className="bg-blue-100 align-middle">Q Budget</th>
-                    <th rowSpan="3" className="bg-red-100 align-middle">Gap</th>
-                    <th rowSpan="3" className="bg-slate-800 text-white align-middle">Q Progress (%)</th>
-                  </tr>
-                  
-                  {/* 헤더 2열: 날짜 입력창 및 Total/Progress */}
-                  <tr>
-                    {targetMonths.map(m => (
-                      <React.Fragment key={`input-m-${m}`}>
-                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w1-${selectedQuarter}-${m}`} /></th>
-                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w2-${selectedQuarter}-${m}`} /></th>
-                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w3-${selectedQuarter}-${m}`} /></th>
-                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w4-${selectedQuarter}-${m}`} /></th>
-                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w5-${selectedQuarter}-${m}`} /></th>
-                        <th rowSpan="2" className="bg-slate-200 align-middle text-slate-700 font-bold">Total</th>
-                        <th rowSpan="2" className="bg-slate-200 align-middle text-blue-700 font-bold">Progress</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-
-                  {/* 헤더 3열: 주차 표시 */}
-                  <tr>
-                    {targetMonths.map(m => (
-                      <React.Fragment key={`week-m-${m}`}>
-                        <th className="bg-slate-100 text-[10px] text-slate-500">1w</th>
-                        <th className="bg-slate-100 text-[10px] text-slate-500">2w</th>
-                        <th className="bg-slate-100 text-[10px] text-slate-500">3w</th>
-                        <th className="bg-slate-100 text-[10px] text-slate-500">4w</th>
-                        <th className="bg-slate-100 text-[10px] text-slate-500">5w</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody className="font-mono">
-                  {memberRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="text-left font-sans font-bold text-slate-600 bg-white">{row.team}</td>
-                      <td className="text-left font-sans font-bold bg-white">{row.member}</td>
-
-                      {/* Month 1 */}
-                      <td className={row.month1.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w1 > 0 ? row.month1.w1.toLocaleString() : '-'}</td>
-                      <td className={row.month1.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w2 > 0 ? row.month1.w2.toLocaleString() : '-'}</td>
-                      <td className={row.month1.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w3 > 0 ? row.month1.w3.toLocaleString() : '-'}</td>
-                      <td className={row.month1.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w4 > 0 ? row.month1.w4.toLocaleString() : '-'}</td>
-                      <td className={row.month1.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w5 > 0 ? row.month1.w5.toLocaleString() : '-'}</td>
-                      <td className="bg-slate-100 font-bold">{row.month1.total.toLocaleString()}</td>
-                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month1.progress.toFixed(1)}%</td>
-
-                      {/* Month 2 */}
-                      <td className={row.month2.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w1 > 0 ? row.month2.w1.toLocaleString() : '-'}</td>
-                      <td className={row.month2.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w2 > 0 ? row.month2.w2.toLocaleString() : '-'}</td>
-                      <td className={row.month2.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w3 > 0 ? row.month2.w3.toLocaleString() : '-'}</td>
-                      <td className={row.month2.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w4 > 0 ? row.month2.w4.toLocaleString() : '-'}</td>
-                      <td className={row.month2.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w5 > 0 ? row.month2.w5.toLocaleString() : '-'}</td>
-                      <td className="bg-slate-100 font-bold">{row.month2.total.toLocaleString()}</td>
-                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month2.progress.toFixed(1)}%</td>
-
-                      {/* Month 3 */}
-                      <td className={row.month3.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w1 > 0 ? row.month3.w1.toLocaleString() : '-'}</td>
-                      <td className={row.month3.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w2 > 0 ? row.month3.w2.toLocaleString() : '-'}</td>
-                      <td className={row.month3.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w3 > 0 ? row.month3.w3.toLocaleString() : '-'}</td>
-                      <td className={row.month3.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w4 > 0 ? row.month3.w4.toLocaleString() : '-'}</td>
-                      <td className={row.month3.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w5 > 0 ? row.month3.w5.toLocaleString() : '-'}</td>
-                      <td className="bg-slate-100 font-bold">{row.month3.total.toLocaleString()}</td>
-                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month3.progress.toFixed(1)}%</td>
-
-                      {/* Quarter Totals */}
-                      <td className="bg-yellow-50 font-bold">{row.mTotal.toLocaleString()}</td>
-                      <td className="bg-blue-50">{row.mBudget.toLocaleString()}</td>
-                      <td className="bg-red-50 text-red-500">{row.mGap.toLocaleString()}</td>
-                      <td className="font-bold text-center bg-slate-50 text-blue-700">{row.mProgress.toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                  
-                  {/* 총합계 (TOTAL) 줄 */}
-                  <tr className="bg-slate-800 text-white font-extrabold">
-                    <td colSpan="2" className="text-center font-sans">TOTAL</td>
-                    {['month1', 'month2', 'month3'].map(mKey => (
-                      <React.Fragment key={`total-${mKey}`}>
-                        <td>{getMonthTotal(mKey, 'w1').toLocaleString()}</td>
-                        <td>{getMonthTotal(mKey, 'w2').toLocaleString()}</td>
-                        <td>{getMonthTotal(mKey, 'w3').toLocaleString()}</td>
-                        <td>{getMonthTotal(mKey, 'w4').toLocaleString()}</td>
-                        <td>{getMonthTotal(mKey, 'w5').toLocaleString()}</td>
-                        <td className="text-yellow-300 bg-slate-700">{getMonthTotal(mKey, 'total').toLocaleString()}</td>
-                        <td className="text-green-300 bg-slate-700">{(totalBudget ? (getMonthTotal(mKey, 'total') / totalBudget) * 100 : 0).toFixed(1)}%</td>
-                      </React.Fragment>
-                    ))}
-                    
-                    <td className="text-yellow-300 bg-slate-900">{totalActual.toLocaleString()}</td>
-                    <td className="text-blue-300 bg-slate-900">{totalBudget.toLocaleString()}</td>
-                    <td className="text-red-300 bg-slate-900">{totalGap.toLocaleString()}</td>
-                    <td className="text-center text-green-400 bg-slate-900">{totalProgress.toFixed(1)}%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 하단 시스템 요구 수량 (Product Breakdown) */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-300 w-full lg:w-1/3">
-            <div className="bg-slate-600 text-white p-2">
-              <h3 className="font-bold text-sm">📦 System Required (# of unit)</h3>
-            </div>
-            <table className="w-full excel-table text-right">
+          <div className="excel-container">
+            <table className="excel-table">
               <thead>
                 <tr>
-                  <th className="text-left bg-slate-100">Product</th>
-                  <th className="bg-slate-100">Sales Count</th>
-                  <th className="bg-slate-100">Total Price (KRW)</th>
+                  <th rowSpan="3" className="text-left w-16">Team</th>
+                  <th rowSpan="3" className="text-left w-24">Sales Reps</th>
+                  <th rowSpan="3">{m1Name}</th>
+                  <th rowSpan="3">{m2Name}</th>
+                  <th rowSpan="3">{m3Name}</th>
+                  <th rowSpan="3" className="bg-yellow">Q Total</th>
+                  <th rowSpan="3" className="bg-blue">Q Budget</th>
+                  <th rowSpan="3">%</th>
+                  <th rowSpan="3" className="bg-red-light text-red">Gap</th>
+                  <th colSpan="7" className="header-dark">{m1Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
+                </tr>
+                <tr>
+                  <th className="font-normal text-slate-500">{rangesM1}</th>
+                  <th className="font-normal text-slate-500">{rangesM1}</th>
+                  <th className="font-normal text-slate-500">{rangesM1}</th>
+                  <th className="font-normal text-slate-500">{rangesM1}</th>
+                  <th className="font-normal text-slate-500">{rangesM1}</th>
+                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
+                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
+
+                  <th className="font-normal text-slate-500">{rangesM2}</th>
+                  <th className="font-normal text-slate-500">{rangesM2}</th>
+                  <th className="font-normal text-slate-500">{rangesM2}</th>
+                  <th className="font-normal text-slate-500">{rangesM2}</th>
+                  <th className="font-normal text-slate-500">{rangesM2}</th>
+                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
+                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
+
+                  <th className="font-normal text-slate-500">{rangesM3}</th>
+                  <th className="font-normal text-slate-500">{rangesM3}</th>
+                  <th className="font-normal text-slate-500">{rangesM3}</th>
+                  <th className="font-normal text-slate-500">{rangesM3}</th>
+                  <th className="font-normal text-slate-500">{rangesM3}</th>
+                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
+                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
+                </tr>
+                <tr>
+                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
+                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
+                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
                 </tr>
               </thead>
-              <tbody className="font-mono">
-                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([product, data]) => (
-                  <tr key={product} className={data.count > 0 ? "bg-white" : "bg-slate-50 text-slate-400"}>
-                    <td className="text-left font-sans font-bold">{product}</td>
-                    <td className="font-bold">{data.count} 대</td>
-                    <td>{data.sum.toLocaleString()}</td>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition">
+                    <td className="text-left text-slate-500 font-bold">{r.team}</td>
+                    <td className="text-left font-bold">{r.member}</td>
+                    <td className={r.valM1 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM1)}</td>
+                    <td className={r.valM2 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM2)}</td>
+                    <td className={r.valM3 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM3)}</td>
+                    <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
+                    <td className="bg-blue">{formatM(r.budget)}</td>
+                    <td className="text-blue">{formatP(r.progress)}</td>
+                    <td className="bg-red-light text-red">{formatM(r.gap)}</td>
+                    
+                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
+                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM1)}</td>
+                    
+                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
+                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM2)}</td>
+
+                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
+                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM3)}</td>
+                  </tr>
+                ))}
+                
+                <tr className="header-dark font-bold text-[13px]">
+                  <td colSpan="2" className="text-center">TOTAL</td>
+                  <td>{formatM(sumM1)}</td>
+                  <td>{formatM(sumM2)}</td>
+                  <td>{formatM(sumM3)}</td>
+                  <td className="text-yellow-300">{formatM(sumTotal)}</td>
+                  <td className="text-blue-300">{formatM(sumBudget)}</td>
+                  <td className="text-green-300">{formatP(sumProgress)}</td>
+                  <td className="text-red-300">{formatM(sumGap)}</td>
+
+                  {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM1)}</td>
+                  <td className="text-green-300">{formatP(sumProgM1)}</td>
+                  
+                  {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM2)}</td>
+                  <td className="text-green-300">{formatP(sumProgM2)}</td>
+
+                  {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM3)}</td>
+                  <td className="text-green-300">{formatP(sumProgM3)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="excel-container w-full md:w-1/3">
+            <table className="excel-table w-full">
+              <thead>
+                <tr>
+                  <th colSpan="2" className="header-dark bg-slate-600">System Required (# of unit)</th>
+                </tr>
+                <tr>
+                  <th className="text-left w-1/2">Product</th>
+                  <th className="w-1/2">Sales Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([p, data]) => (
+                  <tr key={p}>
+                    <td className="text-left font-bold">{p}</td>
+                    <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} 대` : '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
         </div>
       );
     };
