@@ -13,22 +13,38 @@
 
   <style>
     body { background-color: #f1f5f9; font-family: 'Arial', sans-serif; }
-    .excel-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;}
-    .excel-table { border-collapse: collapse; white-space: nowrap; width: max-content; }
     
-    /* ✨ 칸 너비 다이어트 및 패딩 축소 */
+    /* 테이블을 감싸는 컨테이너 - 가로 스크롤 완벽 지원 */
+    .excel-container { 
+        overflow-x: auto; 
+        background: white; 
+        padding: 20px; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        margin-bottom: 30px;
+    }
+    
+    /* 브라우저가 테이블을 마음대로 줄이지 못하게 max-content 강제 지정 */
+    .excel-table { 
+        border-collapse: collapse; 
+        white-space: nowrap; 
+        min-width: max-content; 
+    }
+    
     .excel-table th, .excel-table td { 
         border: 1px solid #94a3b8; 
         padding: 4px 6px; 
         font-size: 11px; 
         text-align: right; 
+        vertical-align: middle;
     }
+    
     .excel-table th { background-color: #dbeafe; color: #1e293b; font-weight: bold; text-align: center; }
     .excel-table .header-dark { background-color: #1e293b; color: white; border-color: #334155; }
     .text-left { text-align: left !important; }
     .text-center { text-align: center !important; }
     
-    /* 컬러 포인트 */
+    /* 배경색 포인트 */
     .bg-yellow { background-color: #fef9c3 !important; }
     .bg-blue { background-color: #e0f2fe !important; }
     .bg-red-light { background-color: #fee2e2 !important; }
@@ -36,25 +52,35 @@
     .text-blue { color: #2563eb !important; font-weight: bold; }
     .font-bold { font-weight: bold !important; }
     
-    /* ✨ 주차별 칸과 인풋 박스 최적화 */
-    .col-week { width: 38px; min-width: 38px; max-width: 45px; }
-    .col-total { width: 45px; font-weight: bold; background-color: #fef9c3 !important; color: #1e40af; }
-    .col-prog { width: 40px; font-weight: bold; color: #047857; background-color: #ecfdf5 !important; }
+    /* ✨ 칸 다이어트 및 콘크리트 고정 (절대 안 깨짐) */
+    .col-week { 
+        width: 44px !important; 
+        min-width: 44px !important; 
+        max-width: 44px !important; 
+        padding: 4px 2px !important;
+    }
+    .col-total { width: 48px; min-width: 48px; font-weight: bold; background-color: #fef9c3 !important; color: #1e40af; }
+    .col-prog { width: 42px; min-width: 42px; font-weight: bold; color: #047857; background-color: #ecfdf5 !important; }
     
+    /* 날짜 입력창 미니멀 사이즈 */
     input.week-input {
-        width: 100%;
+        width: 36px;
         text-align: center;
         font-size: 10px;
-        padding: 1px 0;
-        margin-bottom: 2px;
+        padding: 2px 1px;
+        margin: 0 auto 3px auto;
         border: 1px solid #cbd5e1;
         border-radius: 2px;
         color: #0f172a;
+        display: block;
+        box-sizing: border-box;
     }
-    input.week-input:focus { border-color: #3b82f6; outline: none; }
+    input.week-input:focus { border-color: #3b82f6; outline: none; background-color: #f0f9ff; }
 
+    /* 예쁜 스크롤바 */
     ::-webkit-scrollbar { height: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
   </style>
 </head>
 <body>
@@ -91,7 +117,6 @@
         'Team 3': ['YC lim']
       });
 
-      // ✨ 상단 날짜 기입용 State (Firebase 연동)
       const [weekHeaders, setWeekHeaders] = useState({});
 
       const handleLogin = (e) => {
@@ -116,7 +141,6 @@
           }
         });
         
-        // ✨ 날짜 헤더 불러오기
         const unsubReport = db.collection("settings").doc("report").onSnapshot((doc) => {
           if (doc.exists) setWeekHeaders(doc.data().weekHeaders || {});
         });
@@ -124,7 +148,6 @@
         return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); unsubReport(); };
       }, [isLoggedIn]);
 
-      // ✨ 날짜 헤더 저장 함수 (타이핑 시 파이어베이스로 실시간 전송)
       const handleWeekHeaderChange = (key, value) => {
         const newHeaders = { ...weekHeaders, [key]: value };
         setWeekHeaders(newHeaders);
@@ -143,8 +166,7 @@
         );
       }
 
-      // 월별 및 주차별 분류 로직
-      const qStr = selectedQuarter.split(' ')[1] || 'Q1';
+      const qStr = selectedQuarter.split(' ') || 'Q1';
       let m1=1, m2=2, m3=3;
       let m1Name='Jan', m2Name='Feb', m3Name='Mar';
       if(qStr === 'Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
@@ -153,13 +175,13 @@
 
       const getMonthIdx = (dStr) => {
         if(!dStr) return -1;
-        const m = parseInt(dStr.split('-')[1], 10);
+        const m = parseInt(dStr.split('-'), 10);
         return isNaN(m) ? -1 : m;
       };
       
       const getWeekIdx = (dStr) => {
         if(!dStr) return 0;
-        const d = parseInt(dStr.split('-')[2], 10);
+        const d = parseInt(dStr.split('-'), 10);
         if(isNaN(d)) return 0;
         if(d <= 7) return 1;
         if(d <= 14) return 2;
@@ -168,7 +190,6 @@
         return 5;
       };
 
-      // 백만원(M) 단위 변환 (소수점 1자리까지)
       const toM = (val) => val / 1000000;
       const formatM = (val) => val === 0 ? '' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
       const formatP = (val) => (val * 100).toFixed(1) + '%';
@@ -176,7 +197,6 @@
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
 
       let rows = [];
-      // ✨ Team 1부터 오름차순 정렬 로직 확실하게 적용
       Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
           const mData = currentQData.filter(d => d.member === member);
@@ -188,7 +208,6 @@
           const valM2 = calcMonth(m2);
           const valM3 = calcMonth(m3);
           
-          // ✨ TBD 삭제하고 M1+M2+M3 합계만 사용
           const total = valM1 + valM2 + valM3;
           const budget = toM(memberTargets[member] || 0);
           const gap = budget - total; 
@@ -205,7 +224,6 @@
         });
       });
 
-      // 총 합계 계산
       const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
       const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
       const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
@@ -216,9 +234,9 @@
       const sumGap = sumBudget - sumTotal;
       const sumProgress = sumBudget ? sumTotal / sumBudget : 0;
 
-      const sumWeeksM1 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
-      const sumWeeksM2 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
-      const sumWeeksM3 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
+      const sumWeeksM1 =.map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
+      const sumWeeksM2 =.map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
+      const sumWeeksM3 =.map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
 
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productCounts = {};
@@ -227,20 +245,18 @@
         if(productCounts[d.product]) productCounts[d.product].count += 1;
       });
 
-      const ordinals = ["1st", "2nd", "3rd", "4th", "5th"];
-
       return (
-        <div className="p-6 md:p-8">
-          <div className="flex justify-between items-end mb-6">
-            <div>
+        <div className="p-4 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6">
+            <div className="mb-4 md:mb-0">
               <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
               <p className="text-slate-500 text-sm font-bold mt-1">Candela Korea - Capital Sales Only <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded ml-2">(Unit: M₩)</span></p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer hover:border-blue-500 transition">
                 {quarters.map(q => <option key={q} value={q}>{q}</option>)}
               </select>
-              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">닫기</button>
+              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition whitespace-nowrap">닫기</button>
             </div>
           </div>
 
@@ -250,46 +266,46 @@
                 <tr>
                   <th rowSpan="2" className="text-left w-16 align-middle">Team</th>
                   <th rowSpan="2" className="text-left w-20 align-middle">Sales Reps</th>
-                  <th rowSpan="2" className="w-10 text-center align-middle">{m1Name}</th>
-                  <th rowSpan="2" className="w-10 text-center align-middle">{m2Name}</th>
-                  <th rowSpan="2" className="w-10 text-center align-middle">{m3Name}</th>
+                  <th rowSpan="2" className="w-12 text-center align-middle">{m1Name}</th>
+                  <th rowSpan="2" className="w-12 text-center align-middle">{m2Name}</th>
+                  <th rowSpan="2" className="w-12 text-center align-middle">{m3Name}</th>
                   
                   <th rowSpan="2" className="col-total text-center align-middle">Q Total</th>
                   <th rowSpan="2" className="w-12 text-center bg-blue align-middle">Q Budget</th>
                   <th rowSpan="2" className="w-12 text-center align-middle">%</th>
                   <th rowSpan="2" className="w-14 text-center bg-red-light text-red align-middle">Gap</th>
                   
-                  {/* ✨ Progress 섹션 헤더 (각각 7칸으로 확장됨) */}
+                  {/* Progress Header */}
                   <th colSpan="7" className="header-dark">{m1Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
                 </tr>
                 <tr>
-                  {/* ✨ M1: 1~5주차 인풋 박스 + Total + Prog */}
-                  {[1, 2].map(w => (
-                    <th key={'h1'+w} className="font-normal col-week text-center align-middle">
-                      <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
-                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
+                  {/* ✨ M1: 1~5주차 */}
+                  {.map(w => (
+                    <th key={'h1'+w} className="font-normal col-week text-center align-middle bg-slate-50">
+                      <input type="text" value={weekHeaders[`m1w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m1w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                      <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
                     </th>
                   ))}
                   <th className="col-total align-bottom text-center">Total</th>
                   <th className="col-prog align-bottom text-center">Prog.</th>
 
-                  {/* ✨ M2: 1~5주차 인풋 박스 + Total + Prog */}
-                  {[1, 2].map(w => (
-                    <th key={'h2'+w} className="font-normal col-week text-center align-middle">
-                      <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
-                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
+                  {/* ✨ M2: 1~5주차 */}
+                  {.map(w => (
+                    <th key={'h2'+w} className="font-normal col-week text-center align-middle bg-slate-50">
+                      <input type="text" value={weekHeaders[`m2w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m2w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                      <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
                     </th>
                   ))}
                   <th className="col-total align-bottom text-center">Total</th>
                   <th className="col-prog align-bottom text-center">Prog.</th>
 
-                  {/* ✨ M3: 1~5주차 인풋 박스 + Total + Prog */}
-                  {[1, 2].map(w => (
-                    <th key={'h3'+w} className="font-normal col-week text-center align-middle">
-                      <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="week-input" placeholder="날짜" />
-                      <div className="font-bold text-[10px] leading-none">{ordinals[w-1]}</div>
+                  {/* ✨ M3: 1~5주차 */}
+                  {.map(w => (
+                    <th key={'h3'+w} className="font-normal col-week text-center align-middle bg-slate-50">
+                      <input type="text" value={weekHeaders[`m3w${w}`] || ''} onChange={(e) => handleWeekHeaderChange(`m3w${w}`, e.target.value)} className="week-input" placeholder="M/D" />
+                      <div className="font-bold text-[10px] leading-none text-slate-700">{w}주차</div>
                     </th>
                   ))}
                   <th className="col-total align-bottom text-center">Total</th>
@@ -309,18 +325,18 @@
                     <td className="text-blue font-bold">{formatP(r.progress)}</td>
                     <td className="bg-red-light text-red">{r.gap === 0 ? '' : formatM(r.gap)}</td>
                     
-                    {/* M1 Weeks & Progress */}
-                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    {/* M1 */}
+                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? 'text-slate-800 font-bold col-week' : 'col-week'}>{formatM(w)}</td>)}
                     <td className="col-total">{formatM(r.valM1)}</td>
                     <td className="col-prog">{formatP(r.budget ? r.valM1 / r.budget : 0)}</td>
                     
-                    {/* M2 Weeks & Progress */}
-                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    {/* M2 */}
+                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? 'text-slate-800 font-bold col-week' : 'col-week'}>{formatM(w)}</td>)}
                     <td className="col-total">{formatM(r.valM2)}</td>
                     <td className="col-prog">{formatP(r.budget ? r.valM2 / r.budget : 0)}</td>
 
-                    {/* M3 Weeks & Progress */}
-                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? 'text-slate-800 font-bold' : ''}>{formatM(w)}</td>)}
+                    {/* M3 */}
+                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? 'text-slate-800 font-bold col-week' : 'col-week'}>{formatM(w)}</td>)}
                     <td className="col-total">{formatM(r.valM3)}</td>
                     <td className="col-prog">{formatP(r.budget ? r.valM3 / r.budget : 0)}</td>
                   </tr>
@@ -333,25 +349,22 @@
                   <td>{formatM(sumM2)}</td>
                   <td>{formatM(sumM3)}</td>
                   
-                  <td className="text-yellow-300">{formatM(sumTotal)}</td>
+                  <td className="text-yellow-300 col-total">{formatM(sumTotal)}</td>
                   <td className="text-blue-300">{formatM(sumBudget)}</td>
                   <td className="text-green-300">{formatP(sumProgress)}</td>
                   <td className="text-red-300">{formatM(sumGap)}</td>
 
-                  {/* M1 Total & Progress */}
-                  {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx}>{formatM(w)}</td>)}
-                  <td className="text-yellow-300">{formatM(sumM1)}</td>
-                  <td className="text-green-300">{formatP(sumBudget ? sumM1 / sumBudget : 0)}</td>
+                  {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx} className="col-week">{formatM(w)}</td>)}
+                  <td className="text-yellow-300 col-total">{formatM(sumM1)}</td>
+                  <td className="text-green-300 col-prog">{formatP(sumBudget ? sumM1 / sumBudget : 0)}</td>
                   
-                  {/* M2 Total & Progress */}
-                  {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx}>{formatM(w)}</td>)}
-                  <td className="text-yellow-300">{formatM(sumM2)}</td>
-                  <td className="text-green-300">{formatP(sumBudget ? sumM2 / sumBudget : 0)}</td>
+                  {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx} className="col-week">{formatM(w)}</td>)}
+                  <td className="text-yellow-300 col-total">{formatM(sumM2)}</td>
+                  <td className="text-green-300 col-prog">{formatP(sumBudget ? sumM2 / sumBudget : 0)}</td>
 
-                  {/* M3 Total & Progress */}
-                  {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx}>{formatM(w)}</td>)}
-                  <td className="text-yellow-300">{formatM(sumM3)}</td>
-                  <td className="text-green-300">{formatP(sumBudget ? sumM3 / sumBudget : 0)}</td>
+                  {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx} className="col-week">{formatM(w)}</td>)}
+                  <td className="text-yellow-300 col-total">{formatM(sumM3)}</td>
+                  <td className="text-green-300 col-prog">{formatP(sumBudget ? sumM3 / sumBudget : 0)}</td>
                 </tr>
               </tbody>
             </table>
@@ -369,7 +382,7 @@
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(productCounts).sort((a,b)=>b[1].count - a[1].count).map(([p, data]) => (
+                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([p, data]) => (
                   <tr key={p}>
                     <td className="text-left font-bold">{p}</td>
                     <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} 대` : '-'}</td>
