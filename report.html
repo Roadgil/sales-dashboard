@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대표님 보고용 리포트 (Sales Progress)</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    /* 엑셀 스타일의 깔끔한 테이블을 위한 CSS - 데이터가 많아졌으므로 폰트/패딩 축소 */
+    .excel-table th, .excel-table td {
+      border: 1px solid #cbd5e1;
+      padding: 0.25rem 0.4rem;
+      font-size: 0.75rem; /* 12px */
+    }
+    .excel-table th {
+      background-color: #f1f5f9;
+      font-weight: bold;
+      text-align: center;
+      color: #334155;
+    }
+    /* 인풋 창 디자인 */
+    .date-input {
+      width: 45px;
+      text-align: center;
+      border: 1px solid #94a3b8;
+      border-radius: 2px;
+      padding: 1px;
+      font-size: 0.65rem;
+      color: #334155;
+    }
+  </style>
+</head>
+<body className="bg-slate-100 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
+      authDomain: "sales-dashboard-d0d13.firebaseapp.com",
+      projectId: "sales-dashboard-d0d13",
+      storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
+      messagingSenderId: "870275096697",
+      appId: "1:870275096697:web:cd7373b77358681e21b4a8",
+      measurementId: "G-K5G6BMNBX9"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const { useState, useEffect } = React;
+
+    const ReportApp = () => {
+      const SECRET_PASSWORD = "team2026"; 
+      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
+      const [pwdInput, setPwdInput] = useState('');
+
+      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const [salesData, setSalesData] = useState([]);
+      const [quarterTargets, setQuarterTargets] = useState({});
+      const [memberTargets, setMemberTargets] = useState({});
+
+      const teams = {
+        'Team 1': ['Kim SH', 'Oh SG'],
+        'Team 2': ['Baek SC', 'Lee GR'],
+        'Team 3': ['YC lim']
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pwdInput === SECRET_PASSWORD) {
+          localStorage.setItem('adminAuth', 'true'); setIsLoggedIn(true);
+        } else {
+          alert('비밀번호 불일치!'); setPwdInput('');
+        }
+      };
+
+      useEffect(() => {
+        if (!isLoggedIn) return; 
+        const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
+        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
+        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); };
+      }, [isLoggedIn]);
+
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-900 px-4">
+            <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm text-center">
+              <h2 className="text-xl font-bold mb-4">📈 보고용 리포트 보안접속</h2>
+              <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded mb-4 text-center" placeholder="Password" />
+              <button type="submit" className="w-full bg-slate-800 text-white py-3 rounded font-bold">접속</button>
+            </form>
+          </div>
+        );
+      }
+
+      // ==========================================
+      // 데이터 분류 로직 (분기 -> 월별 -> 주차별)
+      // ==========================================
+      const qNum = selectedQuarter.split(' '); // "Q1", "Q2" 추출
+      const monthsMap = { 'Q1':, 'Q2':, 'Q3':, 'Q4': };
+      const targetMonths = monthsMap[qNum] ||;
+
+      const getMonthFromDate = (dateStr) => {
+        if(!dateStr) return null;
+        const m = parseInt(dateStr.split('-'), 10);
+        return isNaN(m) ? null : m;
+      };
+
+      // 1일~7일(1w), 8일~14일(2w) 등 날짜 기반 주차 계산 함수
+      const getWeekOfMonth = (dateStr) => {
+        if(!dateStr) return 5; 
+        const parts = dateStr.split('-');
+        if(parts.length < 3) return 5;
+        const day = parseInt(parts, 10);
+        if (isNaN(day)) return 5;
+        if (day <= 7) return 1;
+        if (day <= 14) return 2;
+        if (day <= 21) return 3;
+        if (day <= 28) return 4;
+        return 5;
+      };
+
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
+      
+      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, er: 1389 };
+      const totalBudget = currentTargets.target || 0;
+      const totalActual = currentQData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const totalProgress = totalBudget ? (totalActual / totalBudget) * 100 : 0;
+      const totalGap = totalBudget - totalActual;
+
+      // 멤버별, 월별, 주차별 데이터 집계
+      const generateMemberData = () => {
+        let rows = [];
+        // Team 1, Team 2 오름차순 정렬
+        Object.keys(teams).sort().forEach(teamName => {
+          const members = teams[teamName];
+          members.forEach(member => {
+            const mData = currentQData.filter(d => d.member === member);
+            const mBudget = memberTargets[member] || 0;
+
+            const processMonth = (month) => {
+              const monthData = mData.filter(d => getMonthFromDate(d.deliveryDate) === month);
+              const w1 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 1).reduce((a,b)=>a+b.priceKRW,0);
+              const w2 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 2).reduce((a,b)=>a+b.priceKRW,0);
+              const w3 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 3).reduce((a,b)=>a+b.priceKRW,0);
+              const w4 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 4).reduce((a,b)=>a+b.priceKRW,0);
+              const w5 = monthData.filter(d => getWeekOfMonth(d.deliveryDate) === 5).reduce((a,b)=>a+b.priceKRW,0);
+              
+              const total = w1 + w2 + w3 + w4 + w5;
+              // 각 월 Total / Q budget 퍼센트
+              const progress = mBudget ? (total / mBudget) * 100 : 0; 
+              return { w1, w2, w3, w4, w5, total, progress };
+            };
+
+            const month1 = processMonth(targetMonths);
+            const month2 = processMonth(targetMonths);
+            const month3 = processMonth(targetMonths);
+
+            const mTotal = month1.total + month2.total + month3.total;
+            const mProgress = mBudget ? (mTotal / mBudget) * 100 : 0;
+            const mGap = mBudget - mTotal;
+
+            rows.push({ team: teamName, member, mBudget, mTotal, mProgress, mGap, month1, month2, month3 });
+          });
+        });
+        return rows;
+      };
+
+      const memberRows = generateMemberData();
+      
+      // 장비(Product) 판매 수량 집계
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productCounts = {};
+      allProducts.forEach(p => productCounts[p] = { count: 0, sum: 0 });
+      currentQData.forEach(d => {
+        if(productCounts[d.product]) {
+          productCounts[d.product].count += 1;
+          productCounts[d.product].sum += d.priceKRW;
+        }
+      });
+
+      // 합계 계산 헬퍼 함수
+      const getMonthTotal = (monthKey, field) => memberRows.reduce((sum, row) => sum + row[monthKey][field], 0);
+
+      return (
+        <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
+          {/* 헤더 */}
+          <div className="flex flex-col md:flex-row justify-between items-end mb-6 border-b-4 border-slate-800 pb-4">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-800 mb-1">Monthly Sales Progress Check</h1>
+              <p className="text-slate-500 font-bold text-sm">Candela Korea - Capital Sales Only (FCST & ACT)</p>
+            </div>
+            <div className="mt-4 md:mt-0 flex items-center space-x-3">
+              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="p-2 border border-slate-400 rounded-lg font-bold text-sm outline-none bg-white shadow-sm cursor-pointer">
+                {quarters.map(q => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* 메인 엑셀형 테이블 (가로 스크롤 허용) */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-300">
+            <div className="bg-slate-700 text-white p-3">
+              <h3 className="font-bold text-sm">📈 {selectedQuarter} Revenue Progress By Brick (단위: KRW)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full excel-table text-right whitespace-nowrap">
+                <thead>
+                  {/* 헤더 1열: 주요 카테고리 */}
+                  <tr>
+                    <th rowSpan="3" className="bg-slate-200 align-middle min-w-[70px]">Team</th>
+                    <th rowSpan="3" className="bg-slate-200 align-middle min-w-[80px]">Sales Reps</th>
+                    {targetMonths.map(m => (
+                      <th key={`header-m-${m}`} colSpan="7" className="bg-slate-300 text-center text-sm font-extrabold text-slate-800">{m}월</th>
+                    ))}
+                    <th rowSpan="3" className="bg-yellow-100 align-middle">Q Total</th>
+                    <th rowSpan="3" className="bg-blue-100 align-middle">Q Budget</th>
+                    <th rowSpan="3" className="bg-red-100 align-middle">Gap</th>
+                    <th rowSpan="3" className="bg-slate-800 text-white align-middle">Q Progress (%)</th>
+                  </tr>
+                  
+                  {/* 헤더 2열: 날짜 입력창 및 Total/Progress */}
+                  <tr>
+                    {targetMonths.map(m => (
+                      <React.Fragment key={`input-m-${m}`}>
+                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w1-${selectedQuarter}-${m}`} /></th>
+                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w2-${selectedQuarter}-${m}`} /></th>
+                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w3-${selectedQuarter}-${m}`} /></th>
+                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w4-${selectedQuarter}-${m}`} /></th>
+                        <th className="bg-slate-50 font-normal"><input type="text" placeholder="MM/DD" className="date-input" key={`w5-${selectedQuarter}-${m}`} /></th>
+                        <th rowSpan="2" className="bg-slate-200 align-middle text-slate-700 font-bold">Total</th>
+                        <th rowSpan="2" className="bg-slate-200 align-middle text-blue-700 font-bold">Progress</th>
+                      </React.Fragment>
+                    ))}
+                  </tr>
+
+                  {/* 헤더 3열: 주차 표시 */}
+                  <tr>
+                    {targetMonths.map(m => (
+                      <React.Fragment key={`week-m-${m}`}>
+                        <th className="bg-slate-100 text-[10px] text-slate-500">1w</th>
+                        <th className="bg-slate-100 text-[10px] text-slate-500">2w</th>
+                        <th className="bg-slate-100 text-[10px] text-slate-500">3w</th>
+                        <th className="bg-slate-100 text-[10px] text-slate-500">4w</th>
+                        <th className="bg-slate-100 text-[10px] text-slate-500">5w</th>
+                      </React.Fragment>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody className="font-mono">
+                  {memberRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="text-left font-sans font-bold text-slate-600 bg-white">{row.team}</td>
+                      <td className="text-left font-sans font-bold bg-white">{row.member}</td>
+
+                      {/* Month 1 */}
+                      <td className={row.month1.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w1 > 0 ? row.month1.w1.toLocaleString() : '-'}</td>
+                      <td className={row.month1.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w2 > 0 ? row.month1.w2.toLocaleString() : '-'}</td>
+                      <td className={row.month1.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w3 > 0 ? row.month1.w3.toLocaleString() : '-'}</td>
+                      <td className={row.month1.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w4 > 0 ? row.month1.w4.toLocaleString() : '-'}</td>
+                      <td className={row.month1.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month1.w5 > 0 ? row.month1.w5.toLocaleString() : '-'}</td>
+                      <td className="bg-slate-100 font-bold">{row.month1.total.toLocaleString()}</td>
+                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month1.progress.toFixed(1)}%</td>
+
+                      {/* Month 2 */}
+                      <td className={row.month2.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w1 > 0 ? row.month2.w1.toLocaleString() : '-'}</td>
+                      <td className={row.month2.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w2 > 0 ? row.month2.w2.toLocaleString() : '-'}</td>
+                      <td className={row.month2.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w3 > 0 ? row.month2.w3.toLocaleString() : '-'}</td>
+                      <td className={row.month2.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w4 > 0 ? row.month2.w4.toLocaleString() : '-'}</td>
+                      <td className={row.month2.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month2.w5 > 0 ? row.month2.w5.toLocaleString() : '-'}</td>
+                      <td className="bg-slate-100 font-bold">{row.month2.total.toLocaleString()}</td>
+                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month2.progress.toFixed(1)}%</td>
+
+                      {/* Month 3 */}
+                      <td className={row.month3.w1 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w1 > 0 ? row.month3.w1.toLocaleString() : '-'}</td>
+                      <td className={row.month3.w2 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w2 > 0 ? row.month3.w2.toLocaleString() : '-'}</td>
+                      <td className={row.month3.w3 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w3 > 0 ? row.month3.w3.toLocaleString() : '-'}</td>
+                      <td className={row.month3.w4 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w4 > 0 ? row.month3.w4.toLocaleString() : '-'}</td>
+                      <td className={row.month3.w5 > 0 ? "text-slate-800" : "text-slate-300"}>{row.month3.w5 > 0 ? row.month3.w5.toLocaleString() : '-'}</td>
+                      <td className="bg-slate-100 font-bold">{row.month3.total.toLocaleString()}</td>
+                      <td className="bg-slate-100 text-blue-600 font-bold">{row.month3.progress.toFixed(1)}%</td>
+
+                      {/* Quarter Totals */}
+                      <td className="bg-yellow-50 font-bold">{row.mTotal.toLocaleString()}</td>
+                      <td className="bg-blue-50">{row.mBudget.toLocaleString()}</td>
+                      <td className="bg-red-50 text-red-500">{row.mGap.toLocaleString()}</td>
+                      <td className="font-bold text-center bg-slate-50 text-blue-700">{row.mProgress.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  
+                  {/* 총합계 (TOTAL) 줄 */}
+                  <tr className="bg-slate-800 text-white font-extrabold">
+                    <td colSpan="2" className="text-center font-sans">TOTAL</td>
+                    {['month1', 'month2', 'month3'].map(mKey => (
+                      <React.Fragment key={`total-${mKey}`}>
+                        <td>{getMonthTotal(mKey, 'w1').toLocaleString()}</td>
+                        <td>{getMonthTotal(mKey, 'w2').toLocaleString()}</td>
+                        <td>{getMonthTotal(mKey, 'w3').toLocaleString()}</td>
+                        <td>{getMonthTotal(mKey, 'w4').toLocaleString()}</td>
+                        <td>{getMonthTotal(mKey, 'w5').toLocaleString()}</td>
+                        <td className="text-yellow-300 bg-slate-700">{getMonthTotal(mKey, 'total').toLocaleString()}</td>
+                        <td className="text-green-300 bg-slate-700">{(totalBudget ? (getMonthTotal(mKey, 'total') / totalBudget) * 100 : 0).toFixed(1)}%</td>
+                      </React.Fragment>
+                    ))}
+                    
+                    <td className="text-yellow-300 bg-slate-900">{totalActual.toLocaleString()}</td>
+                    <td className="text-blue-300 bg-slate-900">{totalBudget.toLocaleString()}</td>
+                    <td className="text-red-300 bg-slate-900">{totalGap.toLocaleString()}</td>
+                    <td className="text-center text-green-400 bg-slate-900">{totalProgress.toFixed(1)}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 하단 시스템 요구 수량 (Product Breakdown) */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-300 w-full lg:w-1/3">
+            <div className="bg-slate-600 text-white p-2">
+              <h3 className="font-bold text-sm">📦 System Required (# of unit)</h3>
+            </div>
+            <table className="w-full excel-table text-right">
+              <thead>
+                <tr>
+                  <th className="text-left bg-slate-100">Product</th>
+                  <th className="bg-slate-100">Sales Count</th>
+                  <th className="bg-slate-100">Total Price (KRW)</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([product, data]) => (
+                  <tr key={product} className={data.count > 0 ? "bg-white" : "bg-slate-50 text-slate-400"}>
+                    <td className="text-left font-sans font-bold">{product}</td>
+                    <td className="font-bold">{data.count} 대</td>
+                    <td>{data.sum.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ReportApp />);
+  </script>
+</body>
+</html>
