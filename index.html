@@ -94,14 +94,13 @@
         const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
           if (doc.exists) setMemberTargets(doc.data());
         });
-        // ✨ 4. 팀 구조 & 분기 리스트 (DB 저장 연동)
+        // 4. 팀 구조 & 분기 리스트
         const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
             const data = doc.data();
             if (data.teams) setTeams(data.teams);
             if (data.quarters) setQuarters(data.quarters);
           } else {
-            // DB에 없으면 최초 생성
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
         });
@@ -159,7 +158,6 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
-      // ✨ 팀/멤버/분기 추가 시 DB 연동
       const addTeam = () => {
         const newTeam = prompt('추가할 탭 이름을 입력하세요 (예: Team 4)');
         if (newTeam && !teams[newTeam]) {
@@ -196,6 +194,23 @@
           salesData.filter(d => d.member === oldName).forEach(d => {
             db.collection("sales").doc(d.id.toString()).update({ member: newName });
           });
+        }
+      };
+
+      // ✨ [추가된 기능] 멤버 삭제
+      const deleteMember = (memberName, e) => {
+        e.stopPropagation(); // 부모 태그(카드) 클릭 이벤트 방지
+        if (window.confirm(`[${memberName}] 멤버를 정말 삭제하시겠습니까?\n(등록되어 있던 영업 데이터는 삭제되지 않습니다)`)) {
+          const newTeams = { ...teams };
+          newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
+          setTeams(newTeams);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+
+          const newTargets = { ...memberTargets };
+          if (newTargets[memberName] !== undefined) {
+            delete newTargets[memberName];
+            db.collection("targets").doc("memberTargets").set(newTargets);
+          }
         }
       };
 
@@ -336,8 +351,8 @@
       };
 
       const renderBarChart = (dataObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
-        const maxVal = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
+        const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
         return (
           <div className="space-y-4">
             {dataArr.map(([key, stat]) => {
@@ -357,7 +372,7 @@
       };
 
       const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
         return (
           <div className="space-y-5">
             {dataArr.map(([key, stat]) => {
@@ -506,7 +521,11 @@
                       <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
                         <div className="flex justify-between items-start">
                           <div className="text-xl md:text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
-                          <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">✏️ 이름 수정</button>
+                          {/* ✨ 수정: 멤버 이름 옆에 삭제 기능(버튼)이 추가되었습니다 */}
+                          <div className="flex space-x-1">
+                            <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">✏️ 이름 수정</button>
+                            <button onClick={(e) => deleteMember(member, e)} className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-100">🗑️ 삭제</button>
+                          </div>
                         </div>
                         <div className="text-xs md:text-sm text-gray-500 mt-2 font-medium">담당 납품처 및 데이터 관리 &rarr;</div>
                       </div>
