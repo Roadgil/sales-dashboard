@@ -28,6 +28,19 @@
     .font-bold { font-weight: bold !important; }
     ::-webkit-scrollbar { height: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+
+    /* ① 주차 날짜 자동 표시 */
+    .week-date-label {
+      display: block;
+      font-size: 9px;
+      font-weight: normal;
+      color: #1e293b;
+      margin-top: 3px;
+      letter-spacing: 0.2px;
+    }
+
+    /* ③ Progress 셀 */
+    .progress-cell { background-color: #eff6ff !important; color: #1d4ed8 !important; font-weight: bold !important; }
   </style>
 </head>
 <body>
@@ -64,6 +77,24 @@
         'Team 3': ['YC lim']
       });
 
+      // ① 주차별 날짜 자동 계산
+      const getWeekRanges = (year, month) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        const lastDay = new Date(year, month, 0).getDate(); // 해당 월 마지막 날
+        const ranges = [
+          `${pad(month)}/01~${pad(month)}/07`,
+          `${pad(month)}/08~${pad(month)}/14`,
+          `${pad(month)}/15~${pad(month)}/21`,
+          `${pad(month)}/22~${pad(month)}/28`,
+        ];
+        if (lastDay >= 29) {
+          ranges.push(`${pad(month)}/29~${pad(month)}/${lastDay}`);
+        } else {
+          ranges.push(null); // 5주차 없는 달
+        }
+        return ranges;
+      };
+
       const handleLogin = (e) => {
         e.preventDefault();
         if (pwdInput === SECRET_PASSWORD) {
@@ -78,6 +109,8 @@
         const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
         const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
         const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
+        
+        // ✨ 팀 구조 및 분기 자동 동기화
         const unsubLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
             const data = doc.data();
@@ -85,6 +118,7 @@
             if (data.quarters) setQuarters(data.quarters);
           }
         });
+
         return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
       }, [isLoggedIn]);
 
@@ -100,38 +134,27 @@
         );
       }
 
-      const qStr = selectedQuarter.split(' ') || 'Q1';
+      // 월별 및 주차별 분류 로직
+      const qStr = selectedQuarter.split(' ')[1] || 'Q1';
       let m1=1, m2=2, m3=3;
       let m1Name='Jan', m2Name='Feb', m3Name='Mar';
       if(qStr === 'Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
       if(qStr === 'Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
       if(qStr === 'Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
 
-      const year = parseInt(selectedQuarter.split(' ') || '2026', 10);
-      
-      const getWeekRanges = (y, m) => {
-        const lastDay = new Date(y, m, 0).getDate();
-        return [
-          m + "/1~" + m + "/7",
-          m + "/8~" + m + "/14",
-          m + "/15~" + m + "/21",
-          m + "/22~" + m + "/28",
-          lastDay >= 29 ? m + "/29~" + m + "/" + lastDay : "-"
-        ];
-      };
-
-      const rangesM1 = getWeekRanges(year, m1);
-      const rangesM2 = getWeekRanges(year, m2);
-      const rangesM3 = getWeekRanges(year, m3);
+      const year = parseInt(selectedQuarter.split(' ')[0], 10) || new Date().getFullYear();
+      const weekRangesM1 = getWeekRanges(year, m1);
+      const weekRangesM2 = getWeekRanges(year, m2);
+      const weekRangesM3 = getWeekRanges(year, m3);
 
       const getMonthIdx = (dStr) => {
         if(!dStr) return -1;
-        const m = parseInt(dStr.split('-'), 10);
+        const m = parseInt(dStr.split('-')[1], 10);
         return isNaN(m) ? -1 : m;
       };
       const getWeekIdx = (dStr) => {
         if(!dStr) return 0;
-        const d = parseInt(dStr.split('-'), 10);
+        const d = parseInt(dStr.split('-')[2], 10);
         if(isNaN(d)) return 0;
         if(d <= 7) return 1;
         if(d <= 14) return 2;
@@ -140,16 +163,18 @@
         return 5;
       };
 
+      // 백만원(M) 단위 변환
       const toM = (val) => val / 1000000;
       const formatM = (val) => val === 0 ? '-' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
       const formatP = (val) => (val * 100).toFixed(1) + '%';
+      // ③ 월 Total / Q Budget 퍼센트
+      const formatPct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '-';
 
       const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
 
       let rows = [];
-      const sortedTeamNames = Object.keys(teams).sort();
-      sortedTeamNames.forEach(team => {
-        const members = teams[team] || [];
+      // ② Team 1부터 오름차순 정렬
+      Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
           const mData = currentQData.filter(d => d.member === member);
           
@@ -159,30 +184,29 @@
           const valM1 = calcMonth(m1);
           const valM2 = calcMonth(m2);
           const valM3 = calcMonth(m3);
+          const valTBD = mData.filter(d => getMonthIdx(d.deliveryDate) === -1).reduce((a,b)=>a+toM(b.priceKRW),0);
 
-          const total = valM1 + valM2 + valM3;
+          const total = valM1 + valM2 + valM3 + valTBD;
           const budget = toM(memberTargets[member] || 0);
           const gap = budget - total; 
           const progress = budget ? total / budget : 0;
-
-          const progM1 = budget ? valM1 / budget : 0;
-          const progM2 = budget ? valM2 / budget : 0;
-          const progM3 = budget ? valM3 / budget : 0;
 
           const weeksM1 = [calcWeek(m1,1), calcWeek(m1,2), calcWeek(m1,3), calcWeek(m1,4), calcWeek(m1,5)];
           const weeksM2 = [calcWeek(m2,1), calcWeek(m2,2), calcWeek(m2,3), calcWeek(m2,4), calcWeek(m2,5)];
           const weeksM3 = [calcWeek(m3,1), calcWeek(m3,2), calcWeek(m3,3), calcWeek(m3,4), calcWeek(m3,5)];
 
           rows.push({
-            team, member, valM1, valM2, valM3, total, budget, gap, progress,
-            weeksM1, weeksM2, weeksM3, progM1, progM2, progM3
+            team, member, valM1, valM2, valM3, valTBD, total, budget, gap, progress,
+            weeksM1, weeksM2, weeksM3
           });
         });
       });
 
+      // 합계 계산
       const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
       const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
       const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
+      const sumTBD = rows.reduce((a,b)=>a+b.valTBD,0);
       const sumTotal = rows.reduce((a,b)=>a+b.total,0);
       
       const currentTargets = quarterTargets[selectedQuarter] || {};
@@ -190,20 +214,19 @@
       const sumGap = sumBudget - sumTotal;
       const sumProgress = sumBudget ? sumTotal / sumBudget : 0;
 
-      const sumProgM1 = sumBudget ? sumM1 / sumBudget : 0;
-      const sumProgM2 = sumBudget ? sumM2 / sumBudget : 0;
-      const sumProgM3 = sumBudget ? sumM3 / sumBudget : 0;
+      const sumWeeksM1 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
+      const sumWeeksM2 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
+      const sumWeeksM3 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
 
-      const sumWeeksM1 =.map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
-      const sumWeeksM2 =.map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
-      const sumWeeksM3 =.map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
-
+      // Product 카운트
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
       const productCounts = {};
       allProducts.forEach(p => productCounts[p] = { count: 0 });
       currentQData.forEach(d => {
         if(productCounts[d.product]) productCounts[d.product].count += 1;
       });
+
+      const weekLabels = ['1st w', '2nd w', '3rd w', '4th w', '5th w'];
 
       return (
         <div className="p-6 md:p-8">
@@ -224,48 +247,57 @@
             <table className="excel-table">
               <thead>
                 <tr>
-                  <th rowSpan="3" className="text-left w-16">Team</th>
-                  <th rowSpan="3" className="text-left w-24">Sales Reps</th>
-                  <th rowSpan="3">{m1Name}</th>
-                  <th rowSpan="3">{m2Name}</th>
-                  <th rowSpan="3">{m3Name}</th>
-                  <th rowSpan="3" className="bg-yellow">Q Total</th>
-                  <th rowSpan="3" className="bg-blue">Q Budget</th>
-                  <th rowSpan="3">%</th>
-                  <th rowSpan="3" className="bg-red-light text-red">Gap</th>
+                  <th rowSpan="2" className="text-left w-16">Team</th>
+                  <th rowSpan="2" className="text-left w-24">Sales Reps</th>
+                  <th rowSpan="2">{m1Name}</th>
+                  <th rowSpan="2">{m2Name}</th>
+                  <th rowSpan="2">{m3Name}</th>
+                  {/* ② TBD 칼럼 제거 */}
+                  <th rowSpan="2" className="bg-yellow">Q Total</th>
+                  <th rowSpan="2" className="bg-blue">Q Budget</th>
+                  <th rowSpan="2">%</th>
+                  <th rowSpan="2" className="bg-red-light text-red">Gap</th>
+                  {/* ③ colSpan 6 → 7 (Progress 칼럼 추가) */}
                   <th colSpan="7" className="header-dark">{m1Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
                 </tr>
                 <tr>
-                  <th className="font-normal text-slate-500">{rangesM1}</th>
-                  <th className="font-normal text-slate-500">{rangesM1}</th>
-                  <th className="font-normal text-slate-500">{rangesM1}</th>
-                  <th className="font-normal text-slate-500">{rangesM1}</th>
-                  <th className="font-normal text-slate-500">{rangesM1}</th>
-                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
-                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
+                  {/* ① m1 주차 헤더 + 자동 날짜 */}
+                  {weekLabels.map((label, idx) => (
+                    <th key={`m1w${idx}`}>
+                      {label}
+                      {weekRangesM1[idx] && (
+                        <span className="week-date-label">{weekRangesM1[idx]}</span>
+                      )}
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
 
-                  <th className="font-normal text-slate-500">{rangesM2}</th>
-                  <th className="font-normal text-slate-500">{rangesM2}</th>
-                  <th className="font-normal text-slate-500">{rangesM2}</th>
-                  <th className="font-normal text-slate-500">{rangesM2}</th>
-                  <th className="font-normal text-slate-500">{rangesM2}</th>
-                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
-                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
+                  {/* ① m2 주차 헤더 + 자동 날짜 */}
+                  {weekLabels.map((label, idx) => (
+                    <th key={`m2w${idx}`}>
+                      {label}
+                      {weekRangesM2[idx] && (
+                        <span className="week-date-label">{weekRangesM2[idx]}</span>
+                      )}
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
 
-                  <th className="font-normal text-slate-500">{rangesM3}</th>
-                  <th className="font-normal text-slate-500">{rangesM3}</th>
-                  <th className="font-normal text-slate-500">{rangesM3}</th>
-                  <th className="font-normal text-slate-500">{rangesM3}</th>
-                  <th className="font-normal text-slate-500">{rangesM3}</th>
-                  <th rowSpan="2" className="bg-yellow text-slate-800">Total</th>
-                  <th rowSpan="2" className="bg-yellow text-blue-700">%</th>
-                </tr>
-                <tr>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
-                  <th>1st w</th><th>2nd w</th><th>3rd w</th><th>4th w</th><th>5th w</th>
+                  {/* ① m3 주차 헤더 + 자동 날짜 */}
+                  {weekLabels.map((label, idx) => (
+                    <th key={`m3w${idx}`}>
+                      {label}
+                      {weekRangesM3[idx] && (
+                        <span className="week-date-label">{weekRangesM3[idx]}</span>
+                      )}
+                    </th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,6 +308,7 @@
                     <td className={r.valM1 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM1)}</td>
                     <td className={r.valM2 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM2)}</td>
                     <td className={r.valM3 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM3)}</td>
+                    {/* ② TBD td 제거 */}
                     <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
                     <td className="bg-blue">{formatM(r.budget)}</td>
                     <td className="text-blue">{formatP(r.progress)}</td>
@@ -283,15 +316,18 @@
                     
                     {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
-                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM1)}</td>
+                    {/* ③ m1 Progress */}
+                    <td className="progress-cell">{formatPct(r.valM1, r.budget)}</td>
                     
                     {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
-                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM2)}</td>
+                    {/* ③ m2 Progress */}
+                    <td className="progress-cell">{formatPct(r.valM2, r.budget)}</td>
 
                     {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
-                    <td className="bg-yellow text-blue-600 font-bold">{formatP(r.progM3)}</td>
+                    {/* ③ m3 Progress */}
+                    <td className="progress-cell">{formatPct(r.valM3, r.budget)}</td>
                   </tr>
                 ))}
                 
@@ -300,6 +336,7 @@
                   <td>{formatM(sumM1)}</td>
                   <td>{formatM(sumM2)}</td>
                   <td>{formatM(sumM3)}</td>
+                  {/* ② TBD td 제거 */}
                   <td className="text-yellow-300">{formatM(sumTotal)}</td>
                   <td className="text-blue-300">{formatM(sumBudget)}</td>
                   <td className="text-green-300">{formatP(sumProgress)}</td>
@@ -307,15 +344,15 @@
 
                   {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM1)}</td>
-                  <td className="text-green-300">{formatP(sumProgM1)}</td>
+                  <td className="text-blue-300">{formatPct(sumM1, sumBudget)}</td>
                   
                   {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM2)}</td>
-                  <td className="text-green-300">{formatP(sumProgM2)}</td>
+                  <td className="text-blue-300">{formatPct(sumM2, sumBudget)}</td>
 
                   {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM3)}</td>
-                  <td className="text-green-300">{formatP(sumProgM3)}</td>
+                  <td className="text-blue-300">{formatPct(sumM3, sumBudget)}</td>
                 </tr>
               </tbody>
             </table>
@@ -333,7 +370,7 @@
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(productCounts).sort((a,b)=>b.count - a.count).map(([p, data]) => (
+                {Object.entries(productCounts).sort((a,b)=>b[1].count - a[1].count).map(([p, data]) => (
                   <tr key={p}>
                     <td className="text-left font-bold">{p}</td>
                     <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} 대` : '-'}</td>
