@@ -94,13 +94,14 @@
         const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
           if (doc.exists) setMemberTargets(doc.data());
         });
-        // 4. 팀 구조 & 분기 리스트
+        // ✨ 4. 팀 구조 & 분기 리스트 (DB 저장 연동)
         const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
             const data = doc.data();
             if (data.teams) setTeams(data.teams);
             if (data.quarters) setQuarters(data.quarters);
           } else {
+            // DB에 없으면 최초 생성
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
         });
@@ -158,6 +159,7 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
+      // ✨ 팀/멤버/분기 추가 시 DB 연동
       const addTeam = () => {
         const newTeam = prompt('추가할 탭 이름을 입력하세요 (예: Team 4)');
         if (newTeam && !teams[newTeam]) {
@@ -194,23 +196,6 @@
           salesData.filter(d => d.member === oldName).forEach(d => {
             db.collection("sales").doc(d.id.toString()).update({ member: newName });
           });
-        }
-      };
-
-      // ✨ [추가된 기능] 멤버 삭제
-      const deleteMember = (memberName, e) => {
-        e.stopPropagation(); // 부모 태그(카드) 클릭 이벤트 방지
-        if (window.confirm(`[${memberName}] 멤버를 정말 삭제하시겠습니까?\n(등록되어 있던 영업 데이터는 삭제되지 않습니다)`)) {
-          const newTeams = { ...teams };
-          newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
-          setTeams(newTeams);
-          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
-
-          const newTargets = { ...memberTargets };
-          if (newTargets[memberName] !== undefined) {
-            delete newTargets[memberName];
-            db.collection("targets").doc("memberTargets").set(newTargets);
-          }
         }
       };
 
@@ -318,6 +303,10 @@
       allDealers.forEach(d => dealerDirectStats[d] = { count: 0, sumKRW: 0 });
       expectedData.filter(d => d.salesType === 'Direct').forEach(cur => { const dealer = cur.dealerName || '병원'; if (dealerDirectStats[dealer]) { dealerDirectStats[dealer].count += 1; dealerDirectStats[dealer].sumKRW += cur.priceKRW; }});
 
+      const dealerAllStats = {};
+      allDealers.forEach(d => dealerAllStats[d] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => { const dealer = cur.dealerName || (cur.salesType === 'Direct' ? '병원' : '기타'); if (dealerAllStats[dealer]) { dealerAllStats[dealer].count += 1; dealerAllStats[dealer].sumKRW += cur.priceKRW; }});
+
       const allMembers = Object.values(teams).flat();
       const memberStats = {};
       allMembers.forEach(m => memberStats[m] = { count: 0, sumKRW: 0 });
@@ -327,8 +316,9 @@
         if (!targetKRW) return null;
         const target120 = targetKRW * 1.2;
         const target140 = targetKRW * 1.4;
+        const target150 = targetKRW * 1.5;
         const per = (actKRW / targetKRW) * 100;
-        const maxScale = Math.max(target140, actKRW * 1.05); 
+        const maxScale = Math.max(target150, actKRW * 1.05); 
         return (
           <div className="w-full mt-6 md:mt-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
@@ -338,6 +328,7 @@
                 <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}>100%</div>
                 <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600" style={{ left: `${(target120 / maxScale) * 100}%` }}>120%</div>
                 <div className="absolute -translate-x-1/2 text-xs font-bold text-purple-600" style={{ left: `${(target140 / maxScale) * 100}%` }}>140%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-orange-500" style={{ left: `${(target150 / maxScale) * 100}%` }}>150%</div>
               </div>
             </div>
             <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
@@ -345,14 +336,15 @@
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300" style={{ left: `${(target120 / maxScale) * 100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left: `${(target140 / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-orange-400" style={{ left: `${(target150 / maxScale) * 100}%` }}></div>
             </div>
           </div>
         );
       };
 
       const renderBarChart = (dataObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
-        const maxVal = Math.max(...dataArr.map(d => d.sumKRW), 1);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        const maxVal = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
         return (
           <div className="space-y-4">
             {dataArr.map(([key, stat]) => {
@@ -372,7 +364,7 @@
       };
 
       const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a, b) => b.sumKRW - a.sumKRW);
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
         return (
           <div className="space-y-5">
             {dataArr.map(([key, stat]) => {
@@ -455,22 +447,22 @@
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">📋 분기 요약 지표 (Summary)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
                     <div className="flex flex-col space-y-3">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-slate-700 font-extrabold text-[14px]">적용 환율 (ER) ✏️</span><input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[21px] text-right outline-none focus:border-slate-500 transition" placeholder="예: 1389" /></div>
-                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-blue-700 font-extrabold text-[14px]">Target (KRW) ✏️</span><input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[21px] text-right outline-none focus:border-blue-500 transition" placeholder="목표 금액 기입" /></div>
-                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-blue-600 font-bold text-[14px]">Target (USD)</span><span className="font-mono font-bold text-gray-800 text-[21px] text-right px-1">$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-green-700 font-extrabold text-[14px]">Incentive Target (KRW)</span><span className="font-mono font-bold text-green-800 text-[21px] text-right px-1">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-extrabold text-[11px]">적용 환율 (ER) ✏️</span><input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-slate-500 transition" placeholder="예: 1389" /></div>
+                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-700 font-extrabold text-[11px]">Target (KRW) ✏️</span><input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-blue-500 transition" placeholder="목표 금액 기입" /></div>
+                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-600 font-bold text-[11px]">Target (USD)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (KRW)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
                     </div>
                     <div className="flex flex-col space-y-3">
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-green-700 font-extrabold text-[14px]">Incentive Target (USD)</span><span className="font-mono font-bold text-green-800 text-[21px] text-right px-1">$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-300 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-yellow-800 font-extrabold text-[14px]">예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[21px] text-right px-1">₩ {expectedKRW.toLocaleString()}</span></div>
-                      <div className="bg-yellow-50/50 p-3 rounded-xl border border-yellow-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-yellow-700 font-extrabold text-[14px]">ER1 ($)</span><span className="font-mono font-bold text-gray-800 text-[21px] text-right px-1">$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-gray-600 font-bold text-[14px]">GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[21px] text-right px-1">₩ {gapKRW.toLocaleString()}</span></div>
+                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (USD)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-800 font-extrabold text-[11px]">예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {expectedKRW.toLocaleString()}</span></div>
+                      <div className="bg-yellow-50/50 p-3 rounded-xl border border-yellow-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-700 font-extrabold text-[11px]">ER1 ($)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gapKRW.toLocaleString()}</span></div>
                     </div>
                     <div className="flex flex-col space-y-3">
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-gray-600 font-bold text-[14px]">% (예상치 달성률)</span><span className="font-mono font-bold text-blue-600 text-[24px] text-right px-1">{percent.toFixed(3)} %</span></div>
-                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-purple-800 font-extrabold text-[14px]">GMPP Target (KRW) ✏️</span><input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[21px] text-right outline-none focus:border-purple-500 transition" placeholder="GMPP 목표 기입" /></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-slate-700 font-bold text-[14px]">GMPP 예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[21px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[100px]"><span className="text-slate-700 font-bold text-[14px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[21px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span></div>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">% (예상치 달성률)</span><span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{percent.toFixed(3)} %</span></div>
+                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-purple-800 font-extrabold text-[11px]">GMPP Target (KRW) ✏️</span><input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-purple-500 transition" placeholder="GMPP 목표 기입" /></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP 예상치 (KRW)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span></div>
                     </div>
                   </div>
 
@@ -490,14 +482,12 @@
                 <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
                   <div className="grid grid-cols-2 md:flex bg-gray-50 border-b">
                     <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-blue-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>📊 장비별 전체</button>
-                    <button onClick={() => setActiveStatTab('dealerIndirect')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerIndirect' ? 'bg-white text-purple-600 border-purple-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🤝 딜러 (Indirect)</button>
-                    <button onClick={() => setActiveStatTab('dealerDirect')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerDirect' ? 'bg-white text-indigo-600 border-indigo-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🏢 딜러 (Direct)</button>
+                    <button onClick={() => setActiveStatTab('dealerAll')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerAll' ? 'bg-white text-purple-600 border-purple-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🤝 딜러 (전체)</button>
                     <button onClick={() => setActiveStatTab('member')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'member' ? 'bg-white text-emerald-600 border-emerald-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>🧑‍💼 멤버 달성률</button>
                   </div>
                   <div className="p-4 md:p-8">
                     {activeStatTab === 'product' && renderBarChart(productStats, 'bg-blue-500')}
-                    {activeStatTab === 'dealerIndirect' && renderBarChart(dealerIndirectStats, 'bg-purple-500')}
-                    {activeStatTab === 'dealerDirect' && renderBarChart(dealerDirectStats, 'bg-indigo-500')}
+                    {activeStatTab === 'dealerAll' && renderBarChart(dealerAllStats, 'bg-purple-500')}
                     {activeStatTab === 'member' && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
                   </div>
                 </div>
@@ -521,11 +511,7 @@
                       <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
                         <div className="flex justify-between items-start">
                           <div className="text-xl md:text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
-                          {/* ✨ 수정: 멤버 이름 옆에 삭제 기능(버튼)이 추가되었습니다 */}
-                          <div className="flex space-x-1">
-                            <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">✏️ 이름 수정</button>
-                            <button onClick={(e) => deleteMember(member, e)} className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-100">🗑️ 삭제</button>
-                          </div>
+                          <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">✏️ 이름 수정</button>
                         </div>
                         <div className="text-xs md:text-sm text-gray-500 mt-2 font-medium">담당 납품처 및 데이터 관리 &rarr;</div>
                       </div>
@@ -559,6 +545,7 @@
                           </div>
                           <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-green-500 flex-1 lg:flex-none"><span className="text-[10px] text-green-600 block font-bold">120% Target</span><span className="font-bold text-xs md:text-sm text-green-700 text-right">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
                           <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-purple-500 flex-1 lg:flex-none"><span className="text-[10px] text-purple-600 block font-bold">140% Target</span><span className="font-bold text-xs md:text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-orange-500 flex-1 lg:flex-none"><span className="text-[10px] text-orange-500 block font-bold">150% Target</span><span className="font-bold text-xs md:text-sm text-orange-600 text-right">₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
                         </div>
                       </div>
                       {renderProgressBar(memberACT, memberTargets[selectedMember])}
