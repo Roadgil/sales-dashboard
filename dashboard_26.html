@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="pageTitle">Detail Report · Candela Korea</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg:#f4f5f7; --surf:#ffffff; --surf2:#f9fafb; --border:#e4e6eb;
+  --a1:#5b4fcf; --a2:#0faaa0; --a3:#e84d6f; --a4:#e09c10; --green:#0fa878;
+  --text:#1a1a2e; --muted:#8a8fa8; --muted2:#b0b5c8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;min-height:100vh;}
+.wrap{max-width:1440px;margin:0 auto;padding:36px 28px;}
+
+/* HEADER */
+header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:36px;padding-bottom:24px;border-bottom:2px solid var(--border);}
+h1{font-family:'DM Serif Display',serif;font-size:38px;font-weight:400;color:var(--text);line-height:1;margin-bottom:5px;}
+h1 span{color:var(--a1);}
+.sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+.hbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;background:rgba(15,168,120,.1);border:1px solid rgba(15,168,120,.3);border-radius:20px;font-size:11px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:8px;}
+.hbadge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hdate{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:22px;position:relative;overflow:hidden;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kpi.k1::before{background:var(--a1);}
+.kpi.k4::before{background:var(--a4);}
+.klabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Mono',monospace;margin-bottom:10px;}
+.kval{font-family:'DM Serif Display',serif;font-size:34px;line-height:1;margin-bottom:6px;}
+.kval.v1{color:var(--a1);}
+.kval.v4{color:var(--a4);font-size:22px;padding-top:4px;}
+.ksub{font-size:11px;color:var(--muted);}
+
+/* GRID */
+.g{display:grid;gap:14px;margin-bottom:14px;}
+.g11{grid-template-columns:1fr 1fr;}
+.g21{grid-template-columns:2fr 1fr;}
+.g3{grid-template-columns:1fr 1fr 1fr;}
+
+.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.ctitle{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-family:'DM Mono',monospace;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+.ctitle::before{content:'';width:3px;height:10px;background:var(--a1);border-radius:2px;flex-shrink:0;}
+
+/* SR LIST */
+.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;}
+.srow:last-child{border-bottom:none;}
+.savt{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.sinfo{flex:1;}
+.sname{font-size:12px;margin-bottom:3px;font-weight:500;}
+.sbw{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.sbf{height:100%;border-radius:2px;}
+.samt{font-family:'DM Mono',monospace;font-size:11px;text-align:right;white-space:nowrap;}
+.spct{font-size:9px;color:var(--muted);}
+
+/* SPLIT */
+.split{display:flex;gap:10px;margin-top:16px;}
+.sp{flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.splabel{font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.spval{font-family:'DM Serif Display',serif;font-size:22px;line-height:1;margin-bottom:3px;}
+.spsub{font-size:10px;color:var(--muted);}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left;padding:0 6px 10px;border-bottom:2px solid var(--border);}
+td{padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surf2);}
+.mono{font-family:'DM Mono',monospace;font-size:11px;}
+.dim{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
+.mbar{height:4px;border-radius:2px;background:var(--a1);opacity:.5;}
+
+/* TABS */
+.tab-nav{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+.tab-btn{padding:7px 18px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.tab-btn:hover{border-color:var(--a1);color:var(--a1);}
+.tab-btn.active{background:var(--a1);border-color:var(--a1);color:#fff;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* SR DETAIL KPIs */
+.sr-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.sr-kpi{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;}
+.sr-kpi .klabel{margin-bottom:6px;}
+.sr-kpi .kval{font-size:20px;}
+
+footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-decoration:none;margin-bottom:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;transition:all .2s;" onmouseover="this.style.color='var(--a1)';this.style.borderColor='var(--a1)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">← Dashboard로 돌아가기</a>
+    <h1>Sales <span>Dashboard</span></h1>
+    <div class="sub">Candela Korea · <span id="quarterSubLabel">--</span> Detail Report</div>
+  </div>
+  <div style="text-align:right">
+    <div class="hbadge" id="quarterBadge">--</div>
+    <div class="hdate" id="quarterDate">--</div>
+    <div style="margin-top:6px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;">※ Dealer 매출 수치는 데이터 검증 중 (참고용)</div>
+  </div>
+</header>
+
+<!-- KPI -->
+<div class="kpi-row">
+  <div class="kpi k1">
+    <div class="klabel">Total Revenue</div>
+    <div class="kval v1">₩90.85억</div>
+    <div class="ksub">9,085,048,916 KRW</div>
+  </div>
+  <div class="kpi k4">
+    <div class="klabel">Top Performer</div>
+    <div class="kval v4">SC Baek</div>
+    <div class="ksub">₩32.22억 · 35.5%</div>
+  </div>
+</div>
+
+<!-- ROW1: 제품 + SR -->
+<div class="g g11">
+  <div class="card">
+    <div class="ctitle">제품 구성비</div>
+    <div style="position:relative;height:200px"><canvas id="prodChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ctitle">담당자별 실적</div>
+    <div id="srList"></div>
+  </div>
+</div>
+
+<!-- ROW2: True + New/Existing -->
+<div class="g g11">
+  <div class="card">
+    <div class="ctitle">True (실제 유통경로)</div>
+    <div style="position:relative;height:150px"><canvas id="trueChart"></canvas></div>
+    <div class="split">
+      <div class="sp"><div class="splabel">SR</div><div class="spval" style="color:var(--a2)">72.2%</div><div class="spsub">₩65.58억 · 57건</div></div>
+      <div class="sp"><div class="splabel">Dealer</div><div class="spval" style="color:var(--a3)">27.8%</div><div class="spsub">₩25.27억 · 25건</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ctitle">New vs Existing</div>
+    <div style="position:relative;height:150px"><canvas id="rmChart"></canvas></div>
+    <div class="split">
+      <div class="sp"><div class="splabel">New</div><div class="spval" style="color:var(--a3)">70.8%</div><div class="spsub">₩64.31억 · 55건</div></div>
+      <div class="sp"><div class="splabel">Existing</div><div class="spval" style="color:var(--green)">29.2%</div><div class="spsub">₩26.54억 · 27건</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ROW3: 딜러 -->
+<div class="g g21">
+  <div class="card">
+    <div class="ctitle">Dealer별 매출 <span style="font-size:9px;color:var(--a3);margin-left:8px;font-weight:normal;">※ 데이터 검증 중 · 참고용</span></div>
+    <div style="position:relative;height:300px"><canvas id="dealerChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ctitle">Dealer 상세 <span style="font-size:9px;color:var(--a3);margin-left:4px;font-weight:normal;">참고용</span></div>
+    <table>
+      <thead><tr><th>딜러</th><th>금액</th><th>비율</th><th></th></tr></thead>
+      <tbody id="dealerTb"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ROW4: 담당자별 탭 -->
+<div class="card">
+  <div class="ctitle">담당자별 상세</div>
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('sc',this)">SC Baek</button>
+    <button class="tab-btn" onclick="switchTab('sg',this)">SG Oh</button>
+    <button class="tab-btn" onclick="switchTab('yc',this)">YC Lim</button>
+    <button class="tab-btn" onclick="switchTab('sh',this)">SH Kim</button>
+    <button class="tab-btn" onclick="switchTab('gr',this)">GR Lee</button>
+  </div>
+
+  <!-- SC Baek -->
+  <div class="tab-pane active" id="tab-sc">
+    <div class="sr-kpis">
+      <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--a4)"></div><div class="klabel">Total</div><div class="kval" style="color:var(--a4)">₩32.22억</div><div class="ksub">28건</div></div>
+      <div class="sr-kpi"><div class="klabel">True · SR</div><div class="kval" style="color:var(--a2)">78.7%</div><div class="ksub">₩25.37억</div></div>
+      <div class="sr-kpi"><div class="klabel">True · Dealer</div><div class="kval" style="color:var(--a3)">21.3%</div><div class="ksub">₩6.85억</div></div>
+    </div>
+    <div class="g g11">
+      <div class="card"><div class="ctitle">True 비율</div><div style="position:relative;height:160px"><canvas id="c-sc-tr"></canvas></div></div>
+      <div class="card"><div class="ctitle">제품별</div>
+        <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <tr><td>GMPP</td><td class="mono">₩26.39억</td><td class="dim">18건</td><td class="dim">81.9%</td><td><div class="mbar" style="width:70px"></div></td></tr>
+          <tr><td>VBP</td><td class="mono">₩3.52억</td><td class="dim">3건</td><td class="dim">10.9%</td><td><div class="mbar" style="width:9px"></div></td></tr>
+          <tr><td>PICOWAY</td><td class="mono">₩1.45억</td><td class="dim">1건</td><td class="dim">4.5%</td><td><div class="mbar" style="width:4px"></div></td></tr>
+          <tr><td>CRYO7</td><td class="mono">₩0.67억</td><td class="dim">5건</td><td class="dim">2.1%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+          <tr><td>HP</td><td class="mono">₩0.19억</td><td class="dim">1건</td><td class="dim">0.6%</td><td><div class="mbar" style="width:1px"></div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SG Oh -->
+  <div class="tab-pane" id="tab-sg">
+    <div class="sr-kpis">
+      <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--a1)"></div><div class="klabel">Total</div><div class="kval" style="color:var(--a1)">₩19.03억</div><div class="ksub">18건</div></div>
+      <div class="sr-kpi"><div class="klabel">True · SR</div><div class="kval" style="color:var(--a2)">69.8%</div><div class="ksub">₩13.29억</div></div>
+      <div class="sr-kpi"><div class="klabel">True · Dealer</div><div class="kval" style="color:var(--a3)">30.2%</div><div class="ksub">₩5.74억</div></div>
+    </div>
+    <div class="g g11">
+      <div class="card"><div class="ctitle">True 비율</div><div style="position:relative;height:160px"><canvas id="c-sg-tr"></canvas></div></div>
+      <div class="card"><div class="ctitle">제품별</div>
+        <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <tr><td>GMPP</td><td class="mono">₩17.50억</td><td class="dim">12건</td><td class="dim">92.0%</td><td><div class="mbar" style="width:70px"></div></td></tr>
+          <tr><td>VBP</td><td class="mono">₩1.03억</td><td class="dim">1건</td><td class="dim">5.4%</td><td><div class="mbar" style="width:4px"></div></td></tr>
+          <tr><td>CRYO7</td><td class="mono">₩0.39억</td><td class="dim">3건</td><td class="dim">2.0%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+          <tr><td>HP</td><td class="mono">₩0.11억</td><td class="dim">2건</td><td class="dim">0.6%</td><td><div class="mbar" style="width:1px"></div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- YC Lim -->
+  <div class="tab-pane" id="tab-yc">
+    <div class="sr-kpis">
+      <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--a2)"></div><div class="klabel">Total</div><div class="kval" style="color:var(--a2)">₩15.45억</div><div class="ksub">13건</div></div>
+      <div class="sr-kpi"><div class="klabel">True · SR</div><div class="kval" style="color:var(--a2)">64.8%</div><div class="ksub">₩10.02억</div></div>
+      <div class="sr-kpi"><div class="klabel">True · Dealer</div><div class="kval" style="color:var(--a3)">35.2%</div><div class="ksub">₩5.44억</div></div>
+    </div>
+    <div class="g g11">
+      <div class="card"><div class="ctitle">True 비율</div><div style="position:relative;height:160px"><canvas id="c-yc-tr"></canvas></div></div>
+      <div class="card"><div class="ctitle">제품별</div>
+        <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <tr><td>GMPP</td><td class="mono">₩11.44억</td><td class="dim">8건</td><td class="dim">74.0%</td><td><div class="mbar" style="width:70px"></div></td></tr>
+          <tr><td>PICOWAY</td><td class="mono">₩2.72억</td><td class="dim">2건</td><td class="dim">17.6%</td><td><div class="mbar" style="width:16px"></div></td></tr>
+          <tr><td>VBP</td><td class="mono">₩1.03억</td><td class="dim">1건</td><td class="dim">6.7%</td><td><div class="mbar" style="width:6px"></div></td></tr>
+          <tr><td>CRYO7</td><td class="mono">₩0.26억</td><td class="dim">2건</td><td class="dim">1.7%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SH Kim -->
+  <div class="tab-pane" id="tab-sh">
+    <div class="sr-kpis">
+      <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--a3)"></div><div class="klabel">Total</div><div class="kval" style="color:var(--a3)">₩14.84억</div><div class="ksub">13건</div></div>
+      <div class="sr-kpi"><div class="klabel">True · SR</div><div class="kval" style="color:var(--a2)">68.8%</div><div class="ksub">₩10.21억</div></div>
+      <div class="sr-kpi"><div class="klabel">True · Dealer</div><div class="kval" style="color:var(--a3)">31.2%</div><div class="ksub">₩4.63억</div></div>
+    </div>
+    <div class="g g11">
+      <div class="card"><div class="ctitle">True 비율</div><div style="position:relative;height:160px"><canvas id="c-sh-tr"></canvas></div></div>
+      <div class="card"><div class="ctitle">제품별</div>
+        <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <tr><td>GMPP</td><td class="mono">₩12.32억</td><td class="dim">8건</td><td class="dim">83.1%</td><td><div class="mbar" style="width:70px"></div></td></tr>
+          <tr><td>VBP</td><td class="mono">₩2.10억</td><td class="dim">2건</td><td class="dim">14.2%</td><td><div class="mbar" style="width:12px"></div></td></tr>
+          <tr><td>CRYO7</td><td class="mono">₩0.41억</td><td class="dim">3건</td><td class="dim">2.8%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GR Lee -->
+  <div class="tab-pane" id="tab-gr">
+    <div class="sr-kpis">
+      <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div><div class="klabel">Total</div><div class="kval" style="color:var(--green)">₩9.31억</div><div class="ksub">10건</div></div>
+      <div class="sr-kpi"><div class="klabel">True · SR</div><div class="kval" style="color:var(--a2)">71.9%</div><div class="ksub">₩6.69억</div></div>
+      <div class="sr-kpi"><div class="klabel">True · Dealer</div><div class="kval" style="color:var(--a3)">28.1%</div><div class="ksub">₩2.62억</div></div>
+    </div>
+    <div class="g g11">
+      <div class="card"><div class="ctitle">True 비율</div><div style="position:relative;height:160px"><canvas id="c-gr-tr"></canvas></div></div>
+      <div class="card"><div class="ctitle">제품별</div>
+        <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <tr><td>GMPP</td><td class="mono">₩8.68억</td><td class="dim">6건</td><td class="dim">93.2%</td><td><div class="mbar" style="width:70px"></div></td></tr>
+          <tr><td>CRYO7</td><td class="mono">₩0.26억</td><td class="dim">2건</td><td class="dim">2.8%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+          <tr><td>1940 HP</td><td class="mono">₩0.20억</td><td class="dim">1건</td><td class="dim">2.1%</td><td><div class="mbar" style="width:2px"></div></td></tr>
+          <tr><td>1550 HP</td><td class="mono">₩0.17억</td><td class="dim">1건</td><td class="dim">1.9%</td><td><div class="mbar" style="width:1px"></div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Source: 2021_2026년_월별_장비_판매_기록.xlsx · 2026 시트</span>
+  <span>Candela Korea Sales Ops</span>
+</footer>
+</div>
+
+<script>
+// ── 분기 파라미터 읽기 ──────────────────────────────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('quarter') || '2026 Q1';
+
+  // 페이지 타이틀
+  document.getElementById('pageTitle').textContent = `Detail Report · ${q} · Candela Korea`;
+
+  // 헤더 뱃지 & 서브라벨
+  document.getElementById('quarterBadge').textContent = q;
+  document.getElementById('quarterSubLabel').textContent = q;
+
+  // 날짜 범위 자동 생성 (예: "2026 Q2" → "2026.04 — 2026.06")
+  const quarterMonths = { 'Q1': ['01','03'], 'Q2': ['04','06'], 'Q3': ['07','09'], 'Q4': ['10','12'] };
+  const parts = q.split(' '); // ['2026', 'Q2']
+  const year = parts[0] || '2026';
+  const qKey = parts[1] || 'Q1';
+  const [mStart, mEnd] = quarterMonths[qKey] || ['01','03'];
+  document.getElementById('quarterDate').textContent = `${year}.${mStart} — ${year}.${mEnd}`;
+})();
+// ────────────────────────────────────────────────────────────────
+
+Chart.defaults.color = '#8a8fa8';
+Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
+Chart.defaults.font.size = 11;
+const TT = { backgroundColor:'#fff', borderColor:'#e4e6eb', borderWidth:1, padding:10, titleColor:'#1a1a2e', bodyColor:'#1a1a2e' };
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// 제품 도넛
+new Chart(document.getElementById('prodChart'), {
+  type:'doughnut',
+  data:{
+    labels:['GMPP','VBP','PICOWAY','CRYO7','HP 기타'],
+    datasets:[{ data:[84.0,8.5,4.6,2.2,0.7], backgroundColor:['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#c0c5d8'], borderColor:'#fff', borderWidth:3, hoverOffset:8 }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{position:'right',labels:{color:'#8a8fa8',usePointStyle:true,pointStyle:'circle',padding:10,font:{size:11}}}, tooltip:{...TT,callbacks:{label:c=>` ${c.raw}%`}} } }
+});
+
+// SR 리스트
+const srs = [
+  {n:'SC Baek',a:32.22,p:35.5,c:'rgba(224,156,16,.12)',tc:'#c48a00',bg:'#e09c10'},
+  {n:'SG Oh',  a:19.03,p:20.9,c:'rgba(91,79,207,.1)',  tc:'#5b4fcf',bg:'#5b4fcf'},
+  {n:'YC Lim', a:15.45,p:17.0,c:'rgba(15,170,160,.1)', tc:'#0faaa0',bg:'#0faaa0'},
+  {n:'SH Kim', a:14.84,p:16.3,c:'rgba(232,77,111,.1)', tc:'#e84d6f',bg:'#e84d6f'},
+  {n:'GR Lee', a: 9.31,p:10.2,c:'rgba(15,168,120,.1)', tc:'#0fa878',bg:'#0fa878'},
+];
+const maxA = srs[0].a;
+const sl = document.getElementById('srList');
+srs.forEach(r=>{
+  sl.innerHTML+=`<div class="srow">
+    <div class="savt" style="background:${r.c};color:${r.tc}">${r.n[0]}</div>
+    <div class="sinfo">
+      <div class="sname">${r.n}</div>
+      <div class="sbw"><div class="sbf" style="width:${(r.a/maxA*100).toFixed(0)}%;background:${r.bg}"></div></div>
+    </div>
+    <div class="samt"><div>₩${r.a}억</div><div class="spct">${r.p}%</div></div>
+  </div>`;
+});
+
+// True 도넛
+new Chart(document.getElementById('trueChart'),{type:'doughnut',data:{labels:['SR','Dealer'],datasets:[{data:[72.2,27.8],backgroundColor:['#0faaa0','#e84d6f'],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}%`}}}}});
+
+// New/Existing 도넛
+new Chart(document.getElementById('rmChart'),{type:'doughnut',data:{labels:['New','Existing'],datasets:[{data:[70.8,29.2],backgroundColor:['#e84d6f','#0fa878'],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}%`}}}}});
+
+// 딜러
+const dealers=[
+  {n:'SEVEN U',a:11.75,p:23.0},{n:'Innomed',a:7.01,p:13.7},{n:'TMI',a:6.51,p:12.8},
+  {n:'동안기획',a:4.77,p:9.4},{n:'Bori',a:4.59,p:9.0},{n:'Beauko',a:4.45,p:8.7},
+  {n:'엠디마케팅',a:3.18,p:6.2},{n:'티모티',a:3.18,p:6.2},{n:'엘룩스코리아',a:3.04,p:6.0},
+  {n:'seed group',a:1.50,p:2.9},{n:'Human',a:1.02,p:2.0},
+];
+new Chart(document.getElementById('dealerChart'),{
+  type:'bar',
+  data:{labels:dealers.map(d=>d.n),datasets:[{label:'매출 (억)',data:dealers.map(d=>d.a),backgroundColor:['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0','#aaa6e0'],borderRadius:6}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ₩${c.raw}억`}}},scales:{x:{grid:{color:'#f0f1f5'},ticks:{color:'#8a8fa8',callback:v=>`${v}억`}},y:{grid:{display:false},ticks:{color:'#1a1a2e',font:{size:11}}}}}
+});
+const tb=document.getElementById('dealerTb');const maxD=dealers[0].a;
+dealers.forEach(d=>{tb.innerHTML+=`<tr><td>${d.n}</td><td class="mono">₩${d.a.toFixed(2)}억</td><td class="dim">${d.p}%</td><td><div class="mbar" style="width:${Math.round(d.a/maxD*70)}px"></div></td></tr>`;});
+
+// 담당자별 True 도넛
+const trData={sc:[78.7,21.3],sg:[69.8,30.2],yc:[64.8,35.2],sh:[68.8,31.2],gr:[71.9,28.1]};
+Object.entries(trData).forEach(([k,v])=>{
+  const el=document.getElementById(`c-${k}-tr`);
+  if(el) new Chart(el,{type:'doughnut',data:{labels:['SR','Dealer'],datasets:[{data:v,backgroundColor:['#0faaa0','#e84d6f'],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{labels:{color:'#8a8fa8',usePointStyle:true,pointStyle:'circle',padding:12}},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}%`}}}}});
+});
+</script>
+</body>
+</html>
