@@ -312,28 +312,36 @@ function render(salesData, memberTargets) {
   document.getElementById('split-indirect-pct').textContent = `${indirectPct.toFixed(1)}%`;
   document.getElementById('split-indirect-sub').textContent = `${fmt억(indirectKRW)} · ${indirectCount}건`;
 
-  // ── 딜러 (Indirect 데이터)
+  // ── 딜러 (Indirect 데이터) - 전체 딜러 목록 기준으로 집계
+  const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
   const dealerSum = {}, dealerCount = {};
+  // 전체 딜러를 0으로 미리 초기화
+  ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d] = 0; dealerCount[d] = 0; });
+  // 실제 데이터로 집계 (목록 외 딜러명도 동적 추가)
   qData.filter(d => d.salesType === 'Indirect').forEach(d => {
     const n = d.dealerName || '기타';
-    dealerSum[n] = (dealerSum[n] || 0) + (d.priceKRW || 0);
-    dealerCount[n] = (dealerCount[n] || 0) + 1;
+    if (!dealerSum[n]) { dealerSum[n] = 0; dealerCount[n] = 0; }
+    dealerSum[n] += (d.priceKRW || 0);
+    dealerCount[n] += 1;
   });
+  // 매출 있는 딜러만 차트에 표시 (0인 딜러는 테이블에만 표시)
   const dealerEntries = Object.entries(dealerSum).sort((a, b) => b[1] - a[1]);
-  const maxDealer = dealerEntries[0]?.[1] || 1;
+  const dealerEntriesWithData = dealerEntries.filter(([, v]) => v > 0);
+  const maxDealer = dealerEntriesWithData[0]?.[1] || 1;
 
   makeChart('dealerChart', {
     type: 'bar',
-    data: { labels: dealerEntries.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntries.map(([, v]) => parseFloat((v / 100000000).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
+    data: { labels: dealerEntriesWithData.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntriesWithData.map(([, v]) => parseFloat((v / 100000000).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ₩${c.raw}억` } } },
       scales: { x: { grid: { color: '#f0f1f5' }, ticks: { color: '#8a8fa8', callback: v => `${v}억` } }, y: { grid: { display: false }, ticks: { color: '#1a1a2e', font: { size: 11 } } } } }
   });
   document.getElementById('dealerTb').innerHTML = dealerEntries.length
-    ? dealerEntries.map(([k, v]) => `<tr>
-        <td>${k}</td><td class="mono">${fmt억(v)}</td>
-        <td class="dim">${indirectKRW ? (v / indirectKRW * 100).toFixed(1) : 0}%</td>
-        <td><div class="mbar" style="width:${Math.round(v / maxDealer * 70)}px"></div></td>
+    ? dealerEntries.map(([k, v]) => `<tr style="${v === 0 ? 'opacity:0.4' : ''}">
+        <td>${k}</td>
+        <td class="mono">${v > 0 ? fmt억(v) : '-'}</td>
+        <td class="dim">${v > 0 && indirectKRW ? (v / indirectKRW * 100).toFixed(1) + '%' : '-'}</td>
+        <td><div class="mbar" style="width:${v > 0 ? Math.round(v / maxDealer * 70) : 0}px"></div></td>
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Indirect 데이터 없음</td></tr>`;
 
