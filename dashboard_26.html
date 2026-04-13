@@ -117,14 +117,14 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
   <div style="text-align:right">
     <div class="hbadge" id="quarterBadge">--</div>
     <div class="hdate" id="quarterDate">--</div>
-    <div style="margin-top:6px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;">※ Dealer 매출 수치는 데이터 검증 중 (참고용)</div>
+    <div style="margin-top:6px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;" id="dealerNote">※ Dealer 매출 수치는 데이터 검증 중 (참고용)</div>
   </div>
 </header>
 
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
-  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">건 (FCST + ACT)</div></div>
+  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (FCST + ACT)</div></div>
   <div class="kpi k3"><div class="klabel">Direct (SR)</div><div class="kval v3" id="kpi-direct">--</div><div class="ksub" id="kpi-direct-sub">--</div></div>
   <div class="kpi k4"><div class="klabel">Top Performer</div><div class="kval v4" id="kpi-top">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
 </div>
@@ -132,11 +132,11 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
 <!-- ROW1: 제품 + SR 담당자 -->
 <div class="g g11">
   <div class="card">
-    <div class="ctitle">제품 구성비</div>
+    <div class="ctitle" id="ct-prodMix">제품 구성비</div>
     <div style="position:relative;height:200px"><canvas id="prodChart"></canvas></div>
   </div>
   <div class="card">
-    <div class="ctitle">담당자별 실적</div>
+    <div class="ctitle" id="ct-repPerf">담당자별 실적</div>
     <div id="srList"><div class="loading"><div class="spinner"></div>Loading…</div></div>
   </div>
 </div>
@@ -152,7 +152,7 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
     </div>
   </div>
   <div class="card">
-    <div class="ctitle">제품별 매출</div>
+    <div class="ctitle" id="ct-revByProd">제품별 매출</div>
     <div id="productTable"><div class="loading"><div class="spinner"></div>Loading…</div></div>
   </div>
 </div>
@@ -160,13 +160,13 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
 <!-- ROW3: 딜러 (참고용) -->
 <div class="g g21">
   <div class="card">
-    <div class="ctitle">Dealer별 매출 <span class="warn-tag">※ 데이터 검증 중 · 참고용</span></div>
+    <div class="ctitle" id="ct-dealerChart">Dealer별 매출 <span class="warn-tag" id="wt-dealerChart">※ 데이터 검증 중 · 참고용</span></div>
     <div style="position:relative;height:300px"><canvas id="dealerChart"></canvas></div>
   </div>
   <div class="card">
-    <div class="ctitle">Dealer 상세 <span class="warn-tag">참고용</span></div>
+    <div class="ctitle" id="ct-dealerDetail">Dealer 상세 <span class="warn-tag" id="wt-dealerDetail">참고용</span></div>
     <table>
-      <thead><tr><th>딜러</th><th>금액</th><th>비율</th><th></th></tr></thead>
+      <thead><tr><th id="th-dealer">딜러</th><th id="th-amount">금액</th><th id="th-ratio">비율</th><th></th></tr></thead>
       <tbody id="dealerTb"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
     </table>
   </div>
@@ -174,16 +174,104 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
 
 <!-- ROW4: 담당자별 탭 -->
 <div class="card" style="margin-bottom:14px">
-  <div class="ctitle">담당자별 상세</div>
+  <div class="ctitle" id="ct-repDetail">담당자별 상세</div>
   <div class="tab-nav" id="memberTabNav"></div>
   <div id="memberTabContent"><div class="loading"><div class="spinner"></div>Loading…</div></div>
 </div>
 
 <footer>
-  <span>Source: Firebase Firestore · 실시간 연동</span>
+  <span id="footerSource">Source: Firebase Firestore · 실시간 연동</span>
   <span>Candela Korea Sales Ops</span>
 </footer>
 </div>
+
+<!-- Language Toggle Button -->
+<button id="langToggleBtn" onclick="toggleLang()" style="
+  position:fixed; top:16px; right:16px; z-index:9999;
+  padding:6px 14px; border-radius:20px; border:1.5px solid #e4e6eb;
+  background:white; cursor:pointer; font-weight:bold; font-size:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.12); font-family:'DM Mono',monospace;
+  display:flex; align-items:center; gap:6px;
+">🇺🇸 EN</button>
+
+<script>
+// ── Language Toggle ───────────────────────────────────────────────
+let _lang = localStorage.getItem('lang') || 'ko';
+
+const DICT = {
+  backLink:       { ko:'← Dashboard로 돌아가기',  en:'← Back to Dashboard' },
+  dealerNote:     { ko:'※ Dealer 매출 수치는 데이터 검증 중 (참고용)', en:'※ Dealer figures under verification (reference only)' },
+  prodMix:        { ko:'제품 구성비',              en:'Product Mix' },
+  repPerf:        { ko:'담당자별 실적',            en:'Performance by Rep' },
+  revByProd:      { ko:'제품별 매출',              en:'Revenue by Product' },
+  revByDealer:    { ko:'Dealer별 매출',            en:'Revenue by Dealer' },
+  verifyNote:     { ko:'※ 데이터 검증 중 · 참고용', en:'※ Verifying · Reference only' },
+  dealerDetail:   { ko:'Dealer 상세',              en:'Dealer Detail' },
+  refOnly:        { ko:'참고용',                   en:'Ref. only' },
+  dealer:         { ko:'딜러',                     en:'Dealer' },
+  amount:         { ko:'금액',                     en:'Amount' },
+  ratio:          { ko:'비율',                     en:'Share' },
+  count:          { ko:'건수',                     en:'Count' },
+  product:        { ko:'제품',                     en:'Product' },
+  repDetail:      { ko:'담당자별 상세',             en:'Rep Detail' },
+  noData:         { ko:'데이터 없음',               en:'No data' },
+  noIndirect:     { ko:'Indirect 데이터 없음',      en:'No Indirect data' },
+  footerSrc:      { ko:'Source: Firebase Firestore · 실시간 연동', en:'Source: Firebase Firestore · Live sync' },
+  cases:          { ko:'건',                        en:'cases' },
+  current:        { ko:'현재',                      en:'Current' },
+  target:         { ko:'목표',                      en:'Target' },
+  byProduct:      { ko:'제품별',                    en:'By Product' },
+};
+
+function t(key) { return DICT[key] ? (DICT[key][_lang] || DICT[key].ko) : key; }
+
+function applyLang() {
+  const isKo = _lang === 'ko';
+  document.getElementById('langToggleBtn').textContent = isKo ? '🇺🇸 EN' : '🇰🇷 KO';
+
+  const bl = document.querySelector('.back-link');
+  if (bl) bl.textContent = t('backLink');
+
+  const dn = document.getElementById('dealerNote');
+  if (dn) dn.textContent = t('dealerNote');
+
+  const fs = document.getElementById('footerSource');
+  if (fs) fs.textContent = t('footerSrc');
+
+  const ids = {
+    'ct-prodMix':    t('prodMix'),   'ct-repPerf':    t('repPerf'),
+    'ct-revByProd':  t('revByProd'), 'ct-repDetail':  t('repDetail'),
+    'th-dealer':     t('dealer'),    'th-amount':     t('amount'),
+    'th-ratio':      t('ratio'),
+    'kpi-count-sub': isKo ? '건 (FCST + ACT)' : 'cases (FCST + ACT)',
+  };
+  Object.entries(ids).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  });
+
+  // warn-tag elements
+  const wtChart = document.getElementById('wt-dealerChart');
+  if (wtChart) wtChart.textContent = t('verifyNote');
+  const wtDetail = document.getElementById('wt-dealerDetail');
+  if (wtDetail) wtDetail.textContent = t('refOnly');
+
+  // Dealer chart ctitle text node
+  const ctDChart = document.getElementById('ct-dealerChart');
+  if (ctDChart) ctDChart.childNodes[0].textContent = isKo ? 'Dealer별 매출 ' : 'Revenue by Dealer ';
+  const ctDDetail = document.getElementById('ct-dealerDetail');
+  if (ctDDetail) ctDDetail.childNodes[0].textContent = isKo ? 'Dealer 상세 ' : 'Dealer Detail ';
+
+  // Re-render data (to update dynamic Korean strings in cards)
+  if (typeof _loaded !== 'undefined' && _loaded.s && _loaded.t) render(_sales, _targets);
+}
+
+function toggleLang() {
+  _lang = _lang === 'ko' ? 'en' : 'ko';
+  localStorage.setItem('lang', _lang);
+  applyLang();
+}
+</script>
 
 <script>
 // ── Firebase ──────────────────────────────────────────────────────
@@ -276,9 +364,9 @@ function render(salesData, memberTargets) {
   // ── 제품 테이블
   const maxProd = prodEntries[0]?.[1] || 1;
   document.getElementById('productTable').innerHTML =
-    `<table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+    `<table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
     ${prodEntries.map(([k, v]) => `<tr>
-      <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${prodCount[k]}건</td>
+      <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${prodCount[k]}${_lang==='ko'?'건':'cs'}</td>
       <td class="dim">${totalKRW ? (v / totalKRW * 100).toFixed(1) : 0}%</td>
       <td><div class="mbar" style="width:${Math.round(v / maxProd * 70)}px"></div></td>
     </tr>`).join('')}</tbody></table>`;
@@ -298,7 +386,7 @@ function render(salesData, memberTargets) {
         <div class="spct">${totalKRW ? (val / totalKRW * 100).toFixed(1) : 0}%</div>
       </div>
     </div>`;
-  }).join('') || '<div style="padding:20px;color:var(--muted);text-align:center">데이터 없음</div>';
+  }).join('') || `<div style="padding:20px;color:var(--muted);text-align:center">${t('noData')}</div>`;
 
   // ── Sales Type 도넛
   makeChart('trueChart', {
@@ -343,7 +431,7 @@ function render(salesData, memberTargets) {
         <td class="dim">${v > 0 && indirectKRW ? (v / indirectKRW * 100).toFixed(1) + '%' : '-'}</td>
         <td><div class="mbar" style="width:${v > 0 ? Math.round(v / maxDealer * 70) : 0}px"></div></td>
       </tr>`).join('')
-    : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Indirect 데이터 없음</td></tr>`;
+    : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">${t('noIndirect')}</td></tr>`;
 
   // ── 담당자별 탭
   const allMembers = sortedMembers.map(([m]) => m);
@@ -352,7 +440,7 @@ function render(salesData, memberTargets) {
 
   if (!allMembers.length) {
     nav.innerHTML = '';
-    content.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted)">데이터 없음</div>';
+    content.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">${t('noData')}</div>`;
     return;
   }
 
@@ -406,7 +494,7 @@ function render(salesData, memberTargets) {
         </div>
         <div class="pbar-bg"><div class="pbar-fill" style="width:${Math.min(achievePct, 100)}%;background:${achievePct >= 100 ? 'var(--green)' : col}"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
-          <span>현재: ${fmtKRW(mTotal)}</span><span>목표: ${fmtKRW(target)}</span>
+          <span>${t('current')}: ${fmtKRW(mTotal)}</span><span>${t('target')}: ${fmtKRW(target)}</span>
         </div>
       </div>` : ''}
       <div class="g g11">
@@ -415,10 +503,10 @@ function render(salesData, memberTargets) {
           <div style="position:relative;height:160px"><canvas id="c-tr-${sid}"></canvas></div>
         </div>
         <div class="card">
-          <div class="ctitle">제품별</div>
-          <table><thead><tr><th>제품</th><th>금액</th><th>건수</th><th>비율</th><th></th></tr></thead><tbody>
+          <div class="ctitle">${t('byProduct')}</div>
+          <table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
           ${mProdEntries.map(([k, v]) => `<tr>
-            <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${mProdCount[k]}건</td>
+            <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${mProdCount[k]}${_lang==='ko'?'건':'cs'}</td>
             <td class="dim">${mTotal ? (v / mTotal * 100).toFixed(1) : 0}%</td>
             <td><div class="mbar" style="width:${Math.round(v / mMaxProd * 70)}px"></div></td>
           </tr>`).join('')}
@@ -459,7 +547,7 @@ function switchMemberTab(id, btn) {
 
 // ── Firebase 실시간 로드 ─────────────────────────────────────────
 let _sales = [], _targets = {}, _loaded = { s: false, t: false };
-const tryRender = () => { if (_loaded.s && _loaded.t) render(_sales, _targets); };
+const tryRender = () => { if (_loaded.s && _loaded.t) { render(_sales, _targets); applyLang(); } };
 
 db.collection("sales").onSnapshot(snap => {
   _sales = snap.docs.map(d => d.data());
