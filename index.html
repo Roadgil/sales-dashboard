@@ -1,564 +1,800 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title id="pageTitle">Detail Report · Candela Korea</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>영업 납품처 FCST Dashboard</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-:root {
-  --bg:#f4f5f7; --surf:#ffffff; --surf2:#f9fafb; --border:#e4e6eb;
-  --a1:#5b4fcf; --a2:#0faaa0; --a3:#e84d6f; --a4:#e09c10; --green:#0fa878;
-  --text:#1a1a2e; --muted:#8a8fa8;
-}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;min-height:100vh;}
-.wrap{max-width:1440px;margin:0 auto;padding:36px 28px;}
-
-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:36px;padding-bottom:24px;border-bottom:2px solid var(--border);}
-h1{font-family:'DM Serif Display',serif;font-size:38px;font-weight:400;color:var(--text);line-height:1;margin-bottom:5px;}
-h1 span{color:var(--a1);}
-.sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
-.hbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;background:rgba(15,168,120,.1);border:1px solid rgba(15,168,120,.3);border-radius:20px;font-size:11px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:8px;}
-.hbadge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.hdate{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
-
-.loading{display:flex;align-items:center;justify-content:center;height:200px;flex-direction:column;gap:12px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;}
-.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--a1);border-radius:50%;animation:spin 0.8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
-@media(max-width:768px){.kpi-row{grid-template-columns:1fr 1fr;}}
-.kpi{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:22px;position:relative;overflow:hidden;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.06);}
-.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1);}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
-.kpi.k1::before{background:var(--a1);}
-.kpi.k2::before{background:var(--a2);}
-.kpi.k3::before{background:var(--a3);}
-.kpi.k4::before{background:var(--a4);}
-.klabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Mono',monospace;margin-bottom:10px;}
-.kval{font-family:'DM Serif Display',serif;font-size:28px;line-height:1;margin-bottom:6px;}
-.kval.v1{color:var(--a1);}
-.kval.v2{color:var(--a2);}
-.kval.v3{color:var(--a3);}
-.kval.v4{color:var(--a4);font-size:22px;padding-top:4px;}
-.ksub{font-size:11px;color:var(--muted);}
-
-.g{display:grid;gap:14px;margin-bottom:14px;}
-.g11{grid-template-columns:1fr 1fr;}
-.g21{grid-template-columns:2fr 1fr;}
-@media(max-width:900px){.g11,.g21{grid-template-columns:1fr;}}
-
-.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-.ctitle{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-family:'DM Mono',monospace;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
-.ctitle::before{content:'';width:3px;height:10px;background:var(--a1);border-radius:2px;flex-shrink:0;}
-.warn-tag{font-size:9px;color:var(--a3);margin-left:4px;font-weight:normal;text-transform:none;letter-spacing:0;}
-
-.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;}
-.srow:last-child{border-bottom:none;}
-.savt{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
-.sinfo{flex:1;}
-.sname{font-size:12px;margin-bottom:3px;font-weight:500;}
-.sbw{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
-.sbf{height:100%;border-radius:2px;}
-.samt{font-family:'DM Mono',monospace;font-size:11px;text-align:right;white-space:nowrap;}
-.spct{font-size:9px;color:var(--muted);}
-
-.split{display:flex;gap:10px;margin-top:16px;}
-.sp{flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:12px;}
-.splabel{font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
-.spval{font-family:'DM Serif Display',serif;font-size:22px;line-height:1;margin-bottom:3px;}
-.spsub{font-size:10px;color:var(--muted);}
-
-table{width:100%;border-collapse:collapse;font-size:12px;}
-th{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left;padding:0 6px 10px;border-bottom:2px solid var(--border);}
-td{padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:var(--surf2);}
-.mono{font-family:'DM Mono',monospace;font-size:11px;}
-.dim{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
-.mbar{height:4px;border-radius:2px;background:var(--a1);opacity:.5;}
-
-.tab-nav{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
-.tab-btn{padding:7px 18px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
-.tab-btn:hover{border-color:var(--a1);color:var(--a1);}
-.tab-btn.active{background:var(--a1);border-color:var(--a1);color:#fff;}
-.tab-pane{display:none;}
-.tab-pane.active{display:block;}
-
-.sr-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
-.sr-kpi{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;}
-.sr-kpi .klabel{margin-bottom:6px;}
-.sr-kpi .kval{font-size:20px;}
-
-.pbar-bg{width:100%;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
-.pbar-fill{height:100%;border-radius:4px;transition:width 1s ease;}
-
-.back-link{display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-decoration:none;margin-bottom:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;transition:all .2s;}
-.back-link:hover{color:var(--a1);border-color:var(--a1);}
-
-footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;}
-</style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
-<body>
-<div class="wrap">
+<body className="bg-gray-100">
+  <div id="root"></div>
 
-<header>
-  <div>
-    <a class="back-link" href="index.html">← Dashboard로 돌아가기</a>
-    <h1>Sales <span>Dashboard</span></h1>
-    <div class="sub">Candela Korea · <span id="quarterSubLabel">--</span> Detail Report</div>
-  </div>
-  <div style="text-align:right">
-    <div class="hbadge" id="quarterBadge">--</div>
-    <div class="hdate" id="quarterDate">--</div>
-    <div style="margin-top:6px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;" id="dealerNote">※ Dealer 매출 수치는 데이터 검증 중 (참고용)</div>
-  </div>
-</header>
+  <script type="text/babel">
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
+      authDomain: "sales-dashboard-d0d13.firebaseapp.com",
+      projectId: "sales-dashboard-d0d13",
+      storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
+      messagingSenderId: "870275096697",
+      appId: "1:870275096697:web:cd7373b77358681e21b4a8",
+      measurementId: "G-K5G6BMNBX9"
+    };
 
-<!-- KPI -->
-<div class="kpi-row">
-  <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
-  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (FCST + ACT)</div></div>
-  <div class="kpi k3"><div class="klabel">Direct (SR)</div><div class="kval v3" id="kpi-direct">--</div><div class="ksub" id="kpi-direct-sub">--</div></div>
-  <div class="kpi k4"><div class="klabel">Top Performer</div><div class="kval v4" id="kpi-top">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
-</div>
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
 
-<!-- ROW1: 제품 + SR 담당자 -->
-<div class="g g11">
-  <div class="card">
-    <div class="ctitle" id="ct-prodMix">제품 구성비</div>
-    <div style="position:relative;height:200px"><canvas id="prodChart"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="ctitle" id="ct-repPerf">담당자별 실적</div>
-    <div id="srList"><div class="loading"><div class="spinner"></div>Loading…</div></div>
-  </div>
-</div>
+    const { useState, useEffect } = React;
 
-<!-- ROW2: Sales Type + 제품 테이블 -->
-<div class="g g11">
-  <div class="card">
-    <div class="ctitle">Sales Type (Direct vs Indirect)</div>
-    <div style="position:relative;height:150px"><canvas id="trueChart"></canvas></div>
-    <div class="split">
-      <div class="sp"><div class="splabel">Direct (SR)</div><div class="spval" id="split-direct-pct" style="color:var(--a2)">--</div><div class="spsub" id="split-direct-sub">--</div></div>
-      <div class="sp"><div class="splabel">Indirect (Dealer)</div><div class="spval" id="split-indirect-pct" style="color:var(--a3)">--</div><div class="spsub" id="split-indirect-sub">--</div></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ctitle" id="ct-revByProd">제품별 매출</div>
-    <div id="productTable"><div class="loading"><div class="spinner"></div>Loading…</div></div>
-  </div>
-</div>
+    const LangBtn = ({ lang, setLang }) => (
+      <button
+        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999,
+          padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
+          background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
+          boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
+      >
+        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+      </button>
+    );
 
-<!-- ROW3: 딜러 (참고용) -->
-<div class="g g21">
-  <div class="card">
-    <div class="ctitle" id="ct-dealerChart">Dealer별 매출 <span class="warn-tag" id="wt-dealerChart">※ 데이터 검증 중 · 참고용</span></div>
-    <div style="position:relative;height:300px"><canvas id="dealerChart"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="ctitle" id="ct-dealerDetail">Dealer 상세 <span class="warn-tag" id="wt-dealerDetail">참고용</span></div>
-    <table>
-      <thead><tr><th id="th-dealer">딜러</th><th id="th-amount">금액</th><th id="th-ratio">비율</th><th></th></tr></thead>
-      <tbody id="dealerTb"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
-    </table>
-  </div>
-</div>
+    const App = () => {
+      const SECRET_PASSWORD = "candelakoreasales"; 
 
-<!-- ROW4: 담당자별 탭 -->
-<div class="card" style="margin-bottom:14px">
-  <div class="ctitle" id="ct-repDetail">담당자별 상세</div>
-  <div class="tab-nav" id="memberTabNav"></div>
-  <div id="memberTabContent"><div class="loading"><div class="spinner"></div>Loading…</div></div>
-</div>
+      const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
+      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
+      const [pwdInput, setPwdInput] = useState('');
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-<footer>
-  <span id="footerSource">Source: Firebase Firestore · 실시간 연동</span>
-  <span>Candela Korea Sales Ops</span>
-</footer>
-</div>
+      const T = {
+        // Login
+        loginTitle:       lang==='ko' ? '영업 납품처 Dashboard'      : 'Sales Delivery Dashboard',
+        loginSub:         lang==='ko' ? '접근 권한이 필요합니다. 비밀번호를 입력해주세요.' : 'Access restricted. Please enter your password.',
+        loginBtn:         lang==='ko' ? '접속하기'                   : 'Log In',
+        wrongPwd:         lang==='ko' ? '비밀번호가 틀렸습니다. 다시 확인해주세요!' : 'Incorrect password. Please try again!',
+        noExportData:     lang==='ko' ? '추출할 데이터가 없습니다.'   : 'No data to export.',
+        noAccount:        lang==='ko' ? 'Account명(납품처)을 입력해주세요.' : 'Please enter the Account name.',
+        noDealer:         lang==='ko' ? 'Dealer Name 항목을 선택해주세요.' : 'Please select a Dealer Name.',
+        confirmDelete:    lang==='ko' ? '이 납품 데이터를 정말 삭제하시겠습니까?' : 'Are you sure you want to delete this entry?',
+        // Sidebar
+        yearSuffix:       lang==='ko' ? '년'      : '',
+        addQuarterBtn:    lang==='ko' ? '+ 분기 추가' : '+ Add Quarter',
+        execReport:       lang==='ko' ? '📊 대표님 보고용 리포트' : '📊 Executive Report',
+        exportCSV:        lang==='ko' ? '엑셀 (CSV) 추출' : 'Export (CSV)',
+        logout:           lang==='ko' ? '로그아웃'  : 'Logout',
+        // Prompts
+        promptTeam:       lang==='ko' ? '추가할 탭 이름을 입력하세요 (예: Team 4)' : 'Enter new tab name (e.g. Team 4)',
+        promptMember:     lang==='ko' ? '에 추가할 멤버 이름을 입력하세요'          : ' — Enter new member name',
+        promptQuarter:    lang==='ko' ? '추가할 년도와 분기를 입력하세요 (예: 2026 Q3)' : 'Enter year and quarter (e.g. 2026 Q3)',
+        promptRename:     lang==='ko' ? '새로운 이름을 입력하세요'                  : 'Enter new name',
+        confirmDelMember: lang==='ko' ? '멤버를 삭제하시겠습니까?\n해당 멤버의 데이터는 삭제되지 않습니다.' : 'Delete this member?\nTheir data will NOT be deleted.',
+        // Dashboard
+        overallTarget:    lang==='ko' ? '🚀 전체 영업 목표 달성 현황' : '🚀 Overall Sales Target Achievement',
+        quarterSummary:   lang==='ko' ? '📋 분기 요약 지표 (Summary)' : '📋 Quarter Summary',
+        er:               lang==='ko' ? '적용 환율 (ER) ✏️'           : 'Exchange Rate (ER) ✏️',
+        targetKRWLabel:   lang==='ko' ? 'Target (KRW) ✏️'            : 'Target (KRW) ✏️',
+        targetPlaceholder:lang==='ko' ? '목표 금액 기입'               : 'Enter target amount',
+        estimated:        lang==='ko' ? '예상치 (KRW)'                : 'Estimated (KRW)',
+        gmppEstimated:    lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
+        attainRate:       lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
+        salesTypeShare:   lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
+        tabByEquip:       lang==='ko' ? '📊 장비별 전체'              : '📊 By Equipment',
+        tabDealer:        lang==='ko' ? '🤝 딜러 (전체)'              : '🤝 Dealers (All)',
+        tabMember:        lang==='ko' ? '🧑‍💼 멤버 달성률'              : '🧑‍💼 Member Achievement',
+        addTab:           lang==='ko' ? '+ 탭 추가'                   : '+ Add Tab',
+        addMember:        lang==='ko' ? '+ 항목 추가'                  : '+ Add Member',
+        memberList:       lang==='ko' ? '목록'                        : 'List',
+        noMembers:        lang==='ko' ? "등록된 항목이 없습니다. 우측 상단의 '+ 항목 추가' 버튼을 눌러주세요." : "No entries yet. Click '+ Add Member' above.",
+        memberSubtitle:   lang==='ko' ? '담당 납품처 및 데이터 관리 →' : 'Delivery & Data Management →',
+        rename:           lang==='ko' ? '✏️ 이름 수정'                : '✏️ Rename',
+        delete:           lang==='ko' ? '🗑️ 삭제'                    : '🗑️ Delete',
+        backBtn:          lang==='ko' ? '뒤로가기 (팀 목록)'           : 'Back (Team List)',
+        cumulative:       lang==='ko' ? '🎯 누적 달성 현황 (FCST + ACT)' : '🎯 Cumulative Achievement (FCST + ACT)',
+        target100label:   lang==='ko' ? '100% Target (KRW) ✏️ 직접기입' : '100% Target (KRW) ✏️ Manual',
+        targetPlaceholder2:lang==='ko'? '목표금액'                    : 'Target Amount',
+        editMode:         lang==='ko' ? '✨ 데이터 수정 모드 진행 중...' : '✨ Edit mode in progress...',
+        // Form labels
+        statusLabel:      lang==='ko' ? '상태 (Status)'              : 'Status',
+        contractLabel:    lang==='ko' ? '계약 구분 (Contract Type)'   : 'Contract Type',
+        deliveryLabel:    lang==='ko' ? '납품예정일'                   : 'Delivery Date',
+        selectRequired:   lang==='ko' ? '선택 (필수)'                 : 'Select (Required)',
+        accountLabel:     lang==='ko' ? 'Account (병원/납품처명)'      : 'Account (Hospital / Clinic)',
+        krwPlaceholder:   lang==='ko' ? '원화 입력 시 달러 자동계산'    : 'Enter KRW, USD auto-calculated',
+        saveEdit:         lang==='ko' ? '수정 완료'                   : 'Save Edit',
+        saveNew:          lang==='ko' ? '데이터 신규 저장'             : 'Save New',
+        cancelEdit:       lang==='ko' ? '수정 취소'                   : 'Cancel Edit',
+        // Tables
+        deliveryStatus:   lang==='ko' ? '✅ 납품 현황 (FCST & ACT)'   : '✅ Delivery Status (FCST & ACT)',
+        deliveryDate:     lang==='ko' ? '납품일'                      : 'Date',
+        contract:         lang==='ko' ? '계약'                        : 'Contract',
+        actions:          lang==='ko' ? '관리'                        : 'Actions',
+        noDelivery:       lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
+        editBtn:          lang==='ko' ? '수정'                        : 'Edit',
+        deleteBtn:        lang==='ko' ? '삭제'                        : 'Del',
+        pendingList:      lang==='ko' ? '🚨 미납 리스트 (Pending / Backlog)' : '🚨 Pending / Backlog',
+        noPending:        lang==='ko' ? '등록된 미납 데이터가 없습니다.' : 'No pending data registered.',
+        currentEst:       lang==='ko' ? '현재 누적 예상치'             : 'Current Cumulative Estimate',
+        achievement:      lang==='ko' ? '달성률'                      : 'Achievement',
+        cases:            lang==='ko' ? '건'                          : 'cs',
+        gmppTargetPH:     lang==='ko' ? 'GMPP 목표 기입'              : 'Enter GMPP target',
+        erPlaceholder:    lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
+      };
 
-<!-- Language Toggle Button -->
-<button id="langToggleBtn" onclick="toggleLang()" style="
-  position:fixed; top:16px; right:16px; z-index:9999;
-  padding:6px 14px; border-radius:20px; border:1.5px solid #e4e6eb;
-  background:white; cursor:pointer; font-weight:bold; font-size:12px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.12); font-family:'DM Mono',monospace;
-  display:flex; align-items:center; gap:6px;
-">🇺🇸 EN</button>
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pwdInput === SECRET_PASSWORD) {
+          localStorage.setItem('adminAuth', 'true'); 
+          setIsLoggedIn(true);
+        } else {
+          alert(T.wrongPwd);
+          setPwdInput('');
+        }
+      };
 
-<script>
-// ── Language Toggle ───────────────────────────────────────────────
-let _lang = localStorage.getItem('lang') || 'ko';
-
-const DICT = {
-  backLink:       { ko:'← Dashboard로 돌아가기',  en:'← Back to Dashboard' },
-  dealerNote:     { ko:'※ Dealer 매출 수치는 데이터 검증 중 (참고용)', en:'※ Dealer figures under verification (reference only)' },
-  prodMix:        { ko:'제품 구성비',              en:'Product Mix' },
-  repPerf:        { ko:'담당자별 실적',            en:'Performance by Rep' },
-  revByProd:      { ko:'제품별 매출',              en:'Revenue by Product' },
-  revByDealer:    { ko:'Dealer별 매출',            en:'Revenue by Dealer' },
-  verifyNote:     { ko:'※ 데이터 검증 중 · 참고용', en:'※ Verifying · Reference only' },
-  dealerDetail:   { ko:'Dealer 상세',              en:'Dealer Detail' },
-  refOnly:        { ko:'참고용',                   en:'Ref. only' },
-  dealer:         { ko:'딜러',                     en:'Dealer' },
-  amount:         { ko:'금액',                     en:'Amount' },
-  ratio:          { ko:'비율',                     en:'Share' },
-  count:          { ko:'건수',                     en:'Count' },
-  product:        { ko:'제품',                     en:'Product' },
-  repDetail:      { ko:'담당자별 상세',             en:'Rep Detail' },
-  noData:         { ko:'데이터 없음',               en:'No data' },
-  noIndirect:     { ko:'Indirect 데이터 없음',      en:'No Indirect data' },
-  footerSrc:      { ko:'Source: Firebase Firestore · 실시간 연동', en:'Source: Firebase Firestore · Live sync' },
-  cases:          { ko:'건',                        en:'cases' },
-  current:        { ko:'현재',                      en:'Current' },
-  target:         { ko:'목표',                      en:'Target' },
-  byProduct:      { ko:'제품별',                    en:'By Product' },
-};
-
-function t(key) { return DICT[key] ? (DICT[key][_lang] || DICT[key].ko) : key; }
-
-function applyLang() {
-  const isKo = _lang === 'ko';
-  document.getElementById('langToggleBtn').textContent = isKo ? '🇺🇸 EN' : '🇰🇷 KO';
-
-  const bl = document.querySelector('.back-link');
-  if (bl) bl.textContent = t('backLink');
-
-  const dn = document.getElementById('dealerNote');
-  if (dn) dn.textContent = t('dealerNote');
-
-  const fs = document.getElementById('footerSource');
-  if (fs) fs.textContent = t('footerSrc');
-
-  const ids = {
-    'ct-prodMix':    t('prodMix'),   'ct-repPerf':    t('repPerf'),
-    'ct-revByProd':  t('revByProd'), 'ct-repDetail':  t('repDetail'),
-    'th-dealer':     t('dealer'),    'th-amount':     t('amount'),
-    'th-ratio':      t('ratio'),
-    'kpi-count-sub': isKo ? '건 (FCST + ACT)' : 'cases (FCST + ACT)',
-  };
-  Object.entries(ids).forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  });
-
-  // warn-tag elements
-  const wtChart = document.getElementById('wt-dealerChart');
-  if (wtChart) wtChart.textContent = t('verifyNote');
-  const wtDetail = document.getElementById('wt-dealerDetail');
-  if (wtDetail) wtDetail.textContent = t('refOnly');
-
-  // Dealer chart ctitle text node
-  const ctDChart = document.getElementById('ct-dealerChart');
-  if (ctDChart) ctDChart.childNodes[0].textContent = isKo ? 'Dealer별 매출 ' : 'Revenue by Dealer ';
-  const ctDDetail = document.getElementById('ct-dealerDetail');
-  if (ctDDetail) ctDDetail.childNodes[0].textContent = isKo ? 'Dealer 상세 ' : 'Dealer Detail ';
-
-  // Re-render data (to update dynamic Korean strings in cards)
-  if (typeof _loaded !== 'undefined' && _loaded.s && _loaded.t) render(_sales, _targets);
-}
-
-function toggleLang() {
-  _lang = _lang === 'ko' ? 'en' : 'ko';
-  localStorage.setItem('lang', _lang);
-  applyLang();
-}
-</script>
-
-<script>
-// ── Firebase ──────────────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
-  authDomain: "sales-dashboard-d0d13.firebaseapp.com",
-  projectId: "sales-dashboard-d0d13",
-  storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
-  messagingSenderId: "870275096697",
-  appId: "1:870275096697:web:cd7373b77358681e21b4a8"
-};
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
-// ── URL 파라미터 → 분기 ───────────────────────────────────────────
-const QUARTER = new URLSearchParams(window.location.search).get('quarter') || '2026 Q1';
-document.getElementById('pageTitle').textContent = `Detail Report · ${QUARTER} · Candela Korea`;
-document.getElementById('quarterBadge').textContent = QUARTER;
-document.getElementById('quarterSubLabel').textContent = QUARTER;
-const QM = { Q1:['01','03'], Q2:['04','06'], Q3:['07','09'], Q4:['10','12'] };
-const [YR, QK] = QUARTER.split(' ');
-const [MS, ME] = QM[QK] || ['01','03'];
-document.getElementById('quarterDate').textContent = `${YR}.${MS} — ${YR}.${ME}`;
-
-// ── 유틸 ──────────────────────────────────────────────────────────
-const fmt억 = v => v >= 100000000 ? `₩${(v/100000000).toFixed(2)}억` : `₩${Math.round(v/10000).toLocaleString()}만`;
-const fmtKRW = v => `₩ ${v.toLocaleString()}`;
-const COLORS = ['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0','#aaa6e0','#c0c5d8'];
-const M_COLORS = ['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
-const TT = { backgroundColor:'#fff', borderColor:'#e4e6eb', borderWidth:1, padding:10, titleColor:'#1a1a2e', bodyColor:'#1a1a2e' };
-Chart.defaults.color = '#8a8fa8';
-Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
-Chart.defaults.font.size = 11;
-
-const chartInst = {};
-function makeChart(id, cfg) {
-  if (chartInst[id]) chartInst[id].destroy();
-  const el = document.getElementById(id);
-  if (el) chartInst[id] = new Chart(el, cfg);
-}
-
-// ── 메인 렌더 ─────────────────────────────────────────────────────
-function render(salesData, memberTargets) {
-  const qData = salesData.filter(d => d.quarter === QUARTER && (d.status === 'FCST' || d.status === 'ACT'));
-
-  // KPI 계산
-  const totalKRW = qData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-  const totalCount = qData.length;
-  const directKRW = qData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
-  const indirectKRW = totalKRW - directKRW;
-  const directCount = qData.filter(d => d.salesType === 'Direct').length;
-  const indirectCount = totalCount - directCount;
-  const directPct = totalKRW ? directKRW / totalKRW * 100 : 0;
-  const indirectPct = 100 - directPct;
-
-  // 멤버별 합계
-  const memberSum = {};
-  qData.forEach(d => { memberSum[d.member] = (memberSum[d.member] || 0) + (d.priceKRW || 0); });
-  const sortedMembers = Object.entries(memberSum).sort((a, b) => b[1] - a[1]);
-  const topMember = sortedMembers[0];
-
-  // ── KPI 업데이트
-  document.getElementById('kpi-total').textContent = fmt억(totalKRW);
-  document.getElementById('kpi-total-sub').textContent = fmtKRW(totalKRW);
-  document.getElementById('kpi-count').textContent = totalCount;
-  document.getElementById('kpi-direct').textContent = `${directPct.toFixed(1)}%`;
-  document.getElementById('kpi-direct-sub').textContent = `${fmt억(directKRW)} · ${directCount}건`;
-  document.getElementById('kpi-top').textContent = topMember ? topMember[0] : '-';
-  document.getElementById('kpi-top-sub').textContent = topMember
-    ? `${fmt억(topMember[1])} · ${((topMember[1] / totalKRW) * 100).toFixed(1)}%` : '-';
-
-  // ── 제품 도넛
-  const prodSum = {}, prodCount = {};
-  qData.forEach(d => {
-    prodSum[d.product] = (prodSum[d.product] || 0) + (d.priceKRW || 0);
-    prodCount[d.product] = (prodCount[d.product] || 0) + 1;
-  });
-  const prodEntries = Object.entries(prodSum).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  makeChart('prodChart', {
-    type: 'doughnut',
-    data: {
-      labels: prodEntries.map(([k]) => k),
-      datasets: [{ data: prodEntries.map(([, v]) => totalKRW ? parseFloat((v / totalKRW * 100).toFixed(1)) : 0), backgroundColor: COLORS, borderColor: '#fff', borderWidth: 3, hoverOffset: 8 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
-      plugins: { legend: { position: 'right', labels: { color: '#8a8fa8', usePointStyle: true, pointStyle: 'circle', padding: 10 } },
-        tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
-  });
-
-  // ── 제품 테이블
-  const maxProd = prodEntries[0]?.[1] || 1;
-  document.getElementById('productTable').innerHTML =
-    `<table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
-    ${prodEntries.map(([k, v]) => `<tr>
-      <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${prodCount[k]}${_lang==='ko'?'건':'cs'}</td>
-      <td class="dim">${totalKRW ? (v / totalKRW * 100).toFixed(1) : 0}%</td>
-      <td><div class="mbar" style="width:${Math.round(v / maxProd * 70)}px"></div></td>
-    </tr>`).join('')}</tbody></table>`;
-
-  // ── SR 담당자 리스트
-  const maxMember = sortedMembers[0]?.[1] || 1;
-  document.getElementById('srList').innerHTML = sortedMembers.map(([name, val], i) => {
-    const col = M_COLORS[i % M_COLORS.length];
-    return `<div class="srow">
-      <div class="savt" style="background:${col}22;color:${col}">${name[0] || '?'}</div>
-      <div class="sinfo">
-        <div class="sname">${name}</div>
-        <div class="sbw"><div class="sbf" style="width:${(val / maxMember * 100).toFixed(0)}%;background:${col}"></div></div>
-      </div>
-      <div class="samt">
-        <div>${fmt억(val)}</div>
-        <div class="spct">${totalKRW ? (val / totalKRW * 100).toFixed(1) : 0}%</div>
-      </div>
-    </div>`;
-  }).join('') || `<div style="padding:20px;color:var(--muted);text-align:center">${t('noData')}</div>`;
-
-  // ── Sales Type 도넛
-  makeChart('trueChart', {
-    type: 'doughnut',
-    data: { labels: ['Direct (SR)', 'Indirect (Dealer)'], datasets: [{ data: [parseFloat(directPct.toFixed(1)), parseFloat(indirectPct.toFixed(1))], backgroundColor: ['#0faaa0', '#e84d6f'], borderColor: '#fff', borderWidth: 3, hoverOffset: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
-      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
-  });
-  document.getElementById('split-direct-pct').textContent = `${directPct.toFixed(1)}%`;
-  document.getElementById('split-direct-sub').textContent = `${fmt억(directKRW)} · ${directCount}건`;
-  document.getElementById('split-indirect-pct').textContent = `${indirectPct.toFixed(1)}%`;
-  document.getElementById('split-indirect-sub').textContent = `${fmt억(indirectKRW)} · ${indirectCount}건`;
-
-  // ── 딜러 (Indirect 데이터) - 전체 딜러 목록 기준으로 집계
-  const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
-  const dealerSum = {}, dealerCount = {};
-  // 전체 딜러를 0으로 미리 초기화
-  ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d] = 0; dealerCount[d] = 0; });
-  // 실제 데이터로 집계 (목록 외 딜러명도 동적 추가)
-  qData.filter(d => d.salesType === 'Indirect').forEach(d => {
-    const n = d.dealerName || '기타';
-    if (!dealerSum[n]) { dealerSum[n] = 0; dealerCount[n] = 0; }
-    dealerSum[n] += (d.priceKRW || 0);
-    dealerCount[n] += 1;
-  });
-  // 매출 있는 딜러만 차트에 표시 (0인 딜러는 테이블에만 표시)
-  const dealerEntries = Object.entries(dealerSum).sort((a, b) => b[1] - a[1]);
-  const dealerEntriesWithData = dealerEntries.filter(([, v]) => v > 0);
-  const maxDealer = dealerEntriesWithData[0]?.[1] || 1;
-
-  makeChart('dealerChart', {
-    type: 'bar',
-    data: { labels: dealerEntriesWithData.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntriesWithData.map(([, v]) => parseFloat((v / 100000000).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ₩${c.raw}억` } } },
-      scales: { x: { grid: { color: '#f0f1f5' }, ticks: { color: '#8a8fa8', callback: v => `${v}억` } }, y: { grid: { display: false }, ticks: { color: '#1a1a2e', font: { size: 11 } } } } }
-  });
-  document.getElementById('dealerTb').innerHTML = dealerEntries.length
-    ? dealerEntries.map(([k, v]) => `<tr style="${v === 0 ? 'opacity:0.4' : ''}">
-        <td>${k}</td>
-        <td class="mono">${v > 0 ? fmt억(v) : '-'}</td>
-        <td class="dim">${v > 0 && indirectKRW ? (v / indirectKRW * 100).toFixed(1) + '%' : '-'}</td>
-        <td><div class="mbar" style="width:${v > 0 ? Math.round(v / maxDealer * 70) : 0}px"></div></td>
-      </tr>`).join('')
-    : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">${t('noIndirect')}</td></tr>`;
-
-  // ── 담당자별 탭
-  const allMembers = sortedMembers.map(([m]) => m);
-  const nav = document.getElementById('memberTabNav');
-  const content = document.getElementById('memberTabContent');
-
-  if (!allMembers.length) {
-    nav.innerHTML = '';
-    content.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">${t('noData')}</div>`;
-    return;
-  }
-
-  nav.innerHTML = allMembers.map((m, i) =>
-    `<button class="tab-btn${i === 0 ? ' active' : ''}" onclick="switchMemberTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`
-  ).join('');
-
-  content.innerHTML = allMembers.map((m, mi) => {
-    const mData = qData.filter(d => d.member === m);
-    const mTotal = mData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-    const mDirect = mData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
-    const mIndirect = mTotal - mDirect;
-    const mDirectPct = mTotal ? (mDirect / mTotal * 100).toFixed(1) : '0.0';
-    const mIndirectPct = mTotal ? (mIndirect / mTotal * 100).toFixed(1) : '0.0';
-    const target = memberTargets[m] || 0;
-    const achievePct = target ? (mTotal / target * 100) : null;
-    const col = M_COLORS[mi % M_COLORS.length];
-
-    const mProdSum = {}, mProdCount = {};
-    mData.forEach(d => {
-      mProdSum[d.product] = (mProdSum[d.product] || 0) + (d.priceKRW || 0);
-      mProdCount[d.product] = (mProdCount[d.product] || 0) + 1;
-    });
-    const mProdEntries = Object.entries(mProdSum).sort((a, b) => b[1] - a[1]);
-    const mMaxProd = mProdEntries[0]?.[1] || 1;
-    const sid = m.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-
-    return `<div class="tab-pane${mi === 0 ? ' active' : ''}" id="tab-m-${sid}">
-      <div class="sr-kpis">
-        <div class="sr-kpi">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
-          <div class="klabel">Total</div>
-          <div class="kval" style="color:${col}">${fmt억(mTotal)}</div>
-          <div class="ksub">${mData.length}건</div>
-        </div>
-        <div class="sr-kpi">
-          <div class="klabel">Direct (SR)</div>
-          <div class="kval" style="color:var(--a2)">${mDirectPct}%</div>
-          <div class="ksub">${fmt억(mDirect)}</div>
-        </div>
-        <div class="sr-kpi">
-          <div class="klabel">Indirect (Dealer)</div>
-          <div class="kval" style="color:var(--a3)">${mIndirectPct}%</div>
-          <div class="ksub">${fmt억(mIndirect)}</div>
-        </div>
-      </div>
-      ${target ? `<div style="margin-bottom:16px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
-          <span style="color:var(--muted);font-family:'DM Mono',monospace">TARGET ACHIEVEMENT</span>
-          <span style="font-weight:700;color:${achievePct >= 100 ? 'var(--green)' : col}">${achievePct.toFixed(1)}%</span>
-        </div>
-        <div class="pbar-bg"><div class="pbar-fill" style="width:${Math.min(achievePct, 100)}%;background:${achievePct >= 100 ? 'var(--green)' : col}"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
-          <span>${t('current')}: ${fmtKRW(mTotal)}</span><span>${t('target')}: ${fmtKRW(target)}</span>
-        </div>
-      </div>` : ''}
-      <div class="g g11">
-        <div class="card">
-          <div class="ctitle">Sales Type</div>
-          <div style="position:relative;height:160px"><canvas id="c-tr-${sid}"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="ctitle">${t('byProduct')}</div>
-          <table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
-          ${mProdEntries.map(([k, v]) => `<tr>
-            <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${mProdCount[k]}${_lang==='ko'?'건':'cs'}</td>
-            <td class="dim">${mTotal ? (v / mTotal * 100).toFixed(1) : 0}%</td>
-            <td><div class="mbar" style="width:${Math.round(v / mMaxProd * 70)}px"></div></td>
-          </tr>`).join('')}
-          </tbody></table>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-
-  // 담당자별 도넛 차트 (DOM 생성 후)
-  requestAnimationFrame(() => {
-    allMembers.forEach((m, mi) => {
-      const mData = qData.filter(d => d.member === m);
-      const mTotal = mData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const mDirect = mData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const dp = mTotal ? parseFloat((mDirect / mTotal * 100).toFixed(1)) : 0;
-      const ip = parseFloat((100 - dp).toFixed(1));
-      const sid = m.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-      makeChart(`c-tr-${sid}`, {
-        type: 'doughnut',
-        data: { labels: ['Direct', 'Indirect'], datasets: [{ data: [dp, ip], backgroundColor: ['#0faaa0', '#e84d6f'], borderColor: '#fff', borderWidth: 3, hoverOffset: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
-          plugins: { legend: { labels: { color: '#8a8fa8', usePointStyle: true, pointStyle: 'circle', padding: 12 } },
-            tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
+      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      
+      const [teams, setTeams] = useState({
+        'Team 1': ['Kim SH', 'Oh SG'],
+        'Team 2': ['Baek SC', 'Lee GR'],
+        'Team 3': ['YC lim']
       });
-    });
-  });
-}
+      const [selectedTeam, setSelectedTeam] = useState('Team 1');
+      const [selectedMember, setSelectedMember] = useState(null);
 
-function switchMemberTab(id, btn) {
-  document.querySelectorAll('#memberTabContent .tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('#memberTabNav .tab-btn').forEach(b => b.classList.remove('active'));
-  const sid = id.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-  const pane = document.getElementById('tab-m-' + sid);
-  if (pane) pane.classList.add('active');
-  btn.classList.add('active');
-}
+      const [activeStatTab, setActiveStatTab] = useState('product'); 
 
-// ── Firebase 실시간 로드 ─────────────────────────────────────────
-let _sales = [], _targets = {}, _loaded = { s: false, t: false };
-const tryRender = () => { if (_loaded.s && _loaded.t) { render(_sales, _targets); applyLang(); } };
+      const [memberTargets, setMemberTargets] = useState({
+        'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000
+      });
 
-db.collection("sales").onSnapshot(snap => {
-  _sales = snap.docs.map(d => d.data());
-  _loaded.s = true;
-  tryRender();
-});
-db.collection("targets").doc("memberTargets").onSnapshot(doc => {
-  if (doc.exists) _targets = doc.data();
-  _loaded.t = true;
-  tryRender();
-});
-</script>
+      const [quarterTargets, setQuarterTargets] = useState({
+        '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 },
+        '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 }
+      });
+      const [salesData, setSalesData] = useState([]);
+
+      const initialForm = { status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const [form, setForm] = useState(initialForm);
+      const [editingId, setEditingId] = useState(null);
+
+      useEffect(() => {
+        if (!isLoggedIn) return; 
+
+        // 1. 판매 데이터 
+        const unsubscribeSales = db.collection("sales").onSnapshot((snapshot) => {
+          if (!snapshot.empty) setSalesData(snapshot.docs.map(doc => doc.data()));
+        });
+        // 2. 분기 타겟
+        const unsubscribeTargets = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => {
+          if (doc.exists) setQuarterTargets(doc.data());
+        });
+        // 3. 개인 타겟
+        const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
+          if (doc.exists) setMemberTargets(doc.data());
+        });
+        // ✨ 4. 팀 구조 & 분기 리스트 (DB 저장 연동)
+        const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            if (data.teams) setTeams(data.teams);
+            if (data.quarters) setQuarters(data.quarters);
+          } else {
+            // DB에 없으면 최초 생성
+            db.collection("settings").doc("layout").set({ teams, quarters });
+          }
+        });
+
+        return () => {
+          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeLayout();
+        };
+      }, [isLoggedIn]);
+
+      const handleSave = () => {
+        if(!form.account) return alert(T.noAccount);
+        if(!form.dealerName) return alert(T.noDealer);
+        
+        const payload = {
+          ...form,
+          priceKRW: Number(form.priceKRW) || 0,
+          priceUSD: Number(form.priceUSD) || 0,
+          id: editingId ? editingId : Date.now(),
+          quarter: selectedQuarter,
+          team: selectedTeam,
+          member: selectedMember,
+          dealerName: form.dealerName 
+        };
+
+        db.collection("sales").doc(payload.id.toString()).set(payload);
+        setEditingId(null);
+        setForm(initialForm);
+      };
+
+      const deleteSalesData = (id) => {
+        if (window.confirm(T.confirmDelete)) {
+          db.collection("sales").doc(id.toString()).delete();
+        }
+      };
+
+      const handleTargetChange = (field, value) => {
+        const val = value === '' ? '' : Number(value);
+        const newTargets = {
+          ...quarterTargets,
+          [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val }
+        };
+        setQuarterTargets(newTargets);
+        db.collection("targets").doc("quarterTargets").set(newTargets); 
+      };
+
+      const handleMemberTargetChange = (member, value) => {
+        const val = value === '' ? '' : Number(value);
+        const newMemberTargets = { ...memberTargets, [member]: val };
+        setMemberTargets(newMemberTargets);
+        db.collection("targets").doc("memberTargets").set(newMemberTargets); 
+      };
+
+      const handleEdit = (data) => {
+        setForm(data); setEditingId(data.id);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      // ✨ 팀/멤버/분기 추가 시 DB 연동
+      const addTeam = () => {
+        const newTeam = prompt(T.promptTeam);
+        if (newTeam && !teams[newTeam]) {
+          const newTeams = { ...teams, [newTeam]: [] };
+          setTeams(newTeams); setSelectedTeam(newTeam); setSelectedMember(null);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+        }
+      };
+
+      const addMember = () => {
+        const newMember = prompt(`${selectedTeam}${T.promptMember}`);
+        if (newMember && !teams[selectedTeam].includes(newMember)) {
+          const newTeams = { ...teams, [selectedTeam]: [...teams[selectedTeam], newMember] };
+          setTeams(newTeams); handleMemberTargetChange(newMember, 0);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+        }
+      };
+
+      const editMemberName = (oldName, e) => {
+        e.stopPropagation(); 
+        const newName = prompt(T.promptRename, oldName);
+        if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
+          const newTeams = { ...teams };
+          newTeams[selectedTeam] = newTeams[selectedTeam].map(m => m === oldName ? newName : m);
+          setTeams(newTeams);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+
+          const newTargets = { ...memberTargets };
+          if (newTargets[oldName] !== undefined) {
+            newTargets[newName] = newTargets[oldName];
+            delete newTargets[oldName];
+            db.collection("targets").doc("memberTargets").set(newTargets);
+          }
+          salesData.filter(d => d.member === oldName).forEach(d => {
+            db.collection("sales").doc(d.id.toString()).update({ member: newName });
+          });
+        }
+      };
+
+      const deleteMember = (memberName, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return;
+        const newTeams = { ...teams };
+        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
+        setTeams(newTeams);
+        db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+      };
+
+      const addQuarter = () => {
+        const newQuarter = prompt(T.promptQuarter);
+        if (newQuarter && !quarters.includes(newQuarter)) {
+          const newQuarters = [...quarters, newQuarter].sort();
+          setQuarters(newQuarters); handleTargetChange('target', 0); 
+          db.collection("settings").doc("layout").set({ quarters: newQuarters }, { merge: true });
+        }
+      };
+
+      const currentER = quarterTargets[selectedQuarter]?.er || 1389;
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        if (name === 'priceKRW') {
+          const krwValue = value ? parseFloat(value) : 0;
+          const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
+          setForm({ ...form, priceKRW: value, priceUSD: usdValue });
+        } else if (name === 'salesType') {
+          setForm({ ...form, [name]: value, dealerName: '' });
+        } else {
+          setForm({ ...form, [name]: value });
+        }
+      };
+
+      const exportToCSV = () => {
+        if (salesData.length === 0) return alert(T.noExportData);
+        const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
+        const rows = salesData.map(d => [d.quarter, d.team, d.member, d.status, d.contractType, d.deliveryDate, d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, d.priceKRW, d.priceUSD]);
+        const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url;
+        const today = new Date().toISOString().slice(0,10);
+        link.setAttribute('download', `FCST_Sales_Data_${today}.csv`);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      };
+
+      const groupedQuarters = quarters.reduce((acc, q) => {
+        const [year, quarter] = q.split(' '); 
+        if (!acc[year]) acc[year] = [];
+        acc[year].push(quarter);
+        return acc;
+      }, {});
+
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
+            <LangBtn lang={lang} setLang={setLang} />
+            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
+              <p className="text-slate-500 text-sm mb-8">{T.loginSub}</p>
+              
+              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
+                <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono text-center text-lg tracking-widest" placeholder="Password" autoFocus />
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">{T.loginBtn}</button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
+      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
+      const targetKRW = currentTargets.target || 0;
+      const gmppTargetKRW = currentTargets.gmppTarget || 0;
+      const activeER = currentTargets.er || 1389;
+
+      const targetUSD = targetKRW / activeER;
+      const incentiveTargetKRW = targetKRW * 1.2;
+      const incentiveTargetUSD = targetUSD * 1.2;
+
+      const expectedData = currentQData.filter(d => d.status === 'FCST' || d.status === 'ACT');
+      const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const expectedUSD = expectedKRW / activeER;
+
+      const percent = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
+      const gapKRW = targetKRW - expectedKRW;
+
+      const gmppExpectedKRW = expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const gmppGapKRW = gmppTargetKRW - gmppExpectedKRW;
+
+      const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
+      const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+
+      const directKRW = expectedData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const indirectKRW = expectedData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
+      const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
+      
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productStats = {};
+      allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += cur.priceKRW; }});
+
+      const ALL_INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '동안기획', 'Bori', 'Beauko', '엠디마케팅', '티모티', '엘룩스코리아', 'seed group', 'Human', '기타'];
+      const allDealers = ['병원', ...ALL_INDIRECT_DEALERS];
+
+      // 딜러 통계: 데이터에 있는 딜러는 목록 외라도 모두 동적 집계
+      const dealerIndirectStats = {};
+      ALL_INDIRECT_DEALERS.forEach(d => dealerIndirectStats[d] = { count: 0, sumKRW: 0 });
+      expectedData.filter(d => d.salesType === 'Indirect').forEach(cur => {
+        const dealer = cur.dealerName || '기타';
+        if (!dealerIndirectStats[dealer]) dealerIndirectStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerIndirectStats[dealer].count += 1; dealerIndirectStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      const dealerDirectStats = { '병원': { count: 0, sumKRW: 0 } };
+      expectedData.filter(d => d.salesType === 'Direct').forEach(cur => {
+        const dealer = cur.dealerName || '병원';
+        if (!dealerDirectStats[dealer]) dealerDirectStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerDirectStats[dealer].count += 1; dealerDirectStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      // 전체 딜러 통계 (Direct + Indirect 합산, 데이터 기반 동적 생성)
+      const dealerAllStats = {};
+      allDealers.forEach(d => dealerAllStats[d] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => {
+        const dealer = cur.dealerName || (cur.salesType === 'Direct' ? '병원' : '기타');
+        if (!dealerAllStats[dealer]) dealerAllStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerAllStats[dealer].count += 1; dealerAllStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      const allMembers = Object.values(teams).flat();
+      const memberStats = {};
+      allMembers.forEach(m => memberStats[m] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += cur.priceKRW; }});
+
+      const renderProgressBar = (actKRW, targetKRW) => {
+        if (!targetKRW) return null;
+        const target120 = targetKRW * 1.2;
+        const target140 = targetKRW * 1.4;
+        const target150 = targetKRW * 1.5;
+        const per = (actKRW / targetKRW) * 100;
+        const maxScale = Math.max(target150, actKRW * 1.05); 
+        return (
+          <div className="w-full mt-6 md:mt-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
+              <span className="text-sm font-bold text-gray-600 mb-2 md:mb-0">{T.currentEst}: ₩ {actKRW.toLocaleString()}</span>
+              <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{T.achievement}: {per.toFixed(1)}%</span>
+              <div className="hidden md:block absolute w-full -bottom-6 left-0 h-5">
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}>100%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600" style={{ left: `${(target120 / maxScale) * 100}%` }}>120%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-purple-600" style={{ left: `${(target140 / maxScale) * 100}%` }}>140%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-orange-500" style={{ left: `${(target150 / maxScale) * 100}%` }}>150%</div>
+              </div>
+            </div>
+            <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
+              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-xs md:text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${(actKRW / maxScale) * 100}%` }}>{per > 5 && `${per.toFixed(1)}%`}</div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300" style={{ left: `${(target120 / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left: `${(target140 / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-orange-400" style={{ left: `${(target150 / maxScale) * 100}%` }}></div>
+            </div>
+          </div>
+        );
+      };
+
+      const renderBarChart = (dataObj, colorClass) => {
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        const maxVal = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
+        return (
+          <div className="space-y-4">
+            {dataArr.map(([key, stat]) => {
+              const per = maxVal === 0 ? 0 : (stat.sumKRW / maxVal) * 100;
+              return (
+                <div key={key} className="flex flex-col">
+                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
+                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
+                    <span className="font-mono font-bold text-gray-700 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${per}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
+
+      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        return (
+          <div className="space-y-5">
+            {dataArr.map(([key, stat]) => {
+              const target = targetsObj[key] || 0;
+              const per = target === 0 ? 0 : (stat.sumKRW / target) * 100;
+              return (
+                <div key={key} className="flex flex-col">
+                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
+                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
+                    <div className="text-right flex flex-col">
+                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
+                      {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${per > 100 ? 100 : per}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
+
+      return (
+        <div className="flex flex-col md:flex-row h-screen font-sans">
+          <LangBtn lang={lang} setLang={setLang} />
+          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
+            <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
+          </div>
+
+          <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
+            <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
+            <div className="flex-1">
+              {Object.entries(groupedQuarters).sort().reverse().map(([year, qList]) => (
+                <div key={year} className="mb-6">
+                  <h4 className="text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1">{year}{T.yearSuffix}</h4>
+                  <div className="space-y-1">
+                    {qList.sort().map(q => {
+                      const fullQ = `${year} ${q}`;
+                      return (
+                        <button key={fullQ} onClick={() => { setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter === fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <button onClick={addQuarter} className="w-full mt-2 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
+            </div>
+            
+            <div className="mt-8 border-t border-slate-600 pt-4">
+              <div className="mb-4">
+                <button onClick={() => window.open('report.html', '_blank')} className="w-full bg-slate-700 text-white font-extrabold py-3 rounded-lg hover:bg-slate-600 transition flex items-center justify-center shadow-lg border border-slate-500">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  {T.execReport}
+                </button>
+              </div>
+              <button onClick={exportToCSV} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                {T.exportCSV}
+              </button>
+              <button onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+            </div>
+          </div>
+
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100">
+            {!selectedMember ? (
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
+                
+                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                  <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
+                  <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 mb-2">
+                    <div className="bg-gray-50 px-4 py-3 rounded shadow-sm border-l-4 border-gray-500 flex-1"><span className="text-xs text-gray-500 font-bold block">100% Target</span><span className="font-bold text-gray-800 text-base md:text-lg">₩ {targetKRW.toLocaleString()}</span></div>
+                    <div className="bg-green-50 px-4 py-3 rounded shadow-sm border-l-4 border-green-500 flex-1"><span className="text-xs text-green-600 font-bold block">120% Target</span><span className="font-bold text-green-700 text-base md:text-lg">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                    <div className="bg-purple-50 px-4 py-3 rounded shadow-sm border-l-4 border-purple-500 flex-1"><span className="text-xs text-purple-600 font-bold block">140% Target</span><span className="font-bold text-purple-700 text-base md:text-lg">₩ {(targetKRW * 1.4).toLocaleString()}</span></div>
+                  </div>
+                  {renderProgressBar(expectedKRW, targetKRW)}
+                </div>
+
+                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                  <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-lg md:text-xl font-bold text-gray-800">{T.quarterSummary}</h3>
+                    <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                      Detail Report
+                    </a>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
+                    <div className="flex flex-col space-y-3">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-extrabold text-[11px]">{T.er}</span><input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-slate-500 transition" placeholder={T.erPlaceholder} /></div>
+                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-700 font-extrabold text-[11px]">{T.targetKRWLabel}</span><input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-blue-500 transition" placeholder={T.targetPlaceholder} /></div>
+                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-600 font-bold text-[11px]">Target (USD)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (KRW)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                    </div>
+                    <div className="flex flex-col space-y-3">
+                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (USD)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-800 font-extrabold text-[11px]">{T.estimated}</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {expectedKRW.toLocaleString()}</span></div>
+                      <div className="bg-yellow-50/50 p-3 rounded-xl border border-yellow-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-700 font-extrabold text-[11px]">ER1 ($)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gapKRW.toLocaleString()}</span></div>
+                    </div>
+                    <div className="flex flex-col space-y-3">
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">{T.attainRate}</span><span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{percent.toFixed(3)} %</span></div>
+                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-purple-800 font-extrabold text-[11px]">GMPP Target (KRW) ✏️</span><input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-purple-500 transition" placeholder={T.gmppTargetPH} /></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">{T.gmppEstimated}</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span></div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 border-t border-slate-200 pt-5">
+                    <h4 className="text-[13px] font-bold text-slate-600 mb-2">{T.salesTypeShare}</h4>
+                    <div className="flex flex-col md:flex-row justify-between text-xs md:text-sm font-bold mb-2 md:mb-1">
+                      <span className="text-blue-600 mb-1 md:mb-0">Direct: ₩ {directKRW.toLocaleString()} ({directPer.toFixed(1)}%)</span>
+                      <span className="text-purple-600">Indirect: ₩ {indirectKRW.toLocaleString()} ({indirectPer.toFixed(1)}%)</span>
+                    </div>
+                    <div className="w-full h-3 md:h-4 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
+                      <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${directPer}%` }}></div>
+                      <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${indirectPer}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
+                  <div className="grid grid-cols-2 md:flex bg-gray-50 border-b">
+                    <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-blue-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabByEquip}</button>
+                    <button onClick={() => setActiveStatTab('dealerAll')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerAll' ? 'bg-white text-purple-600 border-purple-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabDealer}</button>
+                    <button onClick={() => setActiveStatTab('member')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'member' ? 'bg-white text-emerald-600 border-emerald-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabMember}</button>
+                  </div>
+                  <div className="p-4 md:p-8">
+                    {activeStatTab === 'product' && renderBarChart(productStats, 'bg-blue-500')}
+                    {activeStatTab === 'dealerAll' && renderBarChart(dealerAllStats, 'bg-purple-500')}
+                    {activeStatTab === 'member' && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
+                  </div>
+                </div>
+                
+                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar">
+                  {Object.keys(teams).sort().map(team => (
+                    <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam === team ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
+                  ))}
+                  <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
+                </div>
+
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg md:text-xl font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
+                  <button onClick={addMember} className="text-xs md:text-sm bg-blue-100 text-blue-700 font-bold px-3 md:px-4 py-2 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-10">
+                  {teams[selectedTeam].length === 0 ? (
+                    <div className="col-span-1 md:col-span-2 p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
+                  ) : (
+                    teams[selectedTeam].map(member => (
+                      <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
+                        <div className="flex justify-between items-start">
+                          <div className="text-xl md:text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
+                          <div className="flex gap-1">
+                            <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">{T.rename}</button>
+                            <button onClick={(e) => deleteMember(member, e)} className="text-xs text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-200">{T.delete}</button>
+                          </div>
+                        </div>
+                        <div className="text-xs md:text-sm text-gray-500 mt-2 font-medium">{T.memberSubtitle}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <button onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className="mb-4 flex items-center bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-slate-800 transition">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                  {T.backBtn}
+                </button>
+
+                <div className="bg-white p-4 md:p-8 rounded-xl shadow-md border border-gray-100 mb-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl md:text-3xl font-extrabold text-gray-800">{selectedMember} <span className="text-lg md:text-xl text-gray-500 font-medium block md:inline mt-1 md:mt-0">Account FCST</span></h3>
+                  </div>
+
+                  {memberTargets[selectedMember] !== undefined && (
+                    <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
+                      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
+                        <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative}</h4>
+                        <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
+                          <div className="flex flex-col bg-white px-2 py-2 rounded shadow-sm border-l-4 border-gray-500 border-2 flex-1 lg:flex-none">
+                            <span className="text-[10px] text-gray-500 block font-bold mb-1">{T.target100label}</span>
+                            <div className="flex items-center">
+                              <span className="font-bold text-sm mr-1 text-gray-700">₩</span>
+                              <input type="number" value={memberTargets[selectedMember] === 0 ? '' : memberTargets[selectedMember]} onChange={(e) => handleMemberTargetChange(selectedMember, e.target.value)} className="w-full md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-sm md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right" placeholder={T.targetPlaceholder2} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-green-500 flex-1 lg:flex-none"><span className="text-[10px] text-green-600 block font-bold">120% Target</span><span className="font-bold text-xs md:text-sm text-green-700 text-right">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-purple-500 flex-1 lg:flex-none"><span className="text-[10px] text-purple-600 block font-bold">140% Target</span><span className="font-bold text-xs md:text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-orange-500 flex-1 lg:flex-none"><span className="text-[10px] text-orange-500 block font-bold">150% Target</span><span className="font-bold text-xs md:text-sm text-orange-600 text-right">₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
+                        </div>
+                      </div>
+                      {renderProgressBar(memberACT, memberTargets[selectedMember])}
+                    </div>
+                  )}
+                  
+                  <form className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 bg-slate-50 p-4 md:p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
+                    {editingId && <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]"><span className="text-sm md:text-base">{T.editMode}</span></div>}
+                    
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}><option value="FCST">FCST (정상/예정)</option><option value="ACT">ACT (납품완료)</option><option value="미납">미납 (Pending)</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Sales Type</label><select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="Direct">Direct</option><option value="Indirect">Indirect</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
+                      <option value="">{T.selectRequired}</option>
+                      {form.salesType === 'Direct' ? (
+                        <option value="병원">병원</option>
+                      ) : (
+                        <>
+                          <option value="SEVEN U">SEVEN U</option>
+                          <option value="Innomed">Innomed</option>
+                          <option value="TMI">TMI</option>
+                          <option value="동안기획">동안기획</option>
+                          <option value="Bori">Bori</option>
+                          <option value="Beauko">Beauko</option>
+                          <option value="엠디마케팅">엠디마케팅</option>
+                          <option value="티모티">티모티</option>
+                          <option value="엘룩스코리아">엘룩스코리아</option>
+                          <option value="seed group">seed group</option>
+                          <option value="Human">Human</option>
+                          <option value="기타">기타</option>
+                        </>
+                      )}
+                    </select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.accountLabel}</label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_KR (₩)</label><input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder} /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`} /></div>
+                    
+                    <div className="col-span-1 md:col-span-2 lg:col-span-3 mt-2 text-right">
+                      <button type="button" onClick={handleSave} className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold w-full py-3 rounded shadow transition`}>{editingId ? T.saveEdit : T.saveNew}</button>
+                      {editingId && <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-4 text-sm text-gray-500 hover:underline ml-3">{T.cancelEdit}</button>}
+                    </div>
+                  </form>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-800">{T.deliveryStatus}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-blue-800 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).length === 0 ? (
+                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
+                          ) : (
+                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).map(row => (
+                              <tr key={row.id} className={`border-b transition ${row.status === 'ACT' ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-blue-50'}`}>
+                                <td className={`p-2 md:p-3 font-bold ${row.status === 'ACT' ? 'text-green-600' : 'text-blue-600'}`}>{row.status}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-red-700">{T.pendingList}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-red-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-red-700 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').length === 0 ? (
+                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
+                          ) : (
+                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').map(row => (
+                              <tr key={row.id} className="border-b bg-red-50 hover:bg-red-100 transition">
+                                <td className="p-2 md:p-3 font-bold text-red-600">{row.status}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-red-200 hover:bg-red-300 text-red-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+  
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
 </body>
 </html>
