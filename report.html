@@ -61,10 +61,34 @@
     const db = firebase.firestore();
     const { useState, useEffect } = React;
 
+    const LangBtn = ({ lang, setLang }) => (
+      <button
+        onClick={() => { const next = lang === 'ko' ? 'en' : 'ko'; setLang(next); localStorage.setItem('lang', next); }}
+        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999,
+          padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8',
+          background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
+          boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
+      >
+        {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+      </button>
+    );
+
     const ReportApp = () => {
       const SECRET_PASSWORD = "candelakoreasales"; 
+      const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
+
+      const T = {
+        loginTitle:   lang==='ko' ? '📈 보고용 리포트 보안접속'  : '📈 Secure Access — Sales Report',
+        loginBtn:     lang==='ko' ? '접속하기'                  : 'Log In',
+        wrongPwd:     lang==='ko' ? '비밀번호 불일치!'            : 'Incorrect password!',
+        closeBtn:     lang==='ko' ? '닫기'                      : 'Close',
+        unitSuffix:   lang==='ko' ? '대'                        : 'unit(s)',
+        noData:       lang==='ko' ? '-'                         : '-',
+        systemRequired: lang==='ko' ? 'System Required (# of unit)' : 'System Required (# of unit)',
+        salesCount:   lang==='ko' ? 'Sales Count'               : 'Sales Count',
+      };
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
@@ -100,7 +124,7 @@
         if (pwdInput === SECRET_PASSWORD) {
           localStorage.setItem('adminAuth', 'true'); setIsLoggedIn(true);
         } else {
-          alert('비밀번호 불일치!'); setPwdInput('');
+          alert(T.wrongPwd); setPwdInput('');
         }
       };
 
@@ -125,10 +149,11 @@
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800">
+            <LangBtn lang={lang} setLang={setLang} />
             <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
-              <h2 className="text-xl font-bold mb-4">📈 보고용 리포트 보안접속</h2>
+              <h2 className="text-xl font-bold mb-4">{T.loginTitle}</h2>
               <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password" />
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition">접속하기</button>
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition">{T.loginBtn}</button>
             </form>
           </div>
         );
@@ -214,9 +239,9 @@
       const sumGap = sumBudget - sumTotal;
       const sumProgress = sumBudget ? sumTotal / sumBudget : 0;
 
-      const sumWeeksM1 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
-      const sumWeeksM2 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
-      const sumWeeksM3 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
+      const sumWeeksM1 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
+      const sumWeeksM2 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
+      const sumWeeksM3 = [1, 2].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
 
       // Product 카운트
       const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
@@ -230,6 +255,7 @@
 
       return (
         <div className="p-6 md:p-8">
+          <LangBtn lang={lang} setLang={setLang} />
           <div className="flex justify-between items-end mb-6">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
@@ -239,7 +265,7 @@
               <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer hover:border-blue-500 transition">
                 {quarters.map(q => <option key={q} value={q}>{q}</option>)}
               </select>
-              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">닫기</button>
+              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">{T.closeBtn}</button>
             </div>
           </div>
 
@@ -373,7 +399,7 @@
                 {Object.entries(productCounts).sort((a,b)=>b[1].count - a[1].count).map(([p, data]) => (
                   <tr key={p}>
                     <td className="text-left font-bold">{p}</td>
-                    <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} 대` : '-'}</td>
+                    <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} ${T.unitSuffix}` : '-'}</td>
                   </tr>
                 ))}
               </tbody>
