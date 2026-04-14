@@ -124,7 +124,7 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
-  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (FCST + ACT)</div></div>
+  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (ACT + Pending)</div></div>
   <div class="kpi k3"><div class="klabel">Direct (SR)</div><div class="kval v3" id="kpi-direct">--</div><div class="ksub" id="kpi-direct-sub">--</div></div>
   <div class="kpi k4"><div class="klabel">Top Performer</div><div class="kval v4" id="kpi-top">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
 </div>
@@ -243,7 +243,7 @@ function applyLang() {
     'ct-revByProd':  t('revByProd'), 'ct-repDetail':  t('repDetail'),
     'th-dealer':     t('dealer'),    'th-amount':     t('amount'),
     'th-ratio':      t('ratio'),
-    'kpi-count-sub': isKo ? '건 (FCST + ACT)' : 'cases (FCST + ACT)',
+    'kpi-count-sub': isKo ? '건 (ACT + Pending)' : 'cases (ACT + Pending)',
   };
   Object.entries(ids).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -315,7 +315,7 @@ function makeChart(id, cfg) {
 
 // ── 메인 렌더 ─────────────────────────────────────────────────────
 function render(salesData, memberTargets) {
-  const qData = salesData.filter(d => d.quarter === QUARTER && (d.status === 'FCST' || d.status === 'ACT'));
+  const qData = salesData.filter(d => d.quarter === QUARTER && (d.status === 'ACT' || d.status === 'Pending' || d.status === 'FCST'));
 
   // KPI 계산
   const totalKRW = qData.reduce((s, d) => s + (d.priceKRW || 0), 0);
