@@ -392,7 +392,7 @@
       allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
       expectedData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += cur.priceKRW; }});
 
-      const ALL_INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '동안기획', 'Bori', 'Beauko', '엠디마케팅', '티모티', '엘룩스코리아', 'seed group', 'Human', '기타'];
+      const ALL_INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디', '동안기획', 'Bori', 'Beauko', '엠디마케팅', '티모티', '엘룩스코리아', 'seed group', 'Human', '기타'];
       const allDealers = ['병원', ...ALL_INDIRECT_DEALERS];
 
       // 딜러 통계: 데이터에 있는 딜러는 목록 외라도 모두 동적 집계
@@ -686,12 +686,17 @@
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                       <option value="">{T.selectRequired}</option>
                       {form.salesType === 'Direct' ? (
-                        <option value="병원">병원</option>
+                        <>
+                          <option value="병원">병원</option>
+                          <option value="Innomed">Innomed</option>
+                          <option value="SEVEN U">SEVEN U</option>
+                        </>
                       ) : (
                         <>
                           <option value="SEVEN U">SEVEN U</option>
                           <option value="Innomed">Innomed</option>
                           <option value="TMI">TMI</option>
+                          <option value="알펙스메디">알펙스메디</option>
                           <option value="동안기획">동안기획</option>
                           <option value="Bori">Bori</option>
                           <option value="Beauko">Beauko</option>
