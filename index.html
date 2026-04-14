@@ -104,6 +104,7 @@
         // Form labels
         statusLabel:      lang==='ko' ? '상태 (Status)'              : 'Status',
         contractLabel:    lang==='ko' ? '계약 구분 (Contract Type)'   : 'Contract Type',
+        contractDateLabel:lang==='ko' ? '계약일'                       : 'Contract Date',
         deliveryLabel:    lang==='ko' ? '납품예정일'                   : 'Delivery Date',
         selectRequired:   lang==='ko' ? '선택 (필수)'                 : 'Select (Required)',
         accountLabel:     lang==='ko' ? 'Account (병원/납품처명)'      : 'Account (Hospital / Clinic)',
@@ -113,7 +114,8 @@
         cancelEdit:       lang==='ko' ? '수정 취소'                   : 'Cancel Edit',
         // Tables
         deliveryStatus:   lang==='ko' ? '✅ 납품 현황 (FCST & ACT)'   : '✅ Delivery Status (FCST & ACT)',
-        deliveryDate:     lang==='ko' ? '납품일'                      : 'Date',
+        deliveryDate:     lang==='ko' ? '납품일'                      : 'Del. Date',
+        contractDate:     lang==='ko' ? '계약일'                      : 'Cont. Date',
         contract:         lang==='ko' ? '계약'                        : 'Contract',
         actions:          lang==='ko' ? '관리'                        : 'Actions',
         noDelivery:       lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
@@ -162,7 +164,7 @@
       });
       const [salesData, setSalesData] = useState([]);
 
-      const initialForm = { status: 'FCST', contractType: '일반', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const initialForm = { status: 'FCST', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
@@ -321,8 +323,8 @@
 
       const exportToCSV = () => {
         if (salesData.length === 0) return alert(T.noExportData);
-        const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
-        const rows = salesData.map(d => [d.quarter, d.team, d.member, d.status, d.contractType, d.deliveryDate, d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, d.priceKRW, d.priceUSD]);
+        const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Contract Date', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
+        const rows = salesData.map(d => [d.quarter, d.team, d.member, d.status, d.contractType, d.contractDate, d.deliveryDate, d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, d.priceKRW, d.priceUSD]);
         const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -678,6 +680,7 @@
                     
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}><option value="FCST">FCST (정상/예정)</option><option value="ACT">ACT (납품완료)</option><option value="미납">미납 (Pending)</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Sales Type</label><select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="Direct">Direct</option><option value="Indirect">Indirect</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
@@ -719,15 +722,16 @@
                     <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-800 text-white font-bold">
-                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
                         </thead>
                         <tbody>
                           {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).length === 0 ? (
-                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
                           ) : (
                             salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).map(row => (
                               <tr key={row.id} className={`border-b transition ${row.status === 'ACT' ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-blue-50'}`}>
                                 <td className={`p-2 md:p-3 font-bold ${row.status === 'ACT' ? 'text-green-600' : 'text-blue-600'}`}>{row.status}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
                                 <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
@@ -752,15 +756,16 @@
                     <div className="overflow-x-auto rounded-lg border border-red-200 hide-scrollbar">
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-red-700 text-white font-bold">
-                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
                         </thead>
                         <tbody>
                           {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').length === 0 ? (
-                            <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
                           ) : (
                             salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').map(row => (
                               <tr key={row.id} className="border-b bg-red-50 hover:bg-red-100 transition">
                                 <td className="p-2 md:p-3 font-bold text-red-600">{row.status}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
                                 <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
