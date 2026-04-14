@@ -401,7 +401,7 @@ function render(salesData, memberTargets) {
   document.getElementById('split-indirect-sub').textContent = `${fmt억(indirectKRW)} · ${indirectCount}건`;
 
   // ── 딜러 (Indirect 데이터) - 전체 딜러 목록 기준으로 집계
-  const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
+  const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','알펙스메디','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
   const dealerSum = {}, dealerCount = {};
   // 전체 딜러를 0으로 미리 초기화
   ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d] = 0; dealerCount[d] = 0; });
