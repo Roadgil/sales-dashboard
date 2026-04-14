@@ -195,7 +195,7 @@
       // ③ 월 Total / Q Budget 퍼센트
       const formatPct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '-';
 
-      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'ACT' || d.status === 'Pending' || d.status === 'FCST'));
 
       let rows = [];
       // ② Team 1부터 오름차순 정렬
