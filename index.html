@@ -401,6 +401,66 @@
 
       const handleDragEnd = () => setDragOverIdx(null);
 
+      // ─── Row order for ACT / Pending / Backup tables ───────────────────
+      const [rowOrders, setRowOrders] = useState({ ACT: {}, Pending: {}, Backup: {} });
+      const [rowDragState, setRowDragState] = useState({ type: null, fromId: null, overId: null });
+
+      useEffect(() => {
+        if (!isLoggedIn) return;
+        const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => {
+          if (doc.exists) setRowOrders(doc.data());
+        });
+        return () => unsub();
+      }, [isLoggedIn]);
+
+      const saveRowOrders = (next) => {
+        setRowOrders(next);
+        db.collection("settings").doc("rowOrders").set(next);
+      };
+
+      const getOrderedRows = (status, rawRows) => {
+        const key = `${selectedQuarter}__${selectedMember}__${status}`;
+        const orderMap = rowOrders[status] && rowOrders[status][key];
+        if (!orderMap || orderMap.length === 0) return rawRows;
+        const idOrder = orderMap;
+        const mapped = {};
+        rawRows.forEach(r => { mapped[String(r.id)] = r; });
+        const ordered = idOrder.map(id => mapped[id]).filter(Boolean);
+        const rest = rawRows.filter(r => !idOrder.includes(String(r.id)));
+        return [...ordered, ...rest];
+      };
+
+      const handleRowDragStart = (e, status, rowId) => {
+        e.dataTransfer.effectAllowed = 'move';
+        setRowDragState({ type: status, fromId: String(rowId), overId: null });
+      };
+
+      const handleRowDragOver = (e, status, rowId) => {
+        e.preventDefault();
+        if (rowDragState.type !== status) return;
+        setRowDragState(s => ({ ...s, overId: String(rowId) }));
+      };
+
+      const handleRowDrop = (e, status, toRowId, rawRows) => {
+        e.preventDefault();
+        const { fromId } = rowDragState;
+        const toId = String(toRowId);
+        if (!fromId || fromId === toId) { setRowDragState({ type: null, fromId: null, overId: null }); return; }
+        const key = `${selectedQuarter}__${selectedMember}__${status}`;
+        const currentOrder = (rowOrders[status] && rowOrders[status][key]) || rawRows.map(r => String(r.id));
+        const fromIdx = currentOrder.indexOf(fromId);
+        const toIdx = currentOrder.indexOf(toId);
+        if (fromIdx === -1 || toIdx === -1) { setRowDragState({ type: null, fromId: null, overId: null }); return; }
+        const next = [...currentOrder];
+        next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, fromId);
+        const nextOrders = { ...rowOrders, [status]: { ...(rowOrders[status] || {}), [key]: next } };
+        saveRowOrders(nextOrders);
+        setRowDragState({ type: null, fromId: null, overId: null });
+      };
+
+      const handleRowDragEnd = () => setRowDragState({ type: null, fromId: null, overId: null });
+
       const groupedQuarters = quarters.reduce((acc, q) => {
         const [year, quarter] = q.split(' '); 
         if (!acc[year]) acc[year] = [];
@@ -952,10 +1012,20 @@
                         <tbody>
                           {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT').length === 0 ? (
                             <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT').map(row => (
-                              <tr key={row.id} className="border-b bg-green-50 hover:bg-green-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-green-600">{row.status}</td>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT');
+                            return getOrderedRows('ACT', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'ACT', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'ACT', row.id)}
+                                onDrop={e => handleRowDrop(e, 'ACT', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-green-50 hover:bg-green-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='ACT' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-green-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-green-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
@@ -969,8 +1039,8 @@
                                 <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
                               </tr>
-                            ))
-                          )}
+                            ));
+                          })()}
                         </tbody>
                       </table>
                     </div>
@@ -986,10 +1056,20 @@
                         <tbody>
                           {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Pending').length === 0 ? (
                             <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Pending').map(row => (
-                              <tr key={row.id} className="border-b bg-blue-50 hover:bg-blue-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-blue-600">{row.status}</td>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Pending');
+                            return getOrderedRows('Pending', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'Pending', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'Pending', row.id)}
+                                onDrop={e => handleRowDrop(e, 'Pending', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-blue-50 hover:bg-blue-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='Pending' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-blue-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
@@ -1003,8 +1083,8 @@
                                 <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-blue-200 hover:bg-blue-300 text-blue-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
                               </tr>
-                            ))
-                          )}
+                            ));
+                          })()}
                         </tbody>
                       </table>
                     </div>
@@ -1020,10 +1100,20 @@
                         <tbody>
                           {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up').length === 0 ? (
                             <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up').map(row => (
-                              <tr key={row.id} className="border-b bg-orange-50 hover:bg-orange-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-orange-600">{row.status}</td>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up');
+                            return getOrderedRows('Backup', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'Backup', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'Backup', row.id)}
+                                onDrop={e => handleRowDrop(e, 'Backup', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-orange-50 hover:bg-orange-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='Backup' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-orange-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-orange-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
@@ -1037,8 +1127,8 @@
                                 <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
                               </tr>
-                            ))
-                          )}
+                            ));
+                          })()}
                         </tbody>
                       </table>
                     </div>
