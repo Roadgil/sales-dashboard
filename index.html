@@ -164,7 +164,7 @@
       });
       const [salesData, setSalesData] = useState([]);
 
-      const initialForm = { status: 'FCST', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
@@ -434,7 +434,7 @@
       const incentiveTargetKRW = targetKRW / 1.2;
       const incentiveTargetUSD = targetUSD / 1.2;
 
-      const expectedData = currentQData.filter(d => d.status === 'FCST' || d.status === 'ACT');
+      const expectedData = currentQData.filter(d => d.status === 'Pending' || d.status === 'ACT');
       const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
       const expectedUSD = expectedKRW / activeER;
 
@@ -896,7 +896,7 @@
                   <form className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 bg-slate-50 p-4 md:p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
                     {editingId && <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]"><span className="text-sm md:text-base">{T.editMode}</span></div>}
                     
-                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}><option value="FCST">FCST (정상/예정)</option><option value="ACT">ACT (납품완료)</option><option value="미납">미납 (Pending)</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}><option value="Pending">Pending(납품대기)</option><option value="ACT">ACT (납품완료)</option><option value="Backup">Backup</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
