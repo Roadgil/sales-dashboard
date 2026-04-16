@@ -97,7 +97,7 @@
         rename:           lang==='ko' ? '✏️ 이름 수정'                : '✏️ Rename',
         delete:           lang==='ko' ? '🗑️ 삭제'                    : '🗑️ Delete',
         backBtn:          lang==='ko' ? '뒤로가기 (팀 목록)'           : 'Back (Team List)',
-        cumulative:       lang==='ko' ? '🎯 누적 달성 현황 (Pending + ACT)' : '🎯 Cumulative Achievement (Pending + ACT)',
+        cumulative:       lang==='ko' ? '🎯 누적 달성 현황 (FCST + ACT)' : '🎯 Cumulative Achievement (FCST + ACT)',
         target100label:   lang==='ko' ? '100% Target (KRW) ✏️ 직접기입' : '100% Target (KRW) ✏️ Manual',
         targetPlaceholder2:lang==='ko'? '목표금액'                    : 'Target Amount',
         editMode:         lang==='ko' ? '✨ 데이터 수정 모드 진행 중...' : '✨ Edit mode in progress...',
@@ -113,7 +113,7 @@
         saveNew:          lang==='ko' ? '데이터 신규 저장'             : 'Save New',
         cancelEdit:       lang==='ko' ? '수정 취소'                   : 'Cancel Edit',
         // Tables
-        deliveryStatus:   lang==='ko' ? '✅ 납품 완료 현황 (ACT)'         : '✅ Delivery Completed (ACT)',
+        deliveryStatus:   lang==='ko' ? '✅ 납품 현황 (FCST & ACT)'   : '✅ Delivery Status (FCST & ACT)',
         deliveryDate:     lang==='ko' ? '납품일'                      : 'Del. Date',
         contractDate:     lang==='ko' ? '계약일'                      : 'Cont. Date',
         contract:         lang==='ko' ? '계약'                        : 'Contract',
@@ -121,10 +121,8 @@
         noDelivery:       lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
         editBtn:          lang==='ko' ? '수정'                        : 'Edit',
         deleteBtn:        lang==='ko' ? '삭제'                        : 'Del',
-        pendingList:      lang==='ko' ? '📋 납품 예정 리스트 (Pending)' : '📋 Pending Delivery List',
-        noPending:        lang==='ko' ? '등록된 납품예정 데이터가 없습니다.' : 'No pending delivery data registered.',
-        backupList:       lang==='ko' ? '🗂️ Back up 리스트 (매출 미집계)' : '🗂️ Back up List (Excluded from Revenue)',
-        noBackup:         lang==='ko' ? '등록된 Back up 데이터가 없습니다.' : 'No back up data registered.',
+        pendingList:      lang==='ko' ? '🚨 미납 리스트 (Pending / Backlog)' : '🚨 Pending / Backlog',
+        noPending:        lang==='ko' ? '등록된 미납 데이터가 없습니다.' : 'No pending data registered.',
         currentEst:       lang==='ko' ? '현재 누적 예상치'             : 'Current Cumulative Estimate',
         achievement:      lang==='ko' ? '달성률'                      : 'Achievement',
         cases:            lang==='ko' ? '건'                          : 'cs',
@@ -166,20 +164,38 @@
       });
       const [salesData, setSalesData] = useState([]);
 
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const initialForm = { status: 'FCST', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
       const [form, setForm] = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
 
-      // FCST → ACT 마이그레이션 (1회성)
-      useEffect(() => {
-        if (!isLoggedIn) return;
-        db.collection("sales").where("status", "==", "FCST").get().then(snapshot => {
-          if (snapshot.empty) return;
-          const batch = db.batch();
-          snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "ACT" }));
-          batch.commit();
-        });
-      }, [isLoggedIn]);
+      const DEFAULT_CARD_ORDER = ['er','targetKRW','targetUSD','incentiveKRW','incentiveUSD','estimatedKRW','estimatedUSD','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
+      const [cardOrder, setCardOrder] = useState(() => {
+        try { const s = localStorage.getItem('summaryCardOrder'); return s ? JSON.parse(s) : DEFAULT_CARD_ORDER; }
+        catch { return DEFAULT_CARD_ORDER; }
+      });
+
+      // 6가지 컬러 팔레트 정의
+      const CARD_PALETTES = {
+        slate:  { bg: '#f8fafc', border: '#cbd5e1', title: '#475569', value: '#1e293b', inputBorder: '#94a3b8', label: 'Slate' },
+        blue:   { bg: '#eff6ff', border: '#93c5fd', title: '#1d4ed8', value: '#1e3a5f', inputBorder: '#60a5fa', label: 'Blue' },
+        green:  { bg: '#f0fdf4', border: '#86efac', title: '#15803d', value: '#14532d', inputBorder: '#4ade80', label: 'Green' },
+        yellow: { bg: '#fefce8', border: '#fde047', title: '#a16207', value: '#713f12', inputBorder: '#facc15', label: 'Yellow' },
+        purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
+        rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
+      };
+      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
+      const [cardColors, setCardColors] = useState(() => {
+        try { const s = localStorage.getItem('summaryCardColors'); return s ? JSON.parse(s) : DEFAULT_CARD_COLORS; }
+        catch { return DEFAULT_CARD_COLORS; }
+      });
+      const [colorPickerOpen, setColorPickerOpen] = useState(null);
+
+      const setCardColor = (id, palette) => {
+        const next = { ...cardColors, [id]: palette };
+        setCardColors(next);
+        localStorage.setItem('summaryCardColors', JSON.stringify(next));
+        setColorPickerOpen(null);
+      };
 
       useEffect(() => {
         if (!isLoggedIn) return; 
@@ -347,6 +363,42 @@
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
       };
 
+      const moveCard = (idx, dir) => {
+        const next = [...cardOrder];
+        const to = idx + dir;
+        if (to < 0 || to >= next.length) return;
+        [next[idx], next[to]] = [next[to], next[idx]];
+        setCardOrder(next);
+        localStorage.setItem('summaryCardOrder', JSON.stringify(next));
+      };
+
+      const [dragOverIdx, setDragOverIdx] = useState(null);
+
+      const handleDragStart = (e, idx) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(idx));
+      };
+
+      const handleDragOver = (e, idx) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverIdx(idx);
+      };
+
+      const handleDrop = (e, toIdx) => {
+        e.preventDefault();
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        if (fromIdx === toIdx) { setDragOverIdx(null); return; }
+        const next = [...cardOrder];
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, moved);
+        setCardOrder(next);
+        localStorage.setItem('summaryCardOrder', JSON.stringify(next));
+        setDragOverIdx(null);
+      };
+
+      const handleDragEnd = () => setDragOverIdx(null);
+
       const groupedQuarters = quarters.reduce((acc, q) => {
         const [year, quarter] = q.split(' '); 
         if (!acc[year]) acc[year] = [];
@@ -379,10 +431,10 @@
       const activeER = currentTargets.er || 1389;
 
       const targetUSD = targetKRW / activeER;
-      const incentiveTargetKRW = targetKRW * 1.2;
-      const incentiveTargetUSD = targetUSD * 1.2;
+      const incentiveTargetKRW = targetKRW / 1.2;
+      const incentiveTargetUSD = targetUSD / 1.2;
 
-      const expectedData = currentQData.filter(d => d.status === 'Pending' || d.status === 'ACT' || d.status === 'FCST');
+      const expectedData = currentQData.filter(d => d.status === 'FCST' || d.status === 'ACT');
       const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
       const expectedUSD = expectedKRW / activeER;
 
@@ -578,26 +630,179 @@
                       Detail Report
                     </a>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-extrabold text-[11px]">{T.er}</span><input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent border-b border-slate-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-slate-500 transition" placeholder={T.erPlaceholder} /></div>
-                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-700 font-extrabold text-[11px]">{T.targetKRWLabel}</span><input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent border-b border-blue-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-blue-500 transition" placeholder={T.targetPlaceholder} /></div>
-                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-blue-600 font-bold text-[11px]">Target (USD)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (KRW)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
-                    </div>
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-green-700 font-extrabold text-[11px]">Incentive Target (USD)</span><span className="font-mono font-bold text-green-800 text-[16px] text-right px-1">$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-800 font-extrabold text-[11px]">{T.estimated}</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {expectedKRW.toLocaleString()}</span></div>
-                      <div className="bg-yellow-50/50 p-3 rounded-xl border border-yellow-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-yellow-700 font-extrabold text-[11px]">ER1 ($)</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span></div>
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gapKRW.toLocaleString()}</span></div>
-                    </div>
-                    <div className="flex flex-col space-y-3">
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-gray-600 font-bold text-[11px]">{T.attainRate}</span><span className="font-mono font-bold text-blue-600 text-[18px] text-right px-1">{percent.toFixed(3)} %</span></div>
-                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-300 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-purple-800 font-extrabold text-[11px]">GMPP Target (KRW) ✏️</span><input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent border-b border-purple-300 px-1 py-0.5 font-mono font-bold text-gray-800 text-[16px] text-right outline-none focus:border-purple-500 transition" placeholder={T.gmppTargetPH} /></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">{T.gmppEstimated}</span><span className="font-mono font-bold text-gray-800 text-[16px] text-right px-1">₩ {gmppExpectedKRW.toLocaleString()}</span></div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between shadow-sm min-h-[85px]"><span className="text-slate-700 font-bold text-[11px]">GMPP GAP (KRW)</span><span className="font-mono font-bold text-red-500 text-[16px] text-right px-1">₩ {gmppGapKRW.toLocaleString()}</span></div>
-                    </div>
-                  </div>
+                  {(() => {
+                    const titleCls = "block font-bold text-[13px] tracking-tight mb-2";
+                    const valueCls = "font-mono font-extrabold text-[17px] text-right px-1 block";
+                    const cardBase = "p-4 rounded-xl border flex flex-col justify-between shadow-sm min-h-[90px]";
+
+                    const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
+
+                    const allCards = {
+                      er: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.er}</span>
+                          <input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.erPlaceholder} />
+                        </div>;
+                      },
+                      targetKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.targetKRWLabel}</span>
+                          <input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.targetPlaceholder} />
+                        </div>;
+                      },
+                      targetUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Target (USD)</span>
+                          <span className={valueCls} style={{color:c.value}}>$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      incentiveKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Incentive Target (KRW) <span className="font-normal opacity-60 text-[11px]">÷120%</span></span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                        </div>;
+                      },
+                      incentiveUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Incentive Target (USD) <span className="font-normal opacity-60 text-[11px]">÷120%</span></span>
+                          <span className={valueCls} style={{color:c.value}}>$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      estimatedKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.estimated}</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      estimatedUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '예상치 ($)' : 'Estimated ($)'}</span>
+                          <span className={valueCls} style={{color:c.value}}>$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      gapKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GAP (KRW)</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      attainRate: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.attainRate}</span>
+                          <span className={valueCls} style={{color:c.value, fontSize:'19px'}}>{percent.toFixed(3)} %</span>
+                        </div>;
+                      },
+                      gmppTarget: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GMPP Target (KRW) ✏️</span>
+                          <input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.gmppTargetPH} />
+                        </div>;
+                      },
+                      gmppEstimated: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.gmppEstimated}</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      gmppGap: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GMPP GAP (KRW)</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                    };
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
+                        {cardOrder.map((id, idx) => (
+                          <div
+                            key={id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx)}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDrop={(e) => handleDrop(e, idx)}
+                            onDragEnd={handleDragEnd}
+                            className="relative group"
+                            style={{
+                              cursor: 'grab',
+                              opacity: dragOverIdx === idx ? 0.5 : 1,
+                              outline: dragOverIdx === idx ? '2px dashed #6366f1' : 'none',
+                              borderRadius: '12px',
+                              transition: 'opacity 0.15s, outline 0.15s',
+                            }}
+                          >
+                            {allCards[id](id)}
+                            {/* 색상 선택 버튼 */}
+                            <div
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                              onDragStart={(e) => e.stopPropagation()}
+                              draggable={false}
+                            >
+                              <button
+                                draggable={false}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); setColorPickerOpen(colorPickerOpen === id ? null : id); }}
+                                style={{
+                                  width:'20px', height:'20px', borderRadius:'50%',
+                                  background: CARD_PALETTES[cardColors[id]||'slate'].border,
+                                  border:'2px solid rgba(0,0,0,0.15)',
+                                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                                  boxShadow:'0 1px 4px rgba(0,0,0,0.18)',
+                                }}
+                                title="색상 변경"
+                              />
+                              {colorPickerOpen === id && (
+                                <div
+                                  draggable={false}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  style={{
+                                    position:'absolute', top:'26px', right:0,
+                                    background:'white', borderRadius:'10px', padding:'8px',
+                                    boxShadow:'0 4px 16px rgba(0,0,0,0.18)',
+                                    border:'1px solid #e2e8f0',
+                                    display:'flex', gap:'6px', zIndex:9999,
+                                  }}
+                                >
+                                  {Object.entries(CARD_PALETTES).map(([key, p]) => (
+                                    <button
+                                      key={key}
+                                      draggable={false}
+                                      onClick={(e) => { e.stopPropagation(); setCardColor(id, key); }}
+                                      title={p.label}
+                                      style={{
+                                        width:'20px', height:'20px', borderRadius:'50%',
+                                        background: p.bg,
+                                        border: cardColors[id] === key ? `3px solid ${p.title}` : `2px solid ${p.border}`,
+                                        cursor:'pointer',
+                                        boxShadow: cardColors[id] === key ? `0 0 0 1px ${p.title}` : 'none',
+                                        transition:'transform 0.1s',
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {/* 드래그 핸들 힌트 */}
+                            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-40 transition-opacity z-10 pointer-events-none select-none">
+                              <span style={{ fontSize:'13px', color:'#64748b', lineHeight:1 }}>⠿</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-6 border-t border-slate-200 pt-5">
                     <h4 className="text-[13px] font-bold text-slate-600 mb-2">{T.salesTypeShare}</h4>
@@ -691,7 +896,7 @@
                   <form className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 bg-slate-50 p-4 md:p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
                     {editingId && <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]"><span className="text-sm md:text-base">{T.editMode}</span></div>}
                     
-                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === 'Pending' ? 'text-blue-600 bg-blue-50' : form.status === 'Back up' ? 'text-orange-600 bg-orange-50' : 'text-green-600 bg-green-50'}`}><option value="Pending">Pending (납품예정)</option><option value="ACT">ACT (납품완료)</option><option value="Back up">Back up</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === '미납' ? 'text-red-600 bg-red-50' : form.status === 'ACT' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}><option value="FCST">FCST (정상/예정)</option><option value="ACT">ACT (납품완료)</option><option value="미납">미납 (Pending)</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
@@ -743,12 +948,12 @@
                           <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
                         </thead>
                         <tbody>
-                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT').length === 0 ? (
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).length === 0 ? (
                             <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
                           ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT').map(row => (
-                              <tr key={row.id} className="border-b bg-green-50 hover:bg-green-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-green-600">{row.status}</td>
+                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'FCST' || d.status === 'ACT')).map(row => (
+                              <tr key={row.id} className={`border-b transition ${row.status === 'ACT' ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-blue-50'}`}>
+                                <td className={`p-2 md:p-3 font-bold ${row.status === 'ACT' ? 'text-green-600' : 'text-blue-600'}`}>{row.status}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
@@ -770,19 +975,19 @@
                   </div>
 
                   <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-700">{T.pendingList}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-red-700">{T.pendingList}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-red-200 hide-scrollbar">
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-blue-700 text-white font-bold">
+                        <thead className="bg-red-700 text-white font-bold">
                           <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
                         </thead>
                         <tbody>
-                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'Pending' || d.status === 'FCST')).length === 0 ? (
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').length === 0 ? (
                             <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
                           ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && (d.status === 'Pending' || d.status === 'FCST')).map(row => (
-                              <tr key={row.id} className="border-b bg-blue-50 hover:bg-blue-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-blue-600">{row.status === 'FCST' ? 'Pending' : row.status}</td>
+                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').map(row => (
+                              <tr key={row.id} className="border-b bg-red-50 hover:bg-red-100 transition">
+                                <td className="p-2 md:p-3 font-bold text-red-600">{row.status}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
                                 <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
                                 <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
@@ -794,41 +999,7 @@
                                 <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
                                 <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
                                 <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-blue-200 hover:bg-blue-300 text-blue-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-orange-600">{T.backupList}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-orange-200 hide-scrollbar">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-orange-500 text-white font-bold">
-                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
-                        </thead>
-                        <tbody>
-                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up').length === 0 ? (
-                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr>
-                          ) : (
-                            salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up').map(row => (
-                              <tr key={row.id} className="border-b bg-orange-50 hover:bg-orange-100 transition">
-                                <td className="p-2 md:p-3 font-bold text-orange-600">{row.status}</td>
-                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
-                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
-                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
-                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
-                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
-                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
-                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
-                                <td className="p-2 md:p-3">{row.product}</td>
-                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
-                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
-                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-red-200 hover:bg-red-300 text-red-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
                               </tr>
                             ))
                           )}
