@@ -299,6 +299,11 @@ document.getElementById('quarterDate').textContent = `${YR}.${MS} — ${YR}.${ME
 // ── 유틸 ──────────────────────────────────────────────────────────
 const fmt억 = v => v >= 100000000 ? `₩${(v/100000000).toFixed(2)}억` : `₩${Math.round(v/10000).toLocaleString()}만`;
 const fmtKRW = v => `₩ ${v.toLocaleString()}`;
+let _er = 1389; // index.html과 동일한 기본값, quarterTargets에서 실시간 업데이트
+const fmtUSD     = v => v >= 1000000 ? `$${(v/1000000).toFixed(2)}M` : `$${Math.round(v/1000).toLocaleString()}K`;
+const fmtUSDFull = v => `$ ${Math.round(v).toLocaleString()}`;
+const fmtAmt     = krw => _lang === 'en' ? fmtUSD(krw / _er)     : fmt억(krw);
+const fmtAmtFull = krw => _lang === 'en' ? fmtUSDFull(krw / _er) : fmtKRW(krw);
 const COLORS = ['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0','#aaa6e0','#c0c5d8'];
 const M_COLORS = ['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
 const TT = { backgroundColor:'#fff', borderColor:'#e4e6eb', borderWidth:1, padding:10, titleColor:'#1a1a2e', bodyColor:'#1a1a2e' };
@@ -334,14 +339,14 @@ function render(salesData, memberTargets) {
   const topMember = sortedMembers[0];
 
   // ── KPI 업데이트
-  document.getElementById('kpi-total').textContent = fmt억(totalKRW);
-  document.getElementById('kpi-total-sub').textContent = fmtKRW(totalKRW);
+  document.getElementById('kpi-total').textContent = fmtAmt(totalKRW);
+  document.getElementById('kpi-total-sub').textContent = fmtAmtFull(totalKRW);
   document.getElementById('kpi-count').textContent = totalCount;
   document.getElementById('kpi-direct').textContent = `${directPct.toFixed(1)}%`;
-  document.getElementById('kpi-direct-sub').textContent = `${fmt억(directKRW)} · ${directCount}건`;
+  document.getElementById('kpi-direct-sub').textContent = `${fmtAmt(directKRW)} · ${directCount}${_lang==='ko'?'건':'cs'}`;
   document.getElementById('kpi-top').textContent = topMember ? topMember[0] : '-';
   document.getElementById('kpi-top-sub').textContent = topMember
-    ? `${fmt억(topMember[1])} · ${((topMember[1] / totalKRW) * 100).toFixed(1)}%` : '-';
+    ? `${fmtAmt(topMember[1])} · ${((topMember[1] / totalKRW) * 100).toFixed(1)}%` : '-';
 
   // ── 제품 도넛
   const prodSum = {}, prodCount = {};
@@ -366,7 +371,7 @@ function render(salesData, memberTargets) {
   document.getElementById('productTable').innerHTML =
     `<table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
     ${prodEntries.map(([k, v]) => `<tr>
-      <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${prodCount[k]}${_lang==='ko'?'건':'cs'}</td>
+      <td>${k}</td><td class="mono">${fmtAmt(v)}</td><td class="dim">${prodCount[k]}${_lang==='ko'?'건':'cs'}</td>
       <td class="dim">${totalKRW ? (v / totalKRW * 100).toFixed(1) : 0}%</td>
       <td><div class="mbar" style="width:${Math.round(v / maxProd * 70)}px"></div></td>
     </tr>`).join('')}</tbody></table>`;
@@ -382,7 +387,7 @@ function render(salesData, memberTargets) {
         <div class="sbw"><div class="sbf" style="width:${(val / maxMember * 100).toFixed(0)}%;background:${col}"></div></div>
       </div>
       <div class="samt">
-        <div>${fmt억(val)}</div>
+        <div>${fmtAmt(val)}</div>
         <div class="spct">${totalKRW ? (val / totalKRW * 100).toFixed(1) : 0}%</div>
       </div>
     </div>`;
@@ -396,9 +401,9 @@ function render(salesData, memberTargets) {
       plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
   });
   document.getElementById('split-direct-pct').textContent = `${directPct.toFixed(1)}%`;
-  document.getElementById('split-direct-sub').textContent = `${fmt억(directKRW)} · ${directCount}건`;
+  document.getElementById('split-direct-sub').textContent = `${fmtAmt(directKRW)} · ${directCount}${_lang==='ko'?'건':'cs'}`;
   document.getElementById('split-indirect-pct').textContent = `${indirectPct.toFixed(1)}%`;
-  document.getElementById('split-indirect-sub').textContent = `${fmt억(indirectKRW)} · ${indirectCount}건`;
+  document.getElementById('split-indirect-sub').textContent = `${fmtAmt(indirectKRW)} · ${indirectCount}${_lang==='ko'?'건':'cs'}`;
 
   // ── 딜러 (Indirect 데이터) - 전체 딜러 목록 기준으로 집계
   const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','알펙스메디','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
@@ -417,17 +422,20 @@ function render(salesData, memberTargets) {
   const dealerEntriesWithData = dealerEntries.filter(([, v]) => v > 0);
   const maxDealer = dealerEntriesWithData[0]?.[1] || 1;
 
+  const dealerUnitDiv = _lang === 'en' ? (_er * 1000000) : 100000000;
+  const dealerUnit   = _lang === 'en' ? 'M' : '억';
+  const dealerPfx    = _lang === 'en' ? '$' : '₩';
   makeChart('dealerChart', {
     type: 'bar',
-    data: { labels: dealerEntriesWithData.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntriesWithData.map(([, v]) => parseFloat((v / 100000000).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
+    data: { labels: dealerEntriesWithData.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntriesWithData.map(([, v]) => parseFloat((v / dealerUnitDiv).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ₩${c.raw}억` } } },
-      scales: { x: { grid: { color: '#f0f1f5' }, ticks: { color: '#8a8fa8', callback: v => `${v}억` } }, y: { grid: { display: false }, ticks: { color: '#1a1a2e', font: { size: 11 } } } } }
+      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ${dealerPfx}${c.raw}${dealerUnit}` } } },
+      scales: { x: { grid: { color: '#f0f1f5' }, ticks: { color: '#8a8fa8', callback: v => `${dealerPfx}${v}${dealerUnit}` } }, y: { grid: { display: false }, ticks: { color: '#1a1a2e', font: { size: 11 } } } } }
   });
   document.getElementById('dealerTb').innerHTML = dealerEntries.length
     ? dealerEntries.map(([k, v]) => `<tr style="${v === 0 ? 'opacity:0.4' : ''}">
         <td>${k}</td>
-        <td class="mono">${v > 0 ? fmt억(v) : '-'}</td>
+        <td class="mono">${v > 0 ? fmtAmt(v) : '-'}</td>
         <td class="dim">${v > 0 && indirectKRW ? (v / indirectKRW * 100).toFixed(1) + '%' : '-'}</td>
         <td><div class="mbar" style="width:${v > 0 ? Math.round(v / maxDealer * 70) : 0}px"></div></td>
       </tr>`).join('')
@@ -473,18 +481,18 @@ function render(salesData, memberTargets) {
         <div class="sr-kpi">
           <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
           <div class="klabel">Total</div>
-          <div class="kval" style="color:${col}">${fmt억(mTotal)}</div>
+          <div class="kval" style="color:${col}">${fmtAmt(mTotal)}</div>
           <div class="ksub">${mData.length}건</div>
         </div>
         <div class="sr-kpi">
           <div class="klabel">Direct (SR)</div>
           <div class="kval" style="color:var(--a2)">${mDirectPct}%</div>
-          <div class="ksub">${fmt억(mDirect)}</div>
+          <div class="ksub">${fmtAmt(mDirect)}</div>
         </div>
         <div class="sr-kpi">
           <div class="klabel">Indirect (Dealer)</div>
           <div class="kval" style="color:var(--a3)">${mIndirectPct}%</div>
-          <div class="ksub">${fmt억(mIndirect)}</div>
+          <div class="ksub">${fmtAmt(mIndirect)}</div>
         </div>
       </div>
       ${target ? `<div style="margin-bottom:16px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
@@ -494,7 +502,7 @@ function render(salesData, memberTargets) {
         </div>
         <div class="pbar-bg"><div class="pbar-fill" style="width:${Math.min(achievePct, 100)}%;background:${achievePct >= 100 ? 'var(--green)' : col}"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
-          <span>${t('current')}: ${fmtKRW(mTotal)}</span><span>${t('target')}: ${fmtKRW(target)}</span>
+          <span>${t('current')}: ${fmtAmtFull(mTotal)}</span><span>${t('target')}: ${fmtAmtFull(target)}</span>
         </div>
       </div>` : ''}
       <div class="g g11">
@@ -506,7 +514,7 @@ function render(salesData, memberTargets) {
           <div class="ctitle">${t('byProduct')}</div>
           <table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
           ${mProdEntries.map(([k, v]) => `<tr>
-            <td>${k}</td><td class="mono">${fmt억(v)}</td><td class="dim">${mProdCount[k]}${_lang==='ko'?'건':'cs'}</td>
+            <td>${k}</td><td class="mono">${fmtAmt(v)}</td><td class="dim">${mProdCount[k]}${_lang==='ko'?'건':'cs'}</td>
             <td class="dim">${mTotal ? (v / mTotal * 100).toFixed(1) : 0}%</td>
             <td><div class="mbar" style="width:${Math.round(v / mMaxProd * 70)}px"></div></td>
           </tr>`).join('')}
@@ -546,8 +554,18 @@ function switchMemberTab(id, btn) {
 }
 
 // ── Firebase 실시간 로드 ─────────────────────────────────────────
-let _sales = [], _targets = {}, _loaded = { s: false, t: false };
-const tryRender = () => { if (_loaded.s && _loaded.t) { render(_sales, _targets); applyLang(); } };
+let _sales = [], _targets = {}, _loaded = { s: false, t: false, q: false };
+const tryRender = () => { if (_loaded.s && _loaded.t && _loaded.q) { render(_sales, _targets); applyLang(); } };
+
+// quarterTargets에서 현재 분기 ER 실시간 동기화 (index.html과 동일한 소스)
+db.collection("targets").doc("quarterTargets").onSnapshot(doc => {
+  if (doc.exists) {
+    const qTargets = doc.data();
+    _er = qTargets?.[QUARTER]?.er || 1389;
+  }
+  _loaded.q = true;
+  tryRender();
+});
 
 db.collection("sales").onSnapshot(snap => {
   _sales = snap.docs.map(d => d.data());
