@@ -93,12 +93,18 @@
         auth.signInWithEmailLink(email, link)
           .then(() => {
             safeRemove('emailForSignIn');
+            sessionStorage.removeItem('pendingSignInLink');
             window.history.replaceState({}, document.title, window.location.pathname);
             setNeedsEmailConfirm(false);
           })
           .catch(err => {
-            setConfirmError(lang === 'ko' ? '인증 실패. 이메일을 확인하거나 다시 시도해주세요.' : 'Authentication failed. Please check your email or try again.');
-            console.error('Sign-in error:', err);
+            console.error('Sign-in error:', err.code, err.message);
+            const msg = err.code === 'auth/invalid-action-code'
+              ? (lang === 'ko' ? '링크가 만료되었거나 이미 사용된 링크입니다. 다시 로그인 링크를 요청해주세요.' : 'Link expired or already used. Please request a new sign-in link.')
+              : err.code === 'auth/invalid-email'
+              ? (lang === 'ko' ? '이메일 주소가 일치하지 않습니다.' : 'Email address does not match.')
+              : `${lang === 'ko' ? '인증 실패' : 'Auth failed'}: ${err.code}`;
+            setConfirmError(msg);
           });
       };
 
@@ -107,6 +113,8 @@
         // 이메일 링크 클릭 후 리다이렉트 처리
         if (auth.isSignInWithEmailLink(window.location.href)) {
           const currentLink = window.location.href;
+          // sessionStorage에도 백업 (Edge 등 localStorage 차단 대응)
+          try { sessionStorage.setItem('pendingSignInLink', currentLink); } catch(e) {}
           const email = safeGet('emailForSignIn');
           if (email) {
             // localStorage에서 이메일 읽기 성공 (Chrome 등)
@@ -181,7 +189,9 @@
           setConfirmError(lang === 'ko' ? '@candelamedical.com 메일 주소를 입력해주세요.' : 'Please enter your @candelamedical.com address.');
           return;
         }
-        completeSignIn(email, pendingLink);
+        // pendingLink 상태가 없으면 sessionStorage에서 복구
+        const link = pendingLink || sessionStorage.getItem('pendingSignInLink') || window.location.href;
+        completeSignIn(email, link);
       };
 
       const handleLogout = () => {
