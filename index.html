@@ -12,7 +12,6 @@
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body className="bg-gray-100">
   <div id="root"></div>
@@ -32,18 +31,6 @@
       firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.firestore();
-    const auth = firebase.auth();
-
-    // ── 분기 키 계산 (1월=Q1, 4월=Q2, 7월=Q3, 10월=Q4)
-    function getCurrentQuarterKey() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = now.getMonth() + 1;
-      const q = m <= 3 ? 'Q1' : m <= 6 ? 'Q2' : m <= 9 ? 'Q3' : 'Q4';
-      return `${y}-${q}`;
-    }
-
-    const ALLOWED_DOMAIN = '@candelamedical.com';
 
     const { useState, useEffect } = React;
 
@@ -60,79 +47,12 @@
     );
 
     const App = () => {
+      const SECRET_PASSWORD = "candelakoreasales"; 
+
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
-
-      // ── Auth 상태: firebase user 기반
-      const [authUser, setAuthUser] = useState(null);
-      const [authLoading, setAuthLoading] = useState(true);
-      const isLoggedIn = !!authUser;
-
-      // ── 이메일 + 비밀번호 로그인 UI 상태
-      const [emailInput, setEmailInput] = useState('');
+      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
-      const [loginError, setLoginError] = useState('');
-      const [loginLoading, setLoginLoading] = useState(false);
-
-      // ── localStorage 안전 읽기/쓰기 (Edge 대응)
-      const safeGet = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
-      const safeSet = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
-      const safeRemove = (key) => { try { localStorage.removeItem(key); } catch(e) {} };
-
-      // ── Firebase Auth 상태 감지 + 분기별 재인증
-      useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(user => {
-          if (user) {
-            if (!user.email.endsWith(ALLOWED_DOMAIN)) {
-              auth.signOut();
-              setAuthUser(null);
-            } else {
-              const savedQ = safeGet('authQuarterKey');
-              const currentQ = getCurrentQuarterKey();
-              if (savedQ !== currentQ) {
-                auth.signOut();
-                safeRemove('authQuarterKey');
-                setAuthUser(null);
-              } else {
-                setAuthUser(user);
-              }
-            }
-          } else {
-            setAuthUser(null);
-          }
-          setAuthLoading(false);
-        });
-        return () => unsubscribe();
-      }, []);
-
-      // 로그인 성공 시 분기 키 저장
-      useEffect(() => {
-        if (authUser) safeSet('authQuarterKey', getCurrentQuarterKey());
-      }, [authUser]);
-
-      const handleLogin = async (e) => {
-        e.preventDefault();
-        setLoginError('');
-        const email = emailInput.trim().toLowerCase();
-        if (!email.endsWith(ALLOWED_DOMAIN)) {
-          setLoginError(lang === 'ko' ? '@candelamedical.com 메일 주소만 허용됩니다.' : 'Only @candelamedical.com addresses are allowed.');
-          return;
-        }
-        setLoginLoading(true);
-        try {
-          await auth.signInWithEmailAndPassword(email, pwdInput);
-        } catch (err) {
-          const msg = (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')
-            ? (lang === 'ko' ? '이메일 또는 비밀번호가 올바르지 않습니다.' : 'Invalid email or password.')
-            : `${lang === 'ko' ? '로그인 실패' : 'Login failed'}: ${err.code}`;
-          setLoginError(msg);
-        }
-        setLoginLoading(false);
-      };
-
-      const handleLogout = () => {
-        auth.signOut();
-        safeRemove('authQuarterKey');
-      };
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       const T = {
         // Login
@@ -214,7 +134,16 @@
         erPlaceholder:    lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
       };
 
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pwdInput === SECRET_PASSWORD) {
+          localStorage.setItem('adminAuth', 'true'); 
+          setIsLoggedIn(true);
+        } else {
+          alert(T.wrongPwd);
+          setPwdInput('');
+        }
+      };
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
@@ -541,14 +470,6 @@
         return acc;
       }, {});
 
-      if (authLoading) {
-        return (
-          <div className="flex h-screen items-center justify-center bg-slate-800">
-            <div style={{color:'#94a3b8', fontFamily:'monospace', fontSize:'14px'}}>Authenticating…</div>
-          </div>
-        );
-      }
-
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
@@ -556,30 +477,11 @@
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
               <div className="text-4xl mb-4">📊</div>
               <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
-              <p className="text-slate-500 text-sm mb-6">
-                {lang === 'ko' ? '회사 이메일과 비밀번호로 로그인하세요.' : 'Sign in with your company email and password.'}
-              </p>
-              <form onSubmit={handleLogin} className="flex flex-col space-y-3">
-                <input
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => { setEmailInput(e.target.value); setLoginError(''); }}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="name@candelamedical.com"
-                  autoFocus
-                />
-                <input
-                  type="password"
-                  value={pwdInput}
-                  onChange={(e) => { setPwdInput(e.target.value); setLoginError(''); }}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder={lang === 'ko' ? '비밀번호' : 'Password'}
-                />
-                {loginError && <p className="text-red-500 text-xs text-left">{loginError}</p>}
-                <button type="submit" disabled={loginLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
-                  {loginLoading ? (lang === 'ko' ? '로그인 중…' : 'Signing in…') : (lang === 'ko' ? '로그인' : 'Sign In')}
-                </button>
+              <p className="text-slate-500 text-sm mb-8">{T.loginSub}</p>
+              
+              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
+                <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono text-center text-lg tracking-widest" placeholder="Password" autoFocus />
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">{T.loginBtn}</button>
               </form>
             </div>
           </div>
@@ -765,7 +667,7 @@
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 {T.exportCSV}
               </button>
-              <button onClick={handleLogout} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+              <button onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
             </div>
           </div>
 
