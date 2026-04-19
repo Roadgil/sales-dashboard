@@ -78,22 +78,44 @@
       const [emailError, setEmailError] = useState('');
       const [emailLoading, setEmailLoading] = useState(false);
 
+      // ── Edge 대응: localStorage 차단 시 이메일 재입력 UI
+      const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+      const [confirmEmail, setConfirmEmail] = useState('');
+      const [confirmError, setConfirmError] = useState('');
+      const [pendingLink, setPendingLink] = useState('');
+
+      // ── localStorage 안전 읽기/쓰기 (Edge tracking prevention 대응)
+      const safeGet = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
+      const safeSet = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
+      const safeRemove = (key) => { try { localStorage.removeItem(key); } catch(e) {} };
+
+      const completeSignIn = (email, link) => {
+        auth.signInWithEmailLink(email, link)
+          .then(() => {
+            safeRemove('emailForSignIn');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setNeedsEmailConfirm(false);
+          })
+          .catch(err => {
+            setConfirmError(lang === 'ko' ? '인증 실패. 이메일을 확인하거나 다시 시도해주세요.' : 'Authentication failed. Please check your email or try again.');
+            console.error('Sign-in error:', err);
+          });
+      };
+
       // ── Firebase Auth 상태 감지 + 분기별 재인증
       useEffect(() => {
         // 이메일 링크 클릭 후 리다이렉트 처리
         if (auth.isSignInWithEmailLink(window.location.href)) {
-          let email = localStorage.getItem('emailForSignIn');
-          if (!email) {
-            email = window.prompt('확인을 위해 이메일 주소를 다시 입력해주세요.');
-          }
+          const currentLink = window.location.href;
+          const email = safeGet('emailForSignIn');
           if (email) {
-            auth.signInWithEmailLink(email, window.location.href)
-              .then(() => {
-                localStorage.removeItem('emailForSignIn');
-                // URL에서 링크 파라미터 제거
-                window.history.replaceState({}, document.title, window.location.pathname);
-              })
-              .catch(err => console.error('Sign-in error:', err));
+            // localStorage에서 이메일 읽기 성공 (Chrome 등)
+            completeSignIn(email, currentLink);
+          } else {
+            // Edge 등 localStorage 차단 → 재입력 UI 표시
+            setPendingLink(currentLink);
+            setNeedsEmailConfirm(true);
+            setAuthLoading(false);
           }
         }
 
@@ -105,12 +127,11 @@
               setAuthUser(null);
             } else {
               // 분기별 재인증 체크
-              const savedQ = localStorage.getItem('authQuarterKey');
+              const savedQ = safeGet('authQuarterKey');
               const currentQ = getCurrentQuarterKey();
               if (savedQ !== currentQ) {
-                // 새 분기 → 재로그인 요구
                 auth.signOut();
-                localStorage.removeItem('authQuarterKey');
+                safeRemove('authQuarterKey');
                 setAuthUser(null);
               } else {
                 setAuthUser(user);
@@ -127,7 +148,7 @@
       // 로그인 성공 시 분기 키 저장
       useEffect(() => {
         if (authUser) {
-          localStorage.setItem('authQuarterKey', getCurrentQuarterKey());
+          safeSet('authQuarterKey', getCurrentQuarterKey());
         }
       }, [authUser]);
 
@@ -144,7 +165,7 @@
         setEmailLoading(true);
         try {
           await auth.sendSignInLinkToEmail(email, actionCodeSettings);
-          localStorage.setItem('emailForSignIn', email);
+          safeSet('emailForSignIn', email);
           setEmailSent(true);
         } catch (err) {
           setEmailError(lang === 'ko' ? '링크 전송 실패. 다시 시도해주세요.' : 'Failed to send link. Please try again.');
@@ -152,9 +173,20 @@
         setEmailLoading(false);
       };
 
+      const handleConfirmEmail = (e) => {
+        e.preventDefault();
+        setConfirmError('');
+        const email = confirmEmail.trim().toLowerCase();
+        if (!email.endsWith(ALLOWED_DOMAIN)) {
+          setConfirmError(lang === 'ko' ? '@candelamedical.com 메일 주소를 입력해주세요.' : 'Please enter your @candelamedical.com address.');
+          return;
+        }
+        completeSignIn(email, pendingLink);
+      };
+
       const handleLogout = () => {
         auth.signOut();
-        localStorage.removeItem('authQuarterKey');
+        safeRemove('authQuarterKey');
       };
 
       const T = {
@@ -568,6 +600,41 @@
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800">
             <div style={{color:'#94a3b8', fontFamily:'monospace', fontSize:'14px'}}>Authenticating…</div>
+          </div>
+        );
+      }
+
+      // Edge 등 localStorage 차단 시: 링크 클릭 후 이메일 재입력 화면
+      if (needsEmailConfirm) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
+            <LangBtn lang={lang} setLang={setLang} />
+            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
+              <div className="text-4xl mb-4">🔐</div>
+              <h2 className="text-xl font-extrabold text-slate-800 mb-2">
+                {lang === 'ko' ? '이메일 확인' : 'Confirm your email'}
+              </h2>
+              <p className="text-slate-500 text-sm mb-6">
+                {lang === 'ko'
+                  ? '보안을 위해 로그인에 사용한 이메일 주소를 다시 입력해주세요.'
+                  : 'For security, please re-enter the email address you used to sign in.'}
+              </p>
+              <form onSubmit={handleConfirmEmail} className="flex flex-col space-y-4">
+                <input
+                  type="email"
+                  value={confirmEmail}
+                  onChange={(e) => { setConfirmEmail(e.target.value); setConfirmError(''); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center text-sm"
+                  placeholder="name@candelamedical.com"
+                  autoFocus
+                />
+                {confirmError && <p className="text-red-500 text-xs">{confirmError}</p>}
+                <button type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
+                  {lang === 'ko' ? '확인 후 입장' : 'Confirm & Enter'}
+                </button>
+              </form>
+            </div>
           </div>
         );
       }
