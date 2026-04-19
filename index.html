@@ -135,8 +135,10 @@
         e.preventDefault();
         setEmailError('');
         const email = emailInput.trim().toLowerCase();
-        if (!email.includes('@')) {
-          setEmailError(lang === 'ko' ? '올바른 이메일을 입력해주세요.' : 'Please enter a valid email.');
+        if (!email.endsWith(ALLOWED_DOMAIN)) {
+          setEmailError(lang === 'ko'
+            ? `@candelamedical.com 메일 주소만 허용됩니다.`
+            : `Only @candelamedical.com addresses are allowed.`);
           return;
         }
         setEmailLoading(true);
