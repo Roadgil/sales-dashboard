@@ -12,6 +12,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body className="bg-gray-100">
   <div id="root"></div>
@@ -31,6 +32,23 @@
       firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    // ── 분기 키 계산 (1월=Q1, 4월=Q2, 7월=Q3, 10월=Q4)
+    function getCurrentQuarterKey() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const q = m <= 3 ? 'Q1' : m <= 6 ? 'Q2' : m <= 9 ? 'Q3' : 'Q4';
+      return `${y}-${q}`;
+    }
+
+    // ── 이메일 링크 전송 (Firebase Passwordless)
+    const ALLOWED_DOMAIN = '@candelamedical.com';
+    const actionCodeSettings = {
+      url: window.location.href.split('?')[0],
+      handleCodeInApp: true,
+    };
 
     const { useState, useEffect } = React;
 
@@ -47,12 +65,97 @@
     );
 
     const App = () => {
-      const SECRET_PASSWORD = "candelakoreasales"; 
-
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
-      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
-      const [pwdInput, setPwdInput] = useState('');
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+      // ── Auth 상태: firebase user 기반
+      const [authUser, setAuthUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+      const isLoggedIn = !!authUser;
+
+      // ── 이메일 링크 로그인 UI 상태
+      const [emailInput, setEmailInput] = useState('');
+      const [emailSent, setEmailSent] = useState(false);
+      const [emailError, setEmailError] = useState('');
+      const [emailLoading, setEmailLoading] = useState(false);
+
+      // ── Firebase Auth 상태 감지 + 분기별 재인증
+      useEffect(() => {
+        // 이메일 링크 클릭 후 리다이렉트 처리
+        if (auth.isSignInWithEmailLink(window.location.href)) {
+          let email = localStorage.getItem('emailForSignIn');
+          if (!email) {
+            email = window.prompt('확인을 위해 이메일 주소를 다시 입력해주세요.');
+          }
+          if (email) {
+            auth.signInWithEmailLink(email, window.location.href)
+              .then(() => {
+                localStorage.removeItem('emailForSignIn');
+                // URL에서 링크 파라미터 제거
+                window.history.replaceState({}, document.title, window.location.pathname);
+              })
+              .catch(err => console.error('Sign-in error:', err));
+          }
+        }
+
+        const unsubscribe = auth.onAuthStateChanged(user => {
+          if (user) {
+            // 도메인 체크
+            if (!user.email.endsWith(ALLOWED_DOMAIN)) {
+              auth.signOut();
+              setAuthUser(null);
+            } else {
+              // 분기별 재인증 체크
+              const savedQ = localStorage.getItem('authQuarterKey');
+              const currentQ = getCurrentQuarterKey();
+              if (savedQ !== currentQ) {
+                // 새 분기 → 재로그인 요구
+                auth.signOut();
+                localStorage.removeItem('authQuarterKey');
+                setAuthUser(null);
+              } else {
+                setAuthUser(user);
+              }
+            }
+          } else {
+            setAuthUser(null);
+          }
+          setAuthLoading(false);
+        });
+        return () => unsubscribe();
+      }, []);
+
+      // 로그인 성공 시 분기 키 저장
+      useEffect(() => {
+        if (authUser) {
+          localStorage.setItem('authQuarterKey', getCurrentQuarterKey());
+        }
+      }, [authUser]);
+
+      const handleSendLink = async (e) => {
+        e.preventDefault();
+        setEmailError('');
+        const email = emailInput.trim().toLowerCase();
+        if (!email.endsWith(ALLOWED_DOMAIN)) {
+          setEmailError(lang === 'ko'
+            ? `@candelamedical.com 메일 주소만 허용됩니다.`
+            : `Only @candelamedical.com addresses are allowed.`);
+          return;
+        }
+        setEmailLoading(true);
+        try {
+          await auth.sendSignInLinkToEmail(email, actionCodeSettings);
+          localStorage.setItem('emailForSignIn', email);
+          setEmailSent(true);
+        } catch (err) {
+          setEmailError(lang === 'ko' ? '링크 전송 실패. 다시 시도해주세요.' : 'Failed to send link. Please try again.');
+        }
+        setEmailLoading(false);
+      };
+
+      const handleLogout = () => {
+        auth.signOut();
+        localStorage.removeItem('authQuarterKey');
+      };
 
       const T = {
         // Login
@@ -134,16 +237,7 @@
         erPlaceholder:    lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
       };
 
-      const handleLogin = (e) => {
-        e.preventDefault();
-        if (pwdInput === SECRET_PASSWORD) {
-          localStorage.setItem('adminAuth', 'true'); 
-          setIsLoggedIn(true);
-        } else {
-          alert(T.wrongPwd);
-          setPwdInput('');
-        }
-      };
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
@@ -463,104 +557,20 @@
 
       const handleRowDragEnd = () => setRowDragState({ type: null, fromId: null, overId: null });
 
-      // ─── 분기 자동 이월 로직 ───────────────────────────────────────────────
-      // KST 기준으로 1/3, 4/3, 7/3, 10/3에 이전 분기의 Pending/Back up/미납 데이터를 새 분기로 이월
-      const getKSTDateString = () => {
-        const now = new Date();
-        // KST = UTC+9
-        const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-        const mm = String(kst.getUTCMonth() + 1).padStart(2, '0');
-        const dd = String(kst.getUTCDate()).padStart(2, '0');
-        const yyyy = kst.getUTCFullYear();
-        return `${yyyy}-${mm}-${dd}`;
-      };
-
-      const getQuarterForDate = (dateStr) => {
-        // dateStr: 'YYYY-MM-DD'
-        const month = parseInt(dateStr.slice(5, 7), 10);
-        const year = parseInt(dateStr.slice(0, 4), 10);
-        if (month <= 3)  return `${year} Q1`;
-        if (month <= 6)  return `${year} Q2`;
-        if (month <= 9)  return `${year} Q3`;
-        return `${year} Q4`;
-      };
-
-      const getPrevQuarter = (quarterStr) => {
-        // quarterStr: '2026 Q2'
-        const [year, q] = quarterStr.split(' ');
-        const yr = parseInt(year, 10);
-        const qn = parseInt(q.slice(1), 10);
-        if (qn === 1) return `${yr - 1} Q4`;
-        return `${yr} Q${qn - 1}`;
-      };
-
-      const isRolloverDay = (dateStr) => {
-        // 매 분기 시작 3일째 (1/3, 4/3, 7/3, 10/3)
-        const month = parseInt(dateStr.slice(5, 7), 10);
-        const day   = parseInt(dateStr.slice(8, 10), 10);
-        return day === 3 && [1, 4, 7, 10].includes(month);
-      };
-
-      const ROLLOVER_LOCK_KEY = 'quarterRolloverDone';
-
-      useEffect(() => {
-        if (!isLoggedIn || salesData.length === 0) return;
-
-        const todayKST = getKSTDateString();
-        const lastDone = localStorage.getItem(ROLLOVER_LOCK_KEY);
-        if (lastDone === todayKST) return;           // 오늘 이미 실행됨
-        if (!isRolloverDay(todayKST)) return;        // 이월 날짜 아님
-
-        const newQuarter  = getQuarterForDate(todayKST);   // 오늘 날짜 기준 현재 분기
-        const prevQuarter = getPrevQuarter(newQuarter);     // 이전 분기
-
-        const ROLLOVER_STATUSES = ['Pending', 'Back up', '미납'];
-        const toRollover = salesData.filter(
-          d => d.quarter === prevQuarter && ROLLOVER_STATUSES.includes(d.status)
-        );
-
-        if (toRollover.length === 0) {
-          localStorage.setItem(ROLLOVER_LOCK_KEY, todayKST);
-          return;
-        }
-
-        // 새 분기가 quarters 목록에 없으면 추가
-        let updatedQuarters = quarters;
-        if (!quarters.includes(newQuarter)) {
-          updatedQuarters = [...quarters, newQuarter].sort();
-          setQuarters(updatedQuarters);
-          db.collection("settings").doc("layout").set({ quarters: updatedQuarters }, { merge: true });
-          // 새 분기 타겟 초기화
-          const newTargets = { ...quarterTargets, [newQuarter]: { target: 0, gmppTarget: 0, er: quarterTargets[prevQuarter]?.er || 1389 } };
-          setQuarterTargets(newTargets);
-          db.collection("targets").doc("quarterTargets").set(newTargets);
-        }
-
-        // 각 데이터를 새 분기로 복사 (새 id 발급)
-        const batch = [];
-        toRollover.forEach(d => {
-          const newId = Date.now() + Math.floor(Math.random() * 1000000);
-          const newDoc = { ...d, quarter: newQuarter, id: newId, rolledOverFrom: prevQuarter };
-          batch.push(db.collection("sales").doc(newId.toString()).set(newDoc));
-        });
-
-        Promise.all(batch).then(() => {
-          localStorage.setItem(ROLLOVER_LOCK_KEY, todayKST);
-          alert(`✅ [분기 자동 이월 완료]\n${prevQuarter}의 ${toRollover.length}건 (Pending / Back up / 미납)\n→ ${newQuarter}으로 자동 이월되었습니다.`);
-        }).catch(err => {
-          console.error('Rollover error:', err);
-        });
-
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [isLoggedIn, salesData]);
-      // ─────────────────────────────────────────────────────────────────────
-
       const groupedQuarters = quarters.reduce((acc, q) => {
         const [year, quarter] = q.split(' '); 
         if (!acc[year]) acc[year] = [];
         acc[year].push(quarter);
         return acc;
       }, {});
+
+      if (authLoading) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800">
+            <div style={{color:'#94a3b8', fontFamily:'monospace', fontSize:'14px'}}>Authenticating…</div>
+          </div>
+        );
+      }
 
       if (!isLoggedIn) {
         return (
@@ -569,12 +579,46 @@
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
               <div className="text-4xl mb-4">📊</div>
               <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
-              <p className="text-slate-500 text-sm mb-8">{T.loginSub}</p>
-              
-              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-                <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono text-center text-lg tracking-widest" placeholder="Password" autoFocus />
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">{T.loginBtn}</button>
-              </form>
+              {emailSent ? (
+                <div>
+                  <div className="text-5xl mb-4">📧</div>
+                  <p className="text-slate-600 text-sm mb-2">
+                    {lang === 'ko'
+                      ? `${emailInput} 으로 로그인 링크를 전송했습니다.`
+                      : `A sign-in link was sent to ${emailInput}.`}
+                  </p>
+                  <p className="text-slate-400 text-xs">
+                    {lang === 'ko' ? '메일함을 확인하고 링크를 클릭해주세요.' : 'Check your inbox and click the link.'}
+                  </p>
+                  <button onClick={() => { setEmailSent(false); setEmailInput(''); }}
+                    className="mt-6 text-blue-500 text-xs underline">
+                    {lang === 'ko' ? '다시 시도' : 'Try again'}
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendLink} className="flex flex-col space-y-4">
+                  <p className="text-slate-500 text-sm">
+                    {lang === 'ko'
+                      ? 'Candela Medical 회사 이메일로 로그인 링크를 전송합니다.'
+                      : 'Enter your Candela Medical email to receive a sign-in link.'}
+                  </p>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => { setEmailInput(e.target.value); setEmailError(''); }}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center text-sm"
+                    placeholder="name@candelamedical.com"
+                    autoFocus
+                  />
+                  {emailError && <p className="text-red-500 text-xs">{emailError}</p>}
+                  <button type="submit" disabled={emailLoading}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
+                    {emailLoading
+                      ? (lang === 'ko' ? '전송 중…' : 'Sending…')
+                      : (lang === 'ko' ? '로그인 링크 전송' : 'Send Sign-in Link')}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         );
@@ -759,7 +803,7 @@
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 {T.exportCSV}
               </button>
-              <button onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+              <button onClick={handleLogout} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
             </div>
           </div>
 
@@ -1053,7 +1097,7 @@
                     {editingId && <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]"><span className="text-sm md:text-base">{T.editMode}</span></div>}
                     
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === 'Pending' ? 'text-blue-600 bg-blue-50' : form.status === 'Back up' ? 'text-orange-600 bg-orange-50' : form.status === '미납' ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option><option value="미납">미납</option></select></div>
-                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option><option value="미정">미정</option><option value="Ship confirm">Ship confirm</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
                     <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Sales Type</label><select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="Direct">Direct</option><option value="Indirect">Indirect</option></select></div>
