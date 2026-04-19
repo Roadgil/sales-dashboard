@@ -43,12 +43,7 @@
       return `${y}-${q}`;
     }
 
-    // ── 이메일 링크 전송 (Firebase Passwordless)
     const ALLOWED_DOMAIN = '@candelamedical.com';
-    const actionCodeSettings = {
-      url: window.location.href.split('?')[0],
-      handleCodeInApp: true,
-    };
 
     const { useState, useEffect } = React;
 
@@ -72,69 +67,25 @@
       const [authLoading, setAuthLoading] = useState(true);
       const isLoggedIn = !!authUser;
 
-      // ── 이메일 링크 로그인 UI 상태
+      // ── 이메일 + 비밀번호 로그인 UI 상태
       const [emailInput, setEmailInput] = useState('');
-      const [emailSent, setEmailSent] = useState(false);
-      const [emailError, setEmailError] = useState('');
-      const [emailLoading, setEmailLoading] = useState(false);
+      const [pwdInput, setPwdInput] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [loginLoading, setLoginLoading] = useState(false);
 
-      // ── Edge 대응: localStorage 차단 시 이메일 재입력 UI
-      const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
-      const [confirmEmail, setConfirmEmail] = useState('');
-      const [confirmError, setConfirmError] = useState('');
-      const [pendingLink, setPendingLink] = useState('');
-
-      // ── localStorage 안전 읽기/쓰기 (Edge tracking prevention 대응)
+      // ── localStorage 안전 읽기/쓰기 (Edge 대응)
       const safeGet = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
       const safeSet = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
       const safeRemove = (key) => { try { localStorage.removeItem(key); } catch(e) {} };
 
-      const completeSignIn = (email, link) => {
-        auth.signInWithEmailLink(email, link)
-          .then(() => {
-            safeRemove('emailForSignIn');
-            sessionStorage.removeItem('pendingSignInLink');
-            window.history.replaceState({}, document.title, window.location.pathname);
-            setNeedsEmailConfirm(false);
-          })
-          .catch(err => {
-            console.error('Sign-in error:', err.code, err.message);
-            const msg = err.code === 'auth/invalid-action-code'
-              ? (lang === 'ko' ? '링크가 만료되었거나 이미 사용된 링크입니다. 다시 로그인 링크를 요청해주세요.' : 'Link expired or already used. Please request a new sign-in link.')
-              : err.code === 'auth/invalid-email'
-              ? (lang === 'ko' ? '이메일 주소가 일치하지 않습니다.' : 'Email address does not match.')
-              : `${lang === 'ko' ? '인증 실패' : 'Auth failed'}: ${err.code}`;
-            setConfirmError(msg);
-          });
-      };
-
       // ── Firebase Auth 상태 감지 + 분기별 재인증
       useEffect(() => {
-        // 이메일 링크 클릭 후 리다이렉트 처리
-        if (auth.isSignInWithEmailLink(window.location.href)) {
-          const currentLink = window.location.href;
-          // sessionStorage에도 백업 (Edge 등 localStorage 차단 대응)
-          try { sessionStorage.setItem('pendingSignInLink', currentLink); } catch(e) {}
-          const email = safeGet('emailForSignIn');
-          if (email) {
-            // localStorage에서 이메일 읽기 성공 (Chrome 등)
-            completeSignIn(email, currentLink);
-          } else {
-            // Edge 등 localStorage 차단 → 재입력 UI 표시
-            setPendingLink(currentLink);
-            setNeedsEmailConfirm(true);
-            setAuthLoading(false);
-          }
-        }
-
         const unsubscribe = auth.onAuthStateChanged(user => {
           if (user) {
-            // 도메인 체크
             if (!user.email.endsWith(ALLOWED_DOMAIN)) {
               auth.signOut();
               setAuthUser(null);
             } else {
-              // 분기별 재인증 체크
               const savedQ = safeGet('authQuarterKey');
               const currentQ = getCurrentQuarterKey();
               if (savedQ !== currentQ) {
@@ -155,44 +106,27 @@
 
       // 로그인 성공 시 분기 키 저장
       useEffect(() => {
-        if (authUser) {
-          safeSet('authQuarterKey', getCurrentQuarterKey());
-        }
+        if (authUser) safeSet('authQuarterKey', getCurrentQuarterKey());
       }, [authUser]);
 
-      const handleSendLink = async (e) => {
+      const handleLogin = async (e) => {
         e.preventDefault();
-        setEmailError('');
+        setLoginError('');
         const email = emailInput.trim().toLowerCase();
         if (!email.endsWith(ALLOWED_DOMAIN)) {
-          setEmailError(lang === 'ko'
-            ? `@candelamedical.com 메일 주소만 허용됩니다.`
-            : `Only @candelamedical.com addresses are allowed.`);
+          setLoginError(lang === 'ko' ? '@candelamedical.com 메일 주소만 허용됩니다.' : 'Only @candelamedical.com addresses are allowed.');
           return;
         }
-        setEmailLoading(true);
+        setLoginLoading(true);
         try {
-          await auth.sendSignInLinkToEmail(email, actionCodeSettings);
-          safeSet('emailForSignIn', email);
-          setEmailSent(true);
+          await auth.signInWithEmailAndPassword(email, pwdInput);
         } catch (err) {
-          console.error('Send link error:', err.code, err.message);
-          setEmailError(`${lang === 'ko' ? '전송 실패' : 'Send failed'}: ${err.code}`);
+          const msg = (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')
+            ? (lang === 'ko' ? '이메일 또는 비밀번호가 올바르지 않습니다.' : 'Invalid email or password.')
+            : `${lang === 'ko' ? '로그인 실패' : 'Login failed'}: ${err.code}`;
+          setLoginError(msg);
         }
-        setEmailLoading(false);
-      };
-
-      const handleConfirmEmail = (e) => {
-        e.preventDefault();
-        setConfirmError('');
-        const email = confirmEmail.trim().toLowerCase();
-        if (!email.endsWith(ALLOWED_DOMAIN)) {
-          setConfirmError(lang === 'ko' ? '@candelamedical.com 메일 주소를 입력해주세요.' : 'Please enter your @candelamedical.com address.');
-          return;
-        }
-        // pendingLink 상태가 없으면 sessionStorage에서 복구
-        const link = pendingLink || sessionStorage.getItem('pendingSignInLink') || window.location.href;
-        completeSignIn(email, link);
+        setLoginLoading(false);
       };
 
       const handleLogout = () => {
@@ -615,41 +549,6 @@
         );
       }
 
-      // Edge 등 localStorage 차단 시: 링크 클릭 후 이메일 재입력 화면
-      if (needsEmailConfirm) {
-        return (
-          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
-            <LangBtn lang={lang} setLang={setLang} />
-            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
-              <div className="text-4xl mb-4">🔐</div>
-              <h2 className="text-xl font-extrabold text-slate-800 mb-2">
-                {lang === 'ko' ? '이메일 확인' : 'Confirm your email'}
-              </h2>
-              <p className="text-slate-500 text-sm mb-6">
-                {lang === 'ko'
-                  ? '보안을 위해 로그인에 사용한 이메일 주소를 다시 입력해주세요.'
-                  : 'For security, please re-enter the email address you used to sign in.'}
-              </p>
-              <form onSubmit={handleConfirmEmail} className="flex flex-col space-y-4">
-                <input
-                  type="email"
-                  value={confirmEmail}
-                  onChange={(e) => { setConfirmEmail(e.target.value); setConfirmError(''); }}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center text-sm"
-                  placeholder="name@candelamedical.com"
-                  autoFocus
-                />
-                {confirmError && <p className="text-red-500 text-xs">{confirmError}</p>}
-                <button type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
-                  {lang === 'ko' ? '확인 후 입장' : 'Confirm & Enter'}
-                </button>
-              </form>
-            </div>
-          </div>
-        );
-      }
-
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
@@ -657,46 +556,31 @@
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
               <div className="text-4xl mb-4">📊</div>
               <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
-              {emailSent ? (
-                <div>
-                  <div className="text-5xl mb-4">📧</div>
-                  <p className="text-slate-600 text-sm mb-2">
-                    {lang === 'ko'
-                      ? `${emailInput} 으로 로그인 링크를 전송했습니다.`
-                      : `A sign-in link was sent to ${emailInput}.`}
-                  </p>
-                  <p className="text-slate-400 text-xs">
-                    {lang === 'ko' ? '메일함을 확인하고 링크를 클릭해주세요.' : 'Check your inbox and click the link.'}
-                  </p>
-                  <button onClick={() => { setEmailSent(false); setEmailInput(''); }}
-                    className="mt-6 text-blue-500 text-xs underline">
-                    {lang === 'ko' ? '다시 시도' : 'Try again'}
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleSendLink} className="flex flex-col space-y-4">
-                  <p className="text-slate-500 text-sm">
-                    {lang === 'ko'
-                      ? 'Candela Medical 회사 이메일로 로그인 링크를 전송합니다.'
-                      : 'Enter your Candela Medical email to receive a sign-in link.'}
-                  </p>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => { setEmailInput(e.target.value); setEmailError(''); }}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center text-sm"
-                    placeholder="name@candelamedical.com"
-                    autoFocus
-                  />
-                  {emailError && <p className="text-red-500 text-xs">{emailError}</p>}
-                  <button type="submit" disabled={emailLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
-                    {emailLoading
-                      ? (lang === 'ko' ? '전송 중…' : 'Sending…')
-                      : (lang === 'ko' ? '로그인 링크 전송' : 'Send Sign-in Link')}
-                  </button>
-                </form>
-              )}
+              <p className="text-slate-500 text-sm mb-6">
+                {lang === 'ko' ? '회사 이메일과 비밀번호로 로그인하세요.' : 'Sign in with your company email and password.'}
+              </p>
+              <form onSubmit={handleLogin} className="flex flex-col space-y-3">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setLoginError(''); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="name@candelamedical.com"
+                  autoFocus
+                />
+                <input
+                  type="password"
+                  value={pwdInput}
+                  onChange={(e) => { setPwdInput(e.target.value); setLoginError(''); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder={lang === 'ko' ? '비밀번호' : 'Password'}
+                />
+                {loginError && <p className="text-red-500 text-xs text-left">{loginError}</p>}
+                <button type="submit" disabled={loginLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
+                  {loginLoading ? (lang === 'ko' ? '로그인 중…' : 'Signing in…') : (lang === 'ko' ? '로그인' : 'Sign In')}
+                </button>
+              </form>
             </div>
           </div>
         );
