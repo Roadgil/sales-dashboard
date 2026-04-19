@@ -176,7 +176,8 @@
           safeSet('emailForSignIn', email);
           setEmailSent(true);
         } catch (err) {
-          setEmailError(lang === 'ko' ? '링크 전송 실패. 다시 시도해주세요.' : 'Failed to send link. Please try again.');
+          console.error('Send link error:', err.code, err.message);
+          setEmailError(`${lang === 'ko' ? '전송 실패' : 'Send failed'}: ${err.code}`);
         }
         setEmailLoading(false);
       };
