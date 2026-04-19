@@ -44,6 +44,7 @@
     }
 
     // ── 이메일 링크 전송 (Firebase Passwordless)
+    const ALLOWED_DOMAIN = '@candelamedical.com';
     const actionCodeSettings = {
       url: window.location.href.split('?')[0],
       handleCodeInApp: true,
@@ -134,10 +135,8 @@
         e.preventDefault();
         setEmailError('');
         const email = emailInput.trim().toLowerCase();
-        if (!email.endsWith(ALLOWED_DOMAIN)) {
-          setEmailError(lang === 'ko'
-            ? `@candelamedical.com 메일 주소만 허용됩니다.`
-            : `Only @candelamedical.com addresses are allowed.`);
+        if (!email.includes('@')) {
+          setEmailError(lang === 'ko' ? '올바른 이메일을 입력해주세요.' : 'Please enter a valid email.');
           return;
         }
         setEmailLoading(true);
