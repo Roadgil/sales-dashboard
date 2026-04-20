@@ -354,13 +354,30 @@
         }
       };
 
+      // ─── 멤버 삭제 비밀번호 모달 ────────────────────────────────────────
+      const [deleteMemberTarget, setDeleteMemberTarget] = useState(null); // 삭제 대상 멤버명
+      const [deleteMemberPwd, setDeleteMemberPwd] = useState('');
+      const [deleteMemberPwdError, setDeleteMemberPwdError] = useState(false);
+
       const deleteMember = (memberName, e) => {
         e.stopPropagation();
-        if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return;
+        setDeleteMemberTarget(memberName);
+        setDeleteMemberPwd('');
+        setDeleteMemberPwdError(false);
+      };
+
+      const confirmDeleteMember = () => {
+        if (deleteMemberPwd !== SECRET_PASSWORD) {
+          setDeleteMemberPwdError(true);
+          setDeleteMemberPwd('');
+          return;
+        }
         const newTeams = { ...teams };
-        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
+        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== deleteMemberTarget);
         setTeams(newTeams);
         db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+        setDeleteMemberTarget(null);
+        setDeleteMemberPwd('');
       };
 
       const addQuarter = () => {
@@ -677,7 +694,52 @@
         <div className="flex flex-col md:flex-row h-screen font-sans">
           <LangBtn lang={lang} setLang={setLang} />
 
-          {/* ── 분기 요약 지표 비밀번호 모달 ── */}
+          {/* ── 멤버 삭제 비밀번호 모달 ── */}
+          {deleteMemberTarget && (
+            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
+              onClick={() => { setDeleteMemberTarget(null); setDeleteMemberPwd(''); setDeleteMemberPwdError(false); }}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
+                onClick={e => e.stopPropagation()}>
+                <div style={{fontSize:'32px',marginBottom:'8px'}}>🗑️</div>
+                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>
+                  {lang==='ko' ? '멤버 삭제 확인' : 'Confirm Member Deletion'}
+                </h3>
+                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'4px'}}>
+                  {lang==='ko' ? '아래 멤버를 삭제합니다:' : 'You are about to delete:'}
+                </p>
+                <p style={{fontSize:'15px',fontWeight:'800',color:'#dc2626',marginBottom:'16px'}}>
+                  {deleteMemberTarget}
+                </p>
+                <p style={{fontSize:'12px',color:'#94a3b8',marginBottom:'16px'}}>
+                  {lang==='ko' ? '* 해당 멤버의 데이터는 삭제되지 않습니다.' : '* Their sales data will NOT be deleted.'}
+                </p>
+                <input
+                  type="password"
+                  autoFocus
+                  value={deleteMemberPwd}
+                  onChange={e => { setDeleteMemberPwd(e.target.value); setDeleteMemberPwdError(false); }}
+                  onKeyDown={e => e.key === 'Enter' && confirmDeleteMember()}
+                  placeholder="Password"
+                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border: deleteMemberPwdError ? '2px solid #ef4444' : '2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}}
+                />
+                {deleteMemberPwdError && (
+                  <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>
+                    {lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}
+                  </p>
+                )}
+                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
+                  <button onClick={() => { setDeleteMemberTarget(null); setDeleteMemberPwd(''); setDeleteMemberPwdError(false); }}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>
+                    {lang==='ko' ? '취소' : 'Cancel'}
+                  </button>
+                  <button onClick={confirmDeleteMember}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#dc2626',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>
+                    {lang==='ko' ? '삭제 확인' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {showSummaryPwdModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
               onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }}>
