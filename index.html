@@ -161,6 +161,7 @@
       const [memberTargets, setMemberTargets] = useState({
         'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000
       });
+      const [teamTargets, setTeamTargets] = useState({});
 
       const [quarterTargets, setQuarterTargets] = useState({
         '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 },
@@ -234,6 +235,10 @@
         const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot((doc) => {
           if (doc.exists) setMemberTargets(doc.data());
         });
+        // 3b. 팀 타겟
+        const unsubscribeTeamTargets = db.collection("targets").doc("teamTargets").onSnapshot((doc) => {
+          if (doc.exists) setTeamTargets(doc.data());
+        });
         // ✨ 4. 팀 구조 & 분기 리스트 (DB 저장 연동)
         const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
           if (doc.exists) {
@@ -247,7 +252,7 @@
         });
 
         return () => {
-          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeLayout();
+          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeTeamTargets(); unsubscribeLayout();
         };
       }, [isLoggedIn]);
 
@@ -292,6 +297,16 @@
         const newMemberTargets = { ...memberTargets, [member]: val };
         setMemberTargets(newMemberTargets);
         db.collection("targets").doc("memberTargets").set(newMemberTargets); 
+      };
+
+      const handleTeamTargetChange = (team, quarter, value) => {
+        const val = value === '' ? 0 : Number(value);
+        const newTeamTargets = {
+          ...teamTargets,
+          [team]: { ...(teamTargets[team] || {}), [quarter]: val }
+        };
+        setTeamTargets(newTeamTargets);
+        db.collection("targets").doc("teamTargets").set(newTeamTargets);
       };
 
       const handleEdit = (data) => {
@@ -979,28 +994,114 @@
 
                 {/* Team 목록 + All List 2-column */}
                 <div className="flex flex-col lg:flex-row gap-6 mb-10">
-                  {/* Left: 팀 멤버 목록 */}
+                  {/* Left: 팀 달성률 + 멤버 카드 */}
                   <div className="lg:w-80 flex-shrink-0">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg md:text-xl font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
-                      <button onClick={addMember} className="text-xs md:text-sm bg-blue-100 text-blue-700 font-bold px-3 md:px-4 py-2 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
+                    {/* ── 팀 목표 & 달성률 헤더 ── */}
+                    {(() => {
+                      const teamAct = Object.values(memberStats)
+                        .filter((_, i) => teams[selectedTeam]?.includes(Object.keys(memberStats)[i]))
+                        .reduce((s, v) => s + v.sumKRW, 0);
+                      // 멤버 기준으로 계산
+                      const teamActKRW = (teams[selectedTeam] || []).reduce((s, m) => s + (memberStats[m]?.sumKRW || 0), 0);
+                      const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
+                      const teamPer = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
+                      const perColor = teamPer >= 100 ? '#16a34a' : teamPer >= 80 ? '#2563eb' : teamPer >= 50 ? '#d97706' : '#dc2626';
+                      const barColor = teamPer >= 100 ? 'bg-green-500' : teamPer >= 80 ? 'bg-blue-500' : teamPer >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                      return (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
+                            <span className="font-extrabold text-lg" style={{color: perColor}}>
+                              {teamTarget > 0 ? `${teamPer.toFixed(1)}%` : '-'}
+                            </span>
+                          </div>
+                          {/* 팀 목표 입력 */}
+                          <div className="flex items-center gap-1 mb-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🎯 팀 목표</span>
+                            <span className="text-slate-400 font-bold text-xs mx-1">₩</span>
+                            <input
+                              type="number"
+                              value={teamTargets[selectedTeam]?.[selectedQuarter] || ''}
+                              onChange={e => handleTeamTargetChange(selectedTeam, selectedQuarter, e.target.value)}
+                              placeholder="목표 금액 입력"
+                              className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0"
+                              style={{borderBottom:'1.5px solid #cbd5e1'}}
+                            />
+                          </div>
+                          {/* 팀 누적 달성 */}
+                          <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+                            <span>{lang==='ko' ? '누적 (ACT+Pending)' : 'Cumulative (ACT+Pending)'}</span>
+                            <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
+                          </div>
+                          {/* 팀 달성률 바 */}
+                          {teamTarget > 0 && (
+                            <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner">
+                              <div className={`${barColor} h-full rounded-full transition-all duration-700`}
+                                style={{width:`${Math.min(teamPer, 100)}%`}} />
+                            </div>
+                          )}
+                          {teamTarget > 0 && (
+                            <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium">
+                              <span>0%</span>
+                              <span className="text-gray-500">100% = ₩ {teamTarget.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* 멤버 카드 */}
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-base font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
+                      <button onClick={addMember} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 gap-3">
                       {teams[selectedTeam].length === 0 ? (
                         <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
                       ) : (
-                        teams[selectedTeam].map(member => (
-                          <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
-                            <div className="flex justify-between items-start">
-                              <div className="text-xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
-                              <div className="flex gap-1">
-                                <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">{T.rename}</button>
-                                <button onClick={(e) => deleteMember(member, e)} className="text-xs text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-200">{T.delete}</button>
+                        teams[selectedTeam].map(member => {
+                          const mActKRW = memberStats[member]?.sumKRW || 0;
+                          const mTarget = memberTargets[member] || 0;
+                          const mPer = mTarget > 0 ? (mActKRW / mTarget) * 100 : 0;
+                          const mBarColor = mPer >= 100 ? 'bg-green-500' : mPer >= 80 ? 'bg-blue-500' : mPer >= 50 ? 'bg-amber-500' : 'bg-red-400';
+                          const mPerColor = mPer >= 100 ? 'text-green-600' : mPer >= 80 ? 'text-blue-600' : mPer >= 50 ? 'text-amber-600' : 'text-red-500';
+                          const mCount = memberStats[member]?.count || 0;
+                          return (
+                            <div key={member} onClick={() => setSelectedMember(member)}
+                              className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
+                              {/* 이름 + 버튼 */}
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div>
+                                  <div className="text-[10px] text-gray-400 mt-0.5">{mCount}{T.cases} · {T.memberSubtitle}</div>
+                                </div>
+                                <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                                  <button onClick={(e) => editMemberName(member, e)} className="text-[10px] text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-1.5 py-1 rounded border transition">{T.rename}</button>
+                                  <button onClick={(e) => deleteMember(member, e)} className="text-[10px] text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-1 rounded border border-red-200 transition">{T.delete}</button>
+                                </div>
                               </div>
+                              {/* 금액 + 달성률 */}
+                              <div className="flex justify-between items-end mb-1.5">
+                                <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
+                                <span className={`text-xs font-extrabold ${mPerColor}`}>
+                                  {mTarget > 0 ? `${mPer.toFixed(1)}%` : '목표 미설정'}
+                                </span>
+                              </div>
+                              {/* 달성률 바 */}
+                              {mTarget > 0 && (
+                                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
+                                  <div className={`${mBarColor} h-full rounded-full transition-all duration-700`}
+                                    style={{width:`${Math.min(mPer, 100)}%`}} />
+                                </div>
+                              )}
+                              {mTarget > 0 && (
+                                <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">
+                                  Target ₩ {mTarget.toLocaleString()}
+                                </div>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500 mt-2 font-medium">{T.memberSubtitle}</div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
