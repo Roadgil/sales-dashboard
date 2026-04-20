@@ -74,7 +74,7 @@
     );
 
     const ReportApp = () => {
-      const SECRET_PASSWORD = "candelakoreasales"; 
+      const SECRET_PASSWORD = "dladydcjf"; 
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
       const [pwdInput, setPwdInput] = useState('');
@@ -195,7 +195,7 @@
       // ③ 월 Total / Q Budget 퍼센트
       const formatPct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '-';
 
-      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && (d.status === 'FCST' || d.status === 'ACT'));
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && d.shipConfirm === 'Yes');
 
       let rows = [];
       // ② Team 1부터 오름차순 정렬
