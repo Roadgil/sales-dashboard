@@ -11,6 +11,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
 <body className="bg-gray-100">
@@ -50,8 +51,89 @@
       const SECRET_PASSWORD = "dladydcjf"; 
 
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
-      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
-      const [pwdInput, setPwdInput] = useState('');
+      const [isLoggedIn, setIsLoggedIn]   = useState(false);
+      const [authChecking, setAuthChecking] = useState(true); // Firebase 인증 상태 확인 중
+      const [authUser, setAuthUser] = useState(null);         // 로그인된 유저 이메일
+
+      // ── 이메일 링크 로그인 UI 상태 ──
+      const [emailInput, setEmailInput] = useState('');
+      const [linkSent, setLinkSent]     = useState(false);
+      const [sendingLink, setSendingLink] = useState(false);
+      const [emailError, setEmailError]  = useState('');
+
+      const ALLOWED_DOMAIN = 'candelamedical.com';
+
+      // ── Firebase Auth 초기화 (페이지 로드 시 1회) ──
+      useEffect(() => {
+        // 1) 이메일 링크 클릭 후 돌아온 경우 — sign-in 완료
+        if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
+          let email = localStorage.getItem('emailForSignIn');
+          if (!email) {
+            email = window.prompt('보안 확인: 이메일 주소를 다시 입력해주세요.');
+          }
+          if (email) {
+            firebase.auth().signInWithEmailLink(email, window.location.href)
+              .then(() => {
+                localStorage.removeItem('emailForSignIn');
+                // URL 파라미터 제거
+                window.history.replaceState({}, document.title, window.location.pathname);
+              })
+              .catch(() => {
+                setEmailError('인증 링크가 만료되었거나 이미 사용된 링크입니다. 다시 요청해주세요.');
+                setAuthChecking(false);
+              });
+          } else {
+            setAuthChecking(false);
+          }
+        }
+
+        // 2) Auth 상태 변화 감지
+        const unsubscribeAuth = firebase.auth().onAuthStateChanged(user => {
+          if (user && user.email && user.email.endsWith('@' + ALLOWED_DOMAIN)) {
+            setIsLoggedIn(true);
+            setAuthUser(user.email);
+          } else {
+            setIsLoggedIn(false);
+            setAuthUser(null);
+            if (user) firebase.auth().signOut(); // 허용 도메인 아니면 즉시 로그아웃
+          }
+          setAuthChecking(false);
+        });
+
+        return () => unsubscribeAuth();
+      }, []);
+
+      // ── 이메일 링크 발송 ──
+      const handleSendLink = (e) => {
+        e.preventDefault();
+        const email = emailInput.trim().toLowerCase();
+        if (!email) { setEmailError(lang==='ko' ? '이메일을 입력해주세요.' : 'Please enter your email.'); return; }
+        if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
+          setEmailError(lang==='ko'
+            ? `@${ALLOWED_DOMAIN} 이메일만 접근 가능합니다.`
+            : `Only @${ALLOWED_DOMAIN} emails are allowed.`);
+          return;
+        }
+        setSendingLink(true);
+        setEmailError('');
+        const actionCodeSettings = {
+          url: window.location.origin + window.location.pathname,
+          handleCodeInApp: true,
+        };
+        firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings)
+          .then(() => {
+            localStorage.setItem('emailForSignIn', email);
+            setLinkSent(true);
+            setSendingLink(false);
+          })
+          .catch((err) => {
+            setEmailError(lang==='ko'
+              ? '이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.'
+              : 'Failed to send email. Please try again.');
+            setSendingLink(false);
+          });
+      };
+
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       const T = {
@@ -132,17 +214,6 @@
         cases:            lang==='ko' ? '건'                          : 'cs',
         gmppTargetPH:     lang==='ko' ? 'GMPP 목표 기입'              : 'Enter GMPP target',
         erPlaceholder:    lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
-      };
-
-      const handleLogin = (e) => {
-        e.preventDefault();
-        if (pwdInput === SECRET_PASSWORD) {
-          localStorage.setItem('adminAuth', 'true'); 
-          setIsLoggedIn(true);
-        } else {
-          alert(T.wrongPwd);
-          setPwdInput('');
-        }
       };
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
@@ -354,30 +425,13 @@
         }
       };
 
-      // ─── 멤버 삭제 비밀번호 모달 ────────────────────────────────────────
-      const [deleteMemberTarget, setDeleteMemberTarget] = useState(null); // 삭제 대상 멤버명
-      const [deleteMemberPwd, setDeleteMemberPwd] = useState('');
-      const [deleteMemberPwdError, setDeleteMemberPwdError] = useState(false);
-
       const deleteMember = (memberName, e) => {
         e.stopPropagation();
-        setDeleteMemberTarget(memberName);
-        setDeleteMemberPwd('');
-        setDeleteMemberPwdError(false);
-      };
-
-      const confirmDeleteMember = () => {
-        if (deleteMemberPwd !== SECRET_PASSWORD) {
-          setDeleteMemberPwdError(true);
-          setDeleteMemberPwd('');
-          return;
-        }
+        if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return;
         const newTeams = { ...teams };
-        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== deleteMemberTarget);
+        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
         setTeams(newTeams);
         db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
-        setDeleteMemberTarget(null);
-        setDeleteMemberPwd('');
       };
 
       const addQuarter = () => {
@@ -531,19 +585,84 @@
         return acc;
       }, {});
 
+      // ── Auth 상태 확인 중 ──
+      if (authChecking) {
+        return (
+          <div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center',background:'#1e293b',flexDirection:'column',gap:'16px'}}>
+            <div style={{width:'40px',height:'40px',border:'4px solid rgba(255,255,255,0.15)',borderTop:'4px solid #60a5fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
+            <p style={{color:'#94a3b8',fontSize:'14px',fontWeight:'600'}}>인증 확인 중...</p>
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        );
+      }
+
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
             <LangBtn lang={lang} setLang={setLang} />
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
-              <div className="text-4xl mb-4">📊</div>
-              <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
-              <p className="text-slate-500 text-sm mb-8">{T.loginSub}</p>
-              
-              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-                <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono text-center text-lg tracking-widest" placeholder="Password" autoFocus />
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">{T.loginBtn}</button>
-              </form>
+
+              {!linkSent ? (
+                <>
+                  <div className="text-4xl mb-4">🔐</div>
+                  <h2 className="text-2xl font-extrabold text-slate-800 mb-1">
+                    {lang==='ko' ? '영업 납품처 Dashboard' : 'Sales Delivery Dashboard'}
+                  </h2>
+                  <p className="text-slate-500 text-sm mb-1">
+                    {lang==='ko' ? '접근 권한 확인이 필요합니다.' : 'Authentication required.'}
+                  </p>
+                  <p className="text-blue-600 text-xs font-bold mb-7 bg-blue-50 py-1.5 px-3 rounded-full inline-block">
+                    @{ALLOWED_DOMAIN} 이메일만 접근 가능
+                  </p>
+
+                  <form onSubmit={handleSendLink} className="flex flex-col space-y-3">
+                    <input
+                      type="email"
+                      value={emailInput}
+                      onChange={e => { setEmailInput(e.target.value); setEmailError(''); }}
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 text-center text-sm font-mono transition"
+                      placeholder={`example@${ALLOWED_DOMAIN}`}
+                      autoFocus
+                    />
+                    {emailError && (
+                      <p className="text-red-500 text-xs font-bold bg-red-50 py-2 px-3 rounded-lg">{emailError}</p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={sendingLink}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-xl shadow-md transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      {sendingLink
+                        ? <><span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}} /> {lang==='ko' ? '발송 중...' : 'Sending...'}</>
+                        : (lang==='ko' ? '✉️ 로그인 링크 받기' : '✉️ Send Login Link')
+                      }
+                    </button>
+                  </form>
+                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl mb-5">📬</div>
+                  <h2 className="text-xl font-extrabold text-slate-800 mb-3">
+                    {lang==='ko' ? '이메일을 확인해주세요!' : 'Check your email!'}
+                  </h2>
+                  <p className="text-slate-500 text-sm mb-2">
+                    {lang==='ko' ? '아래 주소로 로그인 링크를 보냈습니다:' : 'A login link was sent to:'}
+                  </p>
+                  <p className="text-blue-600 font-bold text-sm mb-6 bg-blue-50 py-2 px-4 rounded-lg inline-block">{emailInput}</p>
+                  <p className="text-slate-400 text-xs mb-6">
+                    {lang==='ko'
+                      ? '이메일의 링크를 클릭하면 자동으로 로그인됩니다. 링크는 1시간 동안 유효합니다.'
+                      : 'Click the link in the email to sign in. The link is valid for 1 hour.'}
+                  </p>
+                  <button
+                    onClick={() => { setLinkSent(false); setEmailInput(''); setEmailError(''); }}
+                    className="text-sm text-slate-400 hover:text-blue-600 underline transition"
+                  >
+                    {lang==='ko' ? '다른 이메일로 다시 시도' : 'Try a different email'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         );
@@ -694,52 +813,7 @@
         <div className="flex flex-col md:flex-row h-screen font-sans">
           <LangBtn lang={lang} setLang={setLang} />
 
-          {/* ── 멤버 삭제 비밀번호 모달 ── */}
-          {deleteMemberTarget && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setDeleteMemberTarget(null); setDeleteMemberPwd(''); setDeleteMemberPwdError(false); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🗑️</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>
-                  {lang==='ko' ? '멤버 삭제 확인' : 'Confirm Member Deletion'}
-                </h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'4px'}}>
-                  {lang==='ko' ? '아래 멤버를 삭제합니다:' : 'You are about to delete:'}
-                </p>
-                <p style={{fontSize:'15px',fontWeight:'800',color:'#dc2626',marginBottom:'16px'}}>
-                  {deleteMemberTarget}
-                </p>
-                <p style={{fontSize:'12px',color:'#94a3b8',marginBottom:'16px'}}>
-                  {lang==='ko' ? '* 해당 멤버의 데이터는 삭제되지 않습니다.' : '* Their sales data will NOT be deleted.'}
-                </p>
-                <input
-                  type="password"
-                  autoFocus
-                  value={deleteMemberPwd}
-                  onChange={e => { setDeleteMemberPwd(e.target.value); setDeleteMemberPwdError(false); }}
-                  onKeyDown={e => e.key === 'Enter' && confirmDeleteMember()}
-                  placeholder="Password"
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border: deleteMemberPwdError ? '2px solid #ef4444' : '2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}}
-                />
-                {deleteMemberPwdError && (
-                  <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>
-                    {lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}
-                  </p>
-                )}
-                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                  <button onClick={() => { setDeleteMemberTarget(null); setDeleteMemberPwd(''); setDeleteMemberPwdError(false); }}
-                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>
-                    {lang==='ko' ? '취소' : 'Cancel'}
-                  </button>
-                  <button onClick={confirmDeleteMember}
-                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#dc2626',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>
-                    {lang==='ko' ? '삭제 확인' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* ── 분기 요약 지표 비밀번호 모달 ── */}
           {showSummaryPwdModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
               onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }}>
@@ -812,7 +886,8 @@
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 {T.exportCSV}
               </button>
-              <button onClick={() => { localStorage.removeItem('adminAuth'); setIsLoggedIn(false); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+              <button onClick={() => { firebase.auth().signOut(); }} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+              {authUser && <p className="text-slate-500 text-[10px] mt-2 text-center truncate px-1">{authUser}</p>}
             </div>
           </div>
 
