@@ -7,6 +7,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+<!-- 공통 모듈 -->
+<script src="firebase-init.js"></script>
+<script src="common-utils.js"></script>
+<script src="lang.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 
@@ -274,20 +280,15 @@ function toggleLang() {
 </script>
 
 <script>
-// ── Firebase ──────────────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
-  authDomain: "sales-dashboard-d0d13.firebaseapp.com",
-  projectId: "sales-dashboard-d0d13",
-  storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
-  messagingSenderId: "870275096697",
-  appId: "1:870275096697:web:cd7373b77358681e21b4a8"
-};
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// ── Firebase 공통 모듈 사용 ───────────────────────────────────────
+// firebase-init.js 가 window.db, window.auth 를 노출함
+const db   = window.db;
+const auth = window.auth;
+const { filterRevenueRows, isCountedForRevenue, showToast } = window.AppCommon;
 
 // ── URL 파라미터 → 분기 ───────────────────────────────────────────
-const QUARTER = new URLSearchParams(window.location.search).get('quarter') || '2026 Q1';
+// 메인 대시보드 기본값과 일치시킴 (2026 Q2)
+const QUARTER = new URLSearchParams(window.location.search).get('quarter') || '2026 Q2';
 document.getElementById('pageTitle').textContent = `Detail Report · ${QUARTER} · Candela Korea`;
 document.getElementById('quarterBadge').textContent = QUARTER;
 document.getElementById('quarterSubLabel').textContent = QUARTER;
@@ -320,7 +321,9 @@ function makeChart(id, cfg) {
 
 // ── 메인 렌더 ─────────────────────────────────────────────────────
 function render(salesData, memberTargets) {
-  const qData = salesData.filter(d => d.quarter === QUARTER && (d.status === 'ACT' || d.status === 'Pending' || d.status === 'FCST'));
+  // ★★★ 매출 집계 기준 통일: ACT + Pending 만 집계 (Back up / 미납 제외)
+  // common-utils.js의 filterRevenueRows() 사용 — 모든 화면에서 동일.
+  const qData = filterRevenueRows(salesData.filter(d => d.quarter === QUARTER));
 
   // KPI 계산
   const totalKRW = qData.reduce((s, d) => s + (d.priceKRW || 0), 0);
@@ -557,26 +560,89 @@ function switchMemberTab(id, btn) {
 let _sales = [], _targets = {}, _loaded = { s: false, t: false, q: false };
 const tryRender = () => { if (_loaded.s && _loaded.t && _loaded.q) { render(_sales, _targets); applyLang(); } };
 
-// quarterTargets에서 현재 분기 ER 실시간 동기화 (index.html과 동일한 소스)
-db.collection("targets").doc("quarterTargets").onSnapshot(doc => {
-  if (doc.exists) {
-    const qTargets = doc.data();
-    _er = qTargets?.[QUARTER]?.er || 1389;
-  }
-  _loaded.q = true;
-  tryRender();
-});
+// 인증 후 데이터 구독 시작 (Firebase Auth 미로그인 시 차단)
+function startSubscriptions() {
+  // 분기별 query 제한 — 데이터 늘어나도 가벼움
+  db.collection("sales")
+    .where("quarter", "==", QUARTER)
+    .onSnapshot(
+      snap => {
+        _sales = snap.docs.map(d => d.data());
+        _loaded.s = true;
+        tryRender();
+      },
+      err => {
+        console.error('[sales onSnapshot]', err);
+        showToast('데이터를 불러오지 못했습니다.', 'error');
+      }
+    );
 
-db.collection("sales").onSnapshot(snap => {
-  _sales = snap.docs.map(d => d.data());
-  _loaded.s = true;
-  tryRender();
-});
-db.collection("targets").doc("memberTargets").onSnapshot(doc => {
-  if (doc.exists) _targets = doc.data();
-  _loaded.t = true;
-  tryRender();
-});
+  db.collection("targets").doc("memberTargets").onSnapshot(
+    doc => {
+      if (doc.exists) _targets = doc.data();
+      _loaded.t = true;
+      tryRender();
+    },
+    err => {
+      console.error('[memberTargets onSnapshot]', err);
+      showToast('목표 데이터를 불러오지 못했습니다.', 'error');
+    }
+  );
+
+  db.collection("targets").doc("quarterTargets").onSnapshot(
+    doc => {
+      if (doc.exists) {
+        const qTargets = doc.data();
+        _er = qTargets?.[QUARTER]?.er || 1389;
+      }
+      _loaded.q = true;
+      tryRender();
+    },
+    err => {
+      console.error('[quarterTargets onSnapshot]', err);
+      showToast('분기 목표 데이터를 불러오지 못했습니다.', 'error');
+    }
+  );
+}
+
+function showLoginGate(message) {
+  document.querySelector('.wrap').style.display = 'none';
+  let gate = document.getElementById('__login_gate');
+  if (gate) { gate.style.display = 'flex'; return; }
+  gate = document.createElement('div');
+  gate.id = '__login_gate';
+  gate.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#1e293b;color:#fff;font-family:"Noto Sans KR",sans-serif;z-index:99998;flex-direction:column;gap:14px;padding:20px;text-align:center;';
+  gate.innerHTML = `
+    <div style="font-size:18px;font-weight:700">🔒 ${message || '로그인이 필요합니다.'}</div>
+    <div style="font-size:13px;color:#94a3b8;max-width:360px;line-height:1.6">
+      Detail Report는 인증된 사용자만 조회할 수 있습니다.<br>
+      메인 Dashboard에서 로그인 후 다시 이 페이지를 열어주세요.
+    </div>
+    <a href="index.html" style="padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;margin-top:8px">메인 Dashboard로 이동</a>
+  `;
+  document.body.appendChild(gate);
+}
+
+if (auth) {
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      const gate = document.getElementById('__login_gate');
+      if (gate) gate.style.display = 'none';
+      document.querySelector('.wrap').style.display = '';
+      // 한 번만 구독 시작
+      if (!window.__subsStarted) {
+        window.__subsStarted = true;
+        startSubscriptions();
+      }
+    } else {
+      showLoginGate('로그인이 필요합니다.');
+    }
+  });
+} else {
+  // auth SDK 미로딩 시 fallback (구버전 호환)
+  console.warn('[dashboard_26] firebase.auth 미로드 — 인증 없이 동작');
+  startSubscriptions();
+}
 </script>
 </body>
 </html>

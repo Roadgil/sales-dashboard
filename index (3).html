@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>영업 납품처 FCST Dashboard</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+  <!-- 공통 모듈 (firebase-init.js / common-utils.js / lang.js) -->
+  <script src="firebase-init.js"></script>
+  <script src="common-utils.js"></script>
+  <script src="lang.js"></script>
+</head>
+<body className="bg-gray-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ── 공통 모듈에서 가져오기 ───────────────────────────────────
+    // firebase-init.js → window.db, window.auth
+    // common-utils.js  → window.AppCommon
+    const db   = window.db;
+    const auth = window.auth;
+    const {
+      filterRevenueRows,
+      isCountedForRevenue,
+      generateId,
+      validateSalesEntry,
+      showToast,
+      safeRun,
+      STATUS
+    } = window.AppCommon;
+
+    const { useState, useEffect } = React;
+
+    const LangBtn = ({ lang, setLang }) => (
+      <button
+        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999,
+          padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
+          background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
+          boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
+      >
+        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+      </button>
+    );
+
+    const App = () => {
+      const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
+      const [currentUser, setCurrentUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+      const [emailInput, setEmailInput] = useState('');
+      const [pwdInput, setPwdInput] = useState('');
+      const [authError, setAuthError] = useState('');
+      const [authMode, setAuthMode] = useState('login'); // 'login' | 'reset'
+      const [resetSent, setResetSent] = useState(false);
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+      const isLoggedIn = !!currentUser;
+
+      // Firebase Auth 상태 감지
+      useEffect(() => {
+        const unsub = auth.onAuthStateChanged(user => {
+          setCurrentUser(user);
+          setAuthLoading(false);
+        });
+        return () => unsub();
+      }, []);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        try {
+          await auth.signInWithEmailAndPassword(emailInput, pwdInput);
+        } catch (err) {
+          const msg = {
+            'auth/user-not-found':  lang==='ko' ? '등록되지 않은 이메일입니다.' : 'Email not registered.',
+            'auth/wrong-password':  lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.',
+            'auth/invalid-email':   lang==='ko' ? '이메일 형식이 올바르지 않습니다.' : 'Invalid email format.',
+            'auth/too-many-requests': lang==='ko' ? '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.' : 'Too many attempts. Please try again later.',
+            'auth/invalid-credential': lang==='ko' ? '이메일 또는 비밀번호가 올바르지 않습니다.' : 'Invalid email or password.',
+          }[err.code] || (lang==='ko' ? '로그인에 실패했습니다.' : 'Login failed.');
+          setAuthError(msg);
+        }
+      };
+
+      const handleLogout = () => {
+        auth.signOut();
+      };
+
+      const handlePasswordReset = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        try {
+          await auth.sendPasswordResetEmail(emailInput);
+          setResetSent(true);
+        } catch (err) {
+          const msg = {
+            'auth/user-not-found': lang==='ko' ? '등록되지 않은 이메일입니다.' : 'Email not registered.',
+            'auth/invalid-email':  lang==='ko' ? '이메일 형식이 올바르지 않습니다.' : 'Invalid email format.',
+          }[err.code] || (lang==='ko' ? '오류가 발생했습니다.' : 'An error occurred.');
+          setAuthError(msg);
+        }
+      };
+
+      const T = {
+        // Login
+        loginTitle:       lang==='ko' ? '영업 납품처 Dashboard'      : 'Sales Delivery Dashboard',
+        loginSub:         lang==='ko' ? '접근 권한이 필요합니다. 비밀번호를 입력해주세요.' : 'Access restricted. Please enter your password.',
+        loginBtn:         lang==='ko' ? '접속하기'                   : 'Log In',
+        wrongPwd:         lang==='ko' ? '비밀번호가 틀렸습니다. 다시 확인해주세요!' : 'Incorrect password. Please try again!',
+        noExportData:     lang==='ko' ? '추출할 데이터가 없습니다.'   : 'No data to export.',
+        noAccount:        lang==='ko' ? 'Account명(납품처)을 입력해주세요.' : 'Please enter the Account name.',
+        noDealer:         lang==='ko' ? 'Dealer Name 항목을 선택해주세요.' : 'Please select a Dealer Name.',
+        confirmDelete:    lang==='ko' ? '이 납품 데이터를 정말 삭제하시겠습니까?' : 'Are you sure you want to delete this entry?',
+        // 알림 / 에러 메시지
+        saveSuccess:      lang==='ko' ? '저장되었습니다.' : 'Saved successfully.',
+        saveFail:         lang==='ko' ? '저장에 실패했습니다.' : 'Save failed.',
+        updateSuccess:    lang==='ko' ? '업데이트되었습니다.' : 'Updated.',
+        deleteSuccess:    lang==='ko' ? '삭제되었습니다.' : 'Deleted.',
+        deleteFail:       lang==='ko' ? '삭제에 실패했습니다.' : 'Delete failed.',
+        loadFail:         lang==='ko' ? '데이터를 불러오지 못했습니다.' : 'Failed to load data.',
+        targetSaveFail:   lang==='ko' ? '목표값 저장에 실패했습니다.' : 'Failed to save target.',
+        // Sidebar
+        yearSuffix:       lang==='ko' ? '년'      : '',
+        addQuarterBtn:    lang==='ko' ? '+ 분기 추가' : '+ Add Quarter',
+        execReport:       lang==='ko' ? '📊 대표님 보고용 리포트' : '📊 Executive Report',
+        exportCSV:        lang==='ko' ? '엑셀 (CSV) 추출' : 'Export (CSV)',
+        logout:           lang==='ko' ? '로그아웃'  : 'Logout',
+        // Prompts
+        promptTeam:       lang==='ko' ? '추가할 탭 이름을 입력하세요 (예: Team 4)' : 'Enter new tab name (e.g. Team 4)',
+        promptMember:     lang==='ko' ? '에 추가할 멤버 이름을 입력하세요'          : ' — Enter new member name',
+        promptQuarter:    lang==='ko' ? '추가할 년도와 분기를 입력하세요 (예: 2026 Q3)' : 'Enter year and quarter (e.g. 2026 Q3)',
+        promptRename:     lang==='ko' ? '새로운 이름을 입력하세요'                  : 'Enter new name',
+        confirmDelMember: lang==='ko' ? '멤버를 삭제하시겠습니까?\n해당 멤버의 데이터는 삭제되지 않습니다.' : 'Delete this member?\nTheir data will NOT be deleted.',
+        // Dashboard
+        overallTarget:    lang==='ko' ? '🚀 전체 영업 목표 달성 현황' : '🚀 Overall Sales Target Achievement',
+        quarterSummary:   lang==='ko' ? '📋 분기 요약 지표 (Summary)' : '📋 Quarter Summary',
+        er:               lang==='ko' ? '적용 환율 (ER) ✏️'           : 'Exchange Rate (ER) ✏️',
+        targetKRWLabel:   lang==='ko' ? 'Target (KRW) ✏️'            : 'Target (KRW) ✏️',
+        targetPlaceholder:lang==='ko' ? '목표 금액 기입'               : 'Enter target amount',
+        estimated:        lang==='ko' ? '예상치 (KRW)'                : 'Estimated (KRW)',
+        gmppEstimated:    lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
+        attainRate:       lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
+        salesTypeShare:   lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
+        tabByEquip:       lang==='ko' ? '📊 장비별 전체'              : '📊 By Equipment',
+        tabDealer:        lang==='ko' ? '🤝 딜러 (전체)'              : '🤝 Dealers (All)',
+        tabMember:        lang==='ko' ? '🧑‍💼 멤버 달성률'              : '🧑‍💼 Member Achievement',
+        addTab:           lang==='ko' ? '+ 탭 추가'                   : '+ Add Tab',
+        addMember:        lang==='ko' ? '+ 항목 추가'                  : '+ Add Member',
+        memberList:       lang==='ko' ? '목록'                        : 'List',
+        noMembers:        lang==='ko' ? "등록된 항목이 없습니다. 우측 상단의 '+ 항목 추가' 버튼을 눌러주세요." : "No entries yet. Click '+ Add Member' above.",
+        memberSubtitle:   lang==='ko' ? '담당 납품처 및 데이터 관리 →' : 'Delivery & Data Management →',
+        rename:           lang==='ko' ? '✏️ 이름 수정'                : '✏️ Rename',
+        delete:           lang==='ko' ? '🗑️ 삭제'                    : '🗑️ Delete',
+        backBtn:          lang==='ko' ? '뒤로가기 (팀 목록)'           : 'Back (Team List)',
+        cumulative:       lang==='ko' ? '🎯 누적 달성 현황 (Pending + ACT)' : '🎯 Cumulative Achievement (Pending + ACT)',
+        target100label:   lang==='ko' ? '100% Target (KRW) ✏️ 직접기입' : '100% Target (KRW) ✏️ Manual',
+        targetPlaceholder2:lang==='ko'? '목표금액'                    : 'Target Amount',
+        editMode:         lang==='ko' ? '✨ 데이터 수정 모드 진행 중...' : '✨ Edit mode in progress...',
+        // Form labels
+        statusLabel:      lang==='ko' ? '상태 (Status)'              : 'Status',
+        contractLabel:    lang==='ko' ? '계약 구분 (Contract Type)'   : 'Contract Type',
+        contractDateLabel:lang==='ko' ? '계약일'                       : 'Contract Date',
+        deliveryLabel:    lang==='ko' ? '납품예정일'                   : 'Delivery Date',
+        selectRequired:   lang==='ko' ? '선택 (필수)'                 : 'Select (Required)',
+        accountLabel:     lang==='ko' ? 'Account (병원/납품처명)'      : 'Account (Hospital / Clinic)',
+        krwPlaceholder:   lang==='ko' ? '원화 입력 시 달러 자동계산'    : 'Enter KRW, USD auto-calculated',
+        saveEdit:         lang==='ko' ? '수정 완료'                   : 'Save Edit',
+        saveNew:          lang==='ko' ? '데이터 신규 저장'             : 'Save New',
+        cancelEdit:       lang==='ko' ? '수정 취소'                   : 'Cancel Edit',
+        // Tables
+        deliveryStatus:   lang==='ko' ? '✅ 납품 완료 현황 (ACT)'         : '✅ Delivery Completed (ACT)',
+        deliveryDate:     lang==='ko' ? '납품일'                      : 'Del. Date',
+        contractDate:     lang==='ko' ? '계약일'                      : 'Cont. Date',
+        contract:         lang==='ko' ? '계약'                        : 'Contract',
+        actions:          lang==='ko' ? '관리'                        : 'Actions',
+        noDelivery:       lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
+        editBtn:          lang==='ko' ? '수정'                        : 'Edit',
+        deleteBtn:        lang==='ko' ? '삭제'                        : 'Del',
+        pendingList:      lang==='ko' ? '📋 납품 예정 리스트 (Pending)' : '📋 Pending Delivery List',
+        noPending:        lang==='ko' ? '등록된 납품예정 데이터가 없습니다.' : 'No pending delivery data registered.',
+        backupList:       lang==='ko' ? '🗂️ Back up 리스트 (매출 미집계)' : '🗂️ Back up List (Excluded from Revenue)',
+        noBackup:         lang==='ko' ? '등록된 Back up 데이터가 없습니다.' : 'No back up data registered.',
+        minalList:        lang==='ko' ? '🔴 미납 리스트 (매출 미집계)' : '🔴 Unpaid List (Excluded from Revenue)',
+        noMinal:          lang==='ko' ? '등록된 미납 데이터가 없습니다.' : 'No unpaid data registered.',
+        currentEst:       lang==='ko' ? '현재 누적 예상치'             : 'Current Cumulative Estimate',
+        achievement:      lang==='ko' ? '달성률'                      : 'Achievement',
+        cases:            lang==='ko' ? '건'                          : 'cs',
+        gmppTargetPH:     lang==='ko' ? 'GMPP 목표 기입'              : 'Enter GMPP target',
+        erPlaceholder:    lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
+      };
+
+      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      
+      const [teams, setTeams] = useState({
+        'Team 1': ['Kim SH', 'Oh SG'],
+        'Team 2': ['Baek SC', 'Lee GR'],
+        'Team 3': ['YC lim']
+      });
+      const [selectedTeam, setSelectedTeam] = useState('Team 1');
+      const [selectedMember, setSelectedMember] = useState(null);
+
+      const [activeStatTab, setActiveStatTab] = useState('product'); 
+
+      const [memberTargets, setMemberTargets] = useState({
+        'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000
+      });
+
+      const [quarterTargets, setQuarterTargets] = useState({
+        '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 },
+        '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 }
+      });
+      const [salesData, setSalesData] = useState([]);
+
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const [form, setForm] = useState(initialForm);
+      const [editingId, setEditingId] = useState(null);
+
+      const DEFAULT_CARD_ORDER = ['er','targetKRW','targetUSD','incentiveKRW','incentiveUSD','estimatedKRW','estimatedUSD','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
+      const [cardOrder, setCardOrder] = useState(() => {
+        try { const s = localStorage.getItem('summaryCardOrder'); return s ? JSON.parse(s) : DEFAULT_CARD_ORDER; }
+        catch { return DEFAULT_CARD_ORDER; }
+      });
+
+      // 6가지 컬러 팔레트 정의
+      const CARD_PALETTES = {
+        slate:  { bg: '#f8fafc', border: '#cbd5e1', title: '#475569', value: '#1e293b', inputBorder: '#94a3b8', label: 'Slate' },
+        blue:   { bg: '#eff6ff', border: '#93c5fd', title: '#1d4ed8', value: '#1e3a5f', inputBorder: '#60a5fa', label: 'Blue' },
+        green:  { bg: '#f0fdf4', border: '#86efac', title: '#15803d', value: '#14532d', inputBorder: '#4ade80', label: 'Green' },
+        yellow: { bg: '#fefce8', border: '#fde047', title: '#a16207', value: '#713f12', inputBorder: '#facc15', label: 'Yellow' },
+        purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
+        rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
+      };
+      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
+      const [cardColors, setCardColors] = useState(() => {
+        try { const s = localStorage.getItem('summaryCardColors'); return s ? JSON.parse(s) : DEFAULT_CARD_COLORS; }
+        catch { return DEFAULT_CARD_COLORS; }
+      });
+      const [colorPickerOpen, setColorPickerOpen] = useState(null);
+
+      const setCardColor = (id, palette) => {
+        const next = { ...cardColors, [id]: palette };
+        setCardColors(next);
+        localStorage.setItem('summaryCardColors', JSON.stringify(next));
+        setColorPickerOpen(null);
+      };
+
+      useEffect(() => {
+        if (!isLoggedIn) return;
+
+        const onErr = (label) => (err) => {
+          console.error(`[${label} onSnapshot]`, err);
+          showToast(T.loadFail, 'error');
+        };
+
+        // 1. 판매 데이터 — 현재 분기로 query 제한 (데이터가 늘어도 가벼움)
+        const unsubscribeSales = db.collection("sales")
+          .where("quarter", "==", selectedQuarter)
+          .onSnapshot(
+            (snapshot) => { setSalesData(snapshot.docs.map(doc => doc.data())); },
+            onErr('sales')
+          );
+        // 2. 분기 타겟
+        const unsubscribeTargets = db.collection("targets").doc("quarterTargets").onSnapshot(
+          (doc) => { if (doc.exists) setQuarterTargets(doc.data()); },
+          onErr('quarterTargets')
+        );
+        // 3. 개인 타겟
+        const unsubscribeMemberTargets = db.collection("targets").doc("memberTargets").onSnapshot(
+          (doc) => { if (doc.exists) setMemberTargets(doc.data()); },
+          onErr('memberTargets')
+        );
+        // 4. 팀 구조 & 분기 리스트
+        const unsubscribeLayout = db.collection("settings").doc("layout").onSnapshot(
+          (doc) => {
+            if (doc.exists) {
+              const data = doc.data();
+              if (data.teams) setTeams(data.teams);
+              if (data.quarters) setQuarters(data.quarters);
+            } else {
+              // DB에 없으면 최초 생성
+              db.collection("settings").doc("layout").set({ teams, quarters })
+                .catch(err => console.error('[layout init]', err));
+            }
+          },
+          onErr('layout')
+        );
+
+        return () => {
+          unsubscribeSales(); unsubscribeTargets(); unsubscribeMemberTargets(); unsubscribeLayout();
+        };
+      }, [isLoggedIn, selectedQuarter]);
+
+      const handleSave = async () => {
+        // 강화된 검증: status, priceKRW, deliveryDate, salesType, member, quarter 모두 체크
+        const v = validateSalesEntry(form, {
+          quarter: selectedQuarter,
+          team: selectedTeam,
+          member: selectedMember
+        });
+        if (!v.ok) {
+          showToast(v.message, 'error');
+          return;
+        }
+
+        const payload = {
+          ...form,
+          priceKRW: Number(form.priceKRW) || 0,
+          priceUSD: Number(form.priceUSD) || 0,
+          // 신규 저장 시 충돌 방지를 위해 UUID 사용 (수정 시는 기존 id 유지)
+          id: editingId ? editingId : generateId(),
+          quarter: selectedQuarter,
+          team: selectedTeam,
+          member: selectedMember,
+          dealerName: form.dealerName,
+          updatedAt: new Date().toISOString()
+        };
+
+        const result = await safeRun(
+          () => db.collection("sales").doc(payload.id.toString()).set(payload),
+          {
+            successMsg: editingId ? T.updateSuccess : T.saveSuccess,
+            errorMsg:   T.saveFail
+          }
+        );
+        if (result.ok) {
+          setEditingId(null);
+          setForm(initialForm);
+        }
+      };
+
+      const deleteSalesData = async (id) => {
+        if (!window.confirm(T.confirmDelete)) return;
+        await safeRun(
+          () => db.collection("sales").doc(id.toString()).delete(),
+          { successMsg: T.deleteSuccess, errorMsg: T.deleteFail }
+        );
+      };
+
+      const handleTargetChange = (field, value) => {
+        const val = value === '' ? '' : Number(value);
+        const newTargets = {
+          ...quarterTargets,
+          [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val }
+        };
+        setQuarterTargets(newTargets);
+        // 비동기 저장 + 실패 시 토스트
+        db.collection("targets").doc("quarterTargets").set(newTargets)
+          .catch(err => {
+            console.error('[targets save]', err);
+            showToast(T.targetSaveFail, 'error');
+          });
+      };
+
+      const handleMemberTargetChange = (member, value) => {
+        const val = value === '' ? '' : Number(value);
+        const newMemberTargets = { ...memberTargets, [member]: val };
+        setMemberTargets(newMemberTargets);
+        db.collection("targets").doc("memberTargets").set(newMemberTargets)
+          .catch(err => {
+            console.error('[memberTargets save]', err);
+            showToast(T.targetSaveFail, 'error');
+          });
+      };
+
+      const handleEdit = (data) => {
+        setForm(data); setEditingId(data.id);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      // ✨ 팀/멤버/분기 추가 시 DB 연동
+      const addTeam = () => {
+        const newTeam = prompt(T.promptTeam);
+        if (newTeam && !teams[newTeam]) {
+          const newTeams = { ...teams, [newTeam]: [] };
+          setTeams(newTeams); setSelectedTeam(newTeam); setSelectedMember(null);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+        }
+      };
+
+      const addMember = () => {
+        const newMember = prompt(`${selectedTeam}${T.promptMember}`);
+        if (newMember && !teams[selectedTeam].includes(newMember)) {
+          const newTeams = { ...teams, [selectedTeam]: [...teams[selectedTeam], newMember] };
+          setTeams(newTeams); handleMemberTargetChange(newMember, 0);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+        }
+      };
+
+      const editMemberName = (oldName, e) => {
+        e.stopPropagation(); 
+        const newName = prompt(T.promptRename, oldName);
+        if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
+          const newTeams = { ...teams };
+          newTeams[selectedTeam] = newTeams[selectedTeam].map(m => m === oldName ? newName : m);
+          setTeams(newTeams);
+          db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+
+          const newTargets = { ...memberTargets };
+          if (newTargets[oldName] !== undefined) {
+            newTargets[newName] = newTargets[oldName];
+            delete newTargets[oldName];
+            db.collection("targets").doc("memberTargets").set(newTargets);
+          }
+          salesData.filter(d => d.member === oldName).forEach(d => {
+            db.collection("sales").doc(d.id.toString()).update({ member: newName });
+          });
+        }
+      };
+
+      const deleteMember = (memberName, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return;
+        const newTeams = { ...teams };
+        newTeams[selectedTeam] = newTeams[selectedTeam].filter(m => m !== memberName);
+        setTeams(newTeams);
+        db.collection("settings").doc("layout").set({ teams: newTeams }, { merge: true });
+      };
+
+      const addQuarter = () => {
+        const newQuarter = prompt(T.promptQuarter);
+        if (newQuarter && !quarters.includes(newQuarter)) {
+          const newQuarters = [...quarters, newQuarter].sort();
+          setQuarters(newQuarters); handleTargetChange('target', 0); 
+          db.collection("settings").doc("layout").set({ quarters: newQuarters }, { merge: true });
+        }
+      };
+
+      const currentER = quarterTargets[selectedQuarter]?.er || 1389;
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        if (name === 'priceKRW') {
+          const krwValue = value ? parseFloat(value) : 0;
+          const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
+          setForm({ ...form, priceKRW: value, priceUSD: usdValue });
+        } else if (name === 'salesType') {
+          setForm({ ...form, [name]: value, dealerName: '' });
+        } else {
+          setForm({ ...form, [name]: value });
+        }
+      };
+
+      // CSV Export 옵션 상태
+      // scope: 'all' | 'quarter' | 'member'
+      // includeBackup: Back up / 미납 포함 여부
+      const [exportOptions, setExportOptions] = useState({
+        scope: 'quarter',
+        includeBackup: false
+      });
+      const [exportPanelOpen, setExportPanelOpen] = useState(false);
+
+      const exportToCSV = (opts) => {
+        const o = opts || exportOptions;
+        if (!salesData || salesData.length === 0) {
+          showToast(T.noExportData, 'error');
+          return;
+        }
+
+        // 1) scope 필터
+        let filtered = salesData.slice();
+        if (o.scope === 'quarter') {
+          filtered = filtered.filter(d => d.quarter === selectedQuarter);
+        } else if (o.scope === 'member') {
+          filtered = filtered.filter(d => d.quarter === selectedQuarter && d.member === selectedMember);
+        }
+
+        // 2) Back up / 미납 포함 여부
+        if (!o.includeBackup) {
+          filtered = filtered.filter(d => d.status === 'ACT' || d.status === 'Pending');
+        }
+
+        if (filtered.length === 0) {
+          showToast(T.noExportData, 'error');
+          return;
+        }
+
+        const headers = ['Quarter', 'Team', 'Member', 'Status', 'Contract Type', 'Contract Date', 'Delivery Date', 'Sales Type', 'Dealer Name', 'SO', 'Account', 'Product', 'Acc Type', 'Price(KRW)', 'Price(USD)'];
+        const rows = filtered.map(d => [d.quarter, d.team, d.member, d.status, d.contractType, d.contractDate, d.deliveryDate, d.salesType, d.dealerName, d.so, d.account, d.product, d.accType, d.priceKRW, d.priceUSD]);
+        const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell == null ? '' : cell).replace(/"/g, '""')}"`).join(','))].join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url;
+        const today = new Date().toISOString().slice(0,10);
+        const scopeTag = o.scope === 'all' ? 'ALL' : (o.scope === 'member' ? `${selectedMember}` : selectedQuarter.replace(/\s+/g,'_'));
+        const backupTag = o.includeBackup ? 'with-backup' : 'ACT-Pending';
+        link.setAttribute('download', `Sales_${scopeTag}_${backupTag}_${today}.csv`);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast(`CSV ${filtered.length}건 내보내기 완료`, 'success');
+        setExportPanelOpen(false);
+      };
+
+      const moveCard = (idx, dir) => {
+        const next = [...cardOrder];
+        const to = idx + dir;
+        if (to < 0 || to >= next.length) return;
+        [next[idx], next[to]] = [next[to], next[idx]];
+        setCardOrder(next);
+        localStorage.setItem('summaryCardOrder', JSON.stringify(next));
+      };
+
+      const [dragOverIdx, setDragOverIdx] = useState(null);
+
+      const handleDragStart = (e, idx) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(idx));
+      };
+
+      const handleDragOver = (e, idx) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverIdx(idx);
+      };
+
+      const handleDrop = (e, toIdx) => {
+        e.preventDefault();
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        if (fromIdx === toIdx) { setDragOverIdx(null); return; }
+        const next = [...cardOrder];
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, moved);
+        setCardOrder(next);
+        localStorage.setItem('summaryCardOrder', JSON.stringify(next));
+        setDragOverIdx(null);
+      };
+
+      const handleDragEnd = () => setDragOverIdx(null);
+
+      // ─── Row order for ACT / Pending / Backup tables ───────────────────
+      const [rowOrders, setRowOrders] = useState({ ACT: {}, Pending: {}, Backup: {}, Minal: {} });
+      const [rowDragState, setRowDragState] = useState({ type: null, fromId: null, overId: null });
+
+      useEffect(() => {
+        if (!isLoggedIn) return;
+        const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => {
+          if (doc.exists) setRowOrders(doc.data());
+        });
+        return () => unsub();
+      }, [isLoggedIn]);
+
+      const saveRowOrders = (next) => {
+        setRowOrders(next);
+        db.collection("settings").doc("rowOrders").set(next);
+      };
+
+      const getOrderedRows = (status, rawRows) => {
+        const key = `${selectedQuarter}__${selectedMember}__${status}`;
+        const orderMap = rowOrders[status] && rowOrders[status][key];
+        if (!orderMap || orderMap.length === 0) return rawRows;
+        const idOrder = orderMap;
+        const mapped = {};
+        rawRows.forEach(r => { mapped[String(r.id)] = r; });
+        const ordered = idOrder.map(id => mapped[id]).filter(Boolean);
+        const rest = rawRows.filter(r => !idOrder.includes(String(r.id)));
+        return [...ordered, ...rest];
+      };
+
+      const handleRowDragStart = (e, status, rowId) => {
+        e.dataTransfer.effectAllowed = 'move';
+        setRowDragState({ type: status, fromId: String(rowId), overId: null });
+      };
+
+      const handleRowDragOver = (e, status, rowId) => {
+        e.preventDefault();
+        if (rowDragState.type !== status) return;
+        setRowDragState(s => ({ ...s, overId: String(rowId) }));
+      };
+
+      const handleRowDrop = (e, status, toRowId, rawRows) => {
+        e.preventDefault();
+        const { fromId } = rowDragState;
+        const toId = String(toRowId);
+        if (!fromId || fromId === toId) { setRowDragState({ type: null, fromId: null, overId: null }); return; }
+        const key = `${selectedQuarter}__${selectedMember}__${status}`;
+        const currentOrder = (rowOrders[status] && rowOrders[status][key]) || rawRows.map(r => String(r.id));
+        const fromIdx = currentOrder.indexOf(fromId);
+        const toIdx = currentOrder.indexOf(toId);
+        if (fromIdx === -1 || toIdx === -1) { setRowDragState({ type: null, fromId: null, overId: null }); return; }
+        const next = [...currentOrder];
+        next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, fromId);
+        const nextOrders = { ...rowOrders, [status]: { ...(rowOrders[status] || {}), [key]: next } };
+        saveRowOrders(nextOrders);
+        setRowDragState({ type: null, fromId: null, overId: null });
+      };
+
+      const handleRowDragEnd = () => setRowDragState({ type: null, fromId: null, overId: null });
+
+      const groupedQuarters = quarters.reduce((acc, q) => {
+        const [year, quarter] = q.split(' '); 
+        if (!acc[year]) acc[year] = [];
+        acc[year].push(quarter);
+        return acc;
+      }, {});
+
+      if (authLoading) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800">
+            <div className="text-white text-lg font-semibold animate-pulse">Loading...</div>
+          </div>
+        );
+      }
+
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
+            <LangBtn lang={lang} setLang={setLang} />
+            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <h2 className="text-2xl font-extrabold text-slate-800 mb-2">{T.loginTitle}</h2>
+
+              {authMode === 'login' ? (
+                <>
+                  <p className="text-slate-500 text-sm mb-6">{lang==='ko' ? '이메일과 비밀번호로 로그인하세요.' : 'Sign in with your email and password.'}</p>
+                  <form onSubmit={handleLogin} className="flex flex-col space-y-3 text-left">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang==='ko' ? '이메일' : 'Email'}</label>
+                      <input
+                        type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="example@company.com" autoFocus required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang==='ko' ? '비밀번호' : 'Password'}</label>
+                      <input
+                        type="password" value={pwdInput} onChange={e => setPwdInput(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="••••••••" required
+                      />
+                    </div>
+                    {authError && <p className="text-red-500 text-xs font-medium pt-1">{authError}</p>}
+                    <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200 mt-2">
+                      {lang==='ko' ? '로그인' : 'Log In'}
+                    </button>
+                  </form>
+                  <button
+                    onClick={() => { setAuthMode('reset'); setAuthError(''); setResetSent(false); }}
+                    className="mt-4 text-xs text-slate-400 hover:text-blue-500 underline transition"
+                  >
+                    {lang==='ko' ? '비밀번호를 잊으셨나요?' : 'Forgot your password?'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-500 text-sm mb-6">{lang==='ko' ? '가입한 이메일을 입력하면 재설정 링크를 보내드려요.' : 'Enter your email to receive a password reset link.'}</p>
+                  {resetSent ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700 text-sm font-medium">
+                      {lang==='ko' ? '✅ 재설정 이메일을 발송했습니다. 메일함을 확인해주세요.' : '✅ Reset email sent. Please check your inbox.'}
+                    </div>
+                  ) : (
+                    <form onSubmit={handlePasswordReset} className="flex flex-col space-y-3 text-left">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang==='ko' ? '이메일' : 'Email'}</label>
+                        <input
+                          type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="example@company.com" autoFocus required
+                        />
+                      </div>
+                      {authError && <p className="text-red-500 text-xs font-medium pt-1">{authError}</p>}
+                      <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200">
+                        {lang==='ko' ? '재설정 메일 보내기' : 'Send Reset Email'}
+                      </button>
+                    </form>
+                  )}
+                  <button
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    className="mt-4 text-xs text-slate-400 hover:text-blue-500 underline transition"
+                  >
+                    {lang==='ko' ? '← 로그인으로 돌아가기' : '← Back to Login'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      const currentQData = salesData.filter(d => d.quarter === selectedQuarter);
+      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
+      const targetKRW = currentTargets.target || 0;
+      const gmppTargetKRW = currentTargets.gmppTarget || 0;
+      const activeER = currentTargets.er || 1389;
+
+      const targetUSD = targetKRW / activeER;
+      const incentiveTargetKRW = targetKRW / 1.2;
+      const incentiveTargetUSD = targetUSD / 1.2;
+
+      // ★★★ 매출 집계 기준 통일: ACT + Pending 만 (Back up / 미납 제외)
+      // common-utils.js의 filterRevenueRows() 사용 — report.html / dashboard_26.html 과 동일.
+      const expectedData = filterRevenueRows(currentQData);
+      const expectedKRW = expectedData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const expectedUSD = expectedKRW / activeER;
+
+      const percent = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
+      const gapKRW = targetKRW - expectedKRW;
+
+      const gmppExpectedKRW = expectedData.filter(d => d.product === 'GMPP').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const gmppGapKRW = gmppTargetKRW - gmppExpectedKRW;
+
+      const memberActFcstData = selectedMember ? expectedData.filter(d => d.member === selectedMember) : [];
+      const memberACT = memberActFcstData.reduce((acc, cur) => acc + cur.priceKRW, 0);
+
+      const directKRW = expectedData.filter(d => d.salesType === 'Direct').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const indirectKRW = expectedData.filter(d => d.salesType === 'Indirect').reduce((acc, cur) => acc + cur.priceKRW, 0);
+      const directPer = expectedKRW > 0 ? (directKRW / expectedKRW) * 100 : 0;
+      const indirectPer = expectedKRW > 0 ? (indirectKRW / expectedKRW) * 100 : 0;
+      
+      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const productStats = {};
+      allProducts.forEach(p => productStats[p] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += cur.priceKRW; }});
+
+      const ALL_INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디', '동안기획', 'Bori', 'Beauko', '엠디마케팅', '티모티', '엘룩스코리아', 'seed group', 'Human', '기타'];
+      const allDealers = ['병원', ...ALL_INDIRECT_DEALERS];
+
+      // 딜러 통계: 데이터에 있는 딜러는 목록 외라도 모두 동적 집계
+      const dealerIndirectStats = {};
+      ALL_INDIRECT_DEALERS.forEach(d => dealerIndirectStats[d] = { count: 0, sumKRW: 0 });
+      expectedData.filter(d => d.salesType === 'Indirect').forEach(cur => {
+        const dealer = cur.dealerName || '기타';
+        if (!dealerIndirectStats[dealer]) dealerIndirectStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerIndirectStats[dealer].count += 1; dealerIndirectStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      const dealerDirectStats = { '병원': { count: 0, sumKRW: 0 } };
+      expectedData.filter(d => d.salesType === 'Direct').forEach(cur => {
+        const dealer = cur.dealerName || '병원';
+        if (!dealerDirectStats[dealer]) dealerDirectStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerDirectStats[dealer].count += 1; dealerDirectStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      // 전체 딜러 통계 (Direct + Indirect 합산, 데이터 기반 동적 생성)
+      const dealerAllStats = {};
+      allDealers.forEach(d => dealerAllStats[d] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => {
+        const dealer = cur.dealerName || (cur.salesType === 'Direct' ? '병원' : '기타');
+        if (!dealerAllStats[dealer]) dealerAllStats[dealer] = { count: 0, sumKRW: 0 };
+        dealerAllStats[dealer].count += 1; dealerAllStats[dealer].sumKRW += cur.priceKRW;
+      });
+
+      const allMembers = Object.values(teams).flat();
+      const memberStats = {};
+      allMembers.forEach(m => memberStats[m] = { count: 0, sumKRW: 0 });
+      expectedData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += cur.priceKRW; }});
+
+      const renderProgressBar = (actKRW, targetKRW) => {
+        if (!targetKRW) return null;
+        const target120 = targetKRW * 1.2;
+        const target140 = targetKRW * 1.4;
+        const target150 = targetKRW * 1.5;
+        const per = (actKRW / targetKRW) * 100;
+        const maxScale = Math.max(target150, actKRW * 1.05); 
+        return (
+          <div className="w-full mt-6 md:mt-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
+              <span className="text-sm font-bold text-gray-600 mb-2 md:mb-0">{T.currentEst}: ₩ {actKRW.toLocaleString()}</span>
+              <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{T.achievement}: {per.toFixed(1)}%</span>
+              <div className="hidden md:block absolute w-full -bottom-6 left-0 h-5">
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}>100%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600" style={{ left: `${(target120 / maxScale) * 100}%` }}>120%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-purple-600" style={{ left: `${(target140 / maxScale) * 100}%` }}>140%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-orange-500" style={{ left: `${(target150 / maxScale) * 100}%` }}>150%</div>
+              </div>
+            </div>
+            <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
+              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-xs md:text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${(actKRW / maxScale) * 100}%` }}>{per > 5 && `${per.toFixed(1)}%`}</div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500" style={{ left: `${(targetKRW / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300" style={{ left: `${(target120 / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left: `${(target140 / maxScale) * 100}%` }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-orange-400" style={{ left: `${(target150 / maxScale) * 100}%` }}></div>
+            </div>
+          </div>
+        );
+      };
+
+      const renderBarChart = (dataObj, colorClass) => {
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        const maxVal = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
+        return (
+          <div className="space-y-4">
+            {dataArr.map(([key, stat]) => {
+              const per = maxVal === 0 ? 0 : (stat.sumKRW / maxVal) * 100;
+              return (
+                <div key={key} className="flex flex-col">
+                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
+                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
+                    <span className="font-mono font-bold text-gray-700 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${per}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
+
+      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
+        const dataArr = Object.entries(dataObj).sort((a, b) => b[1].sumKRW - a[1].sumKRW);
+        return (
+          <div className="space-y-5">
+            {dataArr.map(([key, stat]) => {
+              const target = targetsObj[key] || 0;
+              const per = target === 0 ? 0 : (stat.sumKRW / target) * 100;
+              return (
+                <div key={key} className="flex flex-col">
+                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
+                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
+                    <div className="text-right flex flex-col">
+                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
+                      {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width: `${per > 100 ? 100 : per}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
+
+      return (
+        <div className="flex flex-col md:flex-row h-screen font-sans">
+          <LangBtn lang={lang} setLang={setLang} />
+          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
+            <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
+          </div>
+
+          <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
+            <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
+            <div className="flex-1">
+              {Object.entries(groupedQuarters).sort().reverse().map(([year, qList]) => (
+                <div key={year} className="mb-6">
+                  <h4 className="text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1">{year}{T.yearSuffix}</h4>
+                  <div className="space-y-1">
+                    {qList.sort().map(q => {
+                      const fullQ = `${year} ${q}`;
+                      return (
+                        <button key={fullQ} onClick={() => { setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter === fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <button onClick={addQuarter} className="w-full mt-2 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
+            </div>
+            
+            <div className="mt-8 border-t border-slate-600 pt-4">
+              <div className="mb-4">
+                <button onClick={() => window.open(`report.html?quarter=${encodeURIComponent(selectedQuarter)}`, '_blank')} className="w-full bg-slate-700 text-white font-extrabold py-3 rounded-lg hover:bg-slate-600 transition flex items-center justify-center shadow-lg border border-slate-500">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  {T.execReport}
+                </button>
+              </div>
+              <div className="w-full">
+                <button
+                  onClick={() => setExportPanelOpen(v => !v)}
+                  className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  {T.exportCSV}
+                </button>
+                {exportPanelOpen && (
+                  <div className="mt-2 p-3 bg-slate-700 rounded-lg text-xs text-slate-200 space-y-2">
+                    <div>
+                      <div className="font-bold mb-1 text-slate-300">{lang==='ko' ? '범위' : 'Scope'}</div>
+                      {[
+                        { v: 'quarter', ko: `현재 분기 (${selectedQuarter})`, en: `Current Quarter (${selectedQuarter})` },
+                        { v: 'member',  ko: `현재 분기 + 담당자${selectedMember ? ' ('+selectedMember+')' : ''}`, en: `Current Quarter + Member${selectedMember ? ' ('+selectedMember+')' : ''}` },
+                        { v: 'all',     ko: '전체', en: 'All' }
+                      ].map(opt => (
+                        <label key={opt.v} className={`flex items-center gap-2 py-1 cursor-pointer ${opt.v==='member' && !selectedMember ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <input
+                            type="radio"
+                            checked={exportOptions.scope === opt.v}
+                            onChange={() => setExportOptions({ ...exportOptions, scope: opt.v })}
+                          />
+                          <span>{lang==='ko' ? opt.ko : opt.en}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="border-t border-slate-600 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={exportOptions.includeBackup}
+                          onChange={e => setExportOptions({ ...exportOptions, includeBackup: e.target.checked })}
+                        />
+                        <span>{lang==='ko' ? 'Back up / 미납 포함' : 'Include Back up / Unpaid'}</span>
+                      </label>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {lang==='ko' ? '체크 안 하면 ACT + Pending 만 내보냄' : 'If unchecked, only ACT + Pending'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => exportToCSV()}
+                      className="w-full bg-green-500 hover:bg-green-400 text-white font-bold py-2 rounded transition"
+                    >
+                      {lang==='ko' ? '다운로드' : 'Download'}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button onClick={handleLogout} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+            </div>
+          </div>
+
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100">
+            {!selectedMember ? (
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
+                
+                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                  <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
+                  <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 mb-2">
+                    <div className="bg-gray-50 px-4 py-3 rounded shadow-sm border-l-4 border-gray-500 flex-1"><span className="text-xs text-gray-500 font-bold block">100% Target</span><span className="font-bold text-gray-800 text-base md:text-lg">₩ {targetKRW.toLocaleString()}</span></div>
+                    <div className="bg-green-50 px-4 py-3 rounded shadow-sm border-l-4 border-green-500 flex-1"><span className="text-xs text-green-600 font-bold block">120% Target</span><span className="font-bold text-green-700 text-base md:text-lg">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                    <div className="bg-purple-50 px-4 py-3 rounded shadow-sm border-l-4 border-purple-500 flex-1"><span className="text-xs text-purple-600 font-bold block">140% Target</span><span className="font-bold text-purple-700 text-base md:text-lg">₩ {(targetKRW * 1.4).toLocaleString()}</span></div>
+                  </div>
+                  {renderProgressBar(expectedKRW, targetKRW)}
+                </div>
+
+                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                  <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-lg md:text-xl font-bold text-gray-800">{T.quarterSummary}</h3>
+                    <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                      Detail Report
+                    </a>
+                  </div>
+                  {(() => {
+                    const titleCls = "block font-bold text-[13px] tracking-tight mb-2";
+                    const valueCls = "font-mono font-extrabold text-[17px] text-right px-1 block";
+                    const cardBase = "p-4 rounded-xl border flex flex-col justify-between shadow-sm min-h-[90px]";
+
+                    const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
+
+                    const allCards = {
+                      er: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.er}</span>
+                          <input type="number" value={activeER === 0 ? '' : activeER} onChange={(e) => handleTargetChange('er', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.erPlaceholder} />
+                        </div>;
+                      },
+                      targetKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.targetKRWLabel}</span>
+                          <input type="number" value={targetKRW === 0 ? '' : targetKRW} onChange={(e) => handleTargetChange('target', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.targetPlaceholder} />
+                        </div>;
+                      },
+                      targetUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Target (USD)</span>
+                          <span className={valueCls} style={{color:c.value}}>$ {targetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      incentiveKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Incentive Target (KRW) <span className="font-normal opacity-60 text-[11px]">÷120%</span></span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                        </div>;
+                      },
+                      incentiveUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>Incentive Target (USD) <span className="font-normal opacity-60 text-[11px]">÷120%</span></span>
+                          <span className={valueCls} style={{color:c.value}}>$ {incentiveTargetUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      estimatedKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.estimated}</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      estimatedUSD: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '예상치 ($)' : 'Estimated ($)'}</span>
+                          <span className={valueCls} style={{color:c.value}}>$ {expectedUSD.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                        </div>;
+                      },
+                      gapKRW: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GAP (KRW)</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      attainRate: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.attainRate}</span>
+                          <span className={valueCls} style={{color:c.value, fontSize:'19px'}}>{percent.toFixed(3)} %</span>
+                        </div>;
+                      },
+                      gmppTarget: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GMPP Target (KRW) ✏️</span>
+                          <input type="number" value={gmppTargetKRW === 0 ? '' : gmppTargetKRW} onChange={(e) => handleTargetChange('gmppTarget', e.target.value)} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`, color:c.value}} placeholder={T.gmppTargetPH} />
+                        </div>;
+                      },
+                      gmppEstimated: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>{T.gmppEstimated}</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                      gmppGap: (id) => {
+                        const c = C(id);
+                        return <div className={cardBase} style={{background:c.bg, borderColor:c.border}}>
+                          <span className={titleCls} style={{color:c.title}}>GMPP GAP (KRW)</span>
+                          <span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span>
+                        </div>;
+                      },
+                    };
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-sm">
+                        {cardOrder.map((id, idx) => (
+                          <div
+                            key={id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx)}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDrop={(e) => handleDrop(e, idx)}
+                            onDragEnd={handleDragEnd}
+                            className="relative group"
+                            style={{
+                              cursor: 'grab',
+                              opacity: dragOverIdx === idx ? 0.5 : 1,
+                              outline: dragOverIdx === idx ? '2px dashed #6366f1' : 'none',
+                              borderRadius: '12px',
+                              transition: 'opacity 0.15s, outline 0.15s',
+                            }}
+                          >
+                            {allCards[id](id)}
+                            {/* 색상 선택 버튼 */}
+                            <div
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                              onDragStart={(e) => e.stopPropagation()}
+                              draggable={false}
+                            >
+                              <button
+                                draggable={false}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); setColorPickerOpen(colorPickerOpen === id ? null : id); }}
+                                style={{
+                                  width:'20px', height:'20px', borderRadius:'50%',
+                                  background: CARD_PALETTES[cardColors[id]||'slate'].border,
+                                  border:'2px solid rgba(0,0,0,0.15)',
+                                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                                  boxShadow:'0 1px 4px rgba(0,0,0,0.18)',
+                                }}
+                                title="색상 변경"
+                              />
+                              {colorPickerOpen === id && (
+                                <div
+                                  draggable={false}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  style={{
+                                    position:'absolute', top:'26px', right:0,
+                                    background:'white', borderRadius:'10px', padding:'8px',
+                                    boxShadow:'0 4px 16px rgba(0,0,0,0.18)',
+                                    border:'1px solid #e2e8f0',
+                                    display:'flex', gap:'6px', zIndex:9999,
+                                  }}
+                                >
+                                  {Object.entries(CARD_PALETTES).map(([key, p]) => (
+                                    <button
+                                      key={key}
+                                      draggable={false}
+                                      onClick={(e) => { e.stopPropagation(); setCardColor(id, key); }}
+                                      title={p.label}
+                                      style={{
+                                        width:'20px', height:'20px', borderRadius:'50%',
+                                        background: p.bg,
+                                        border: cardColors[id] === key ? `3px solid ${p.title}` : `2px solid ${p.border}`,
+                                        cursor:'pointer',
+                                        boxShadow: cardColors[id] === key ? `0 0 0 1px ${p.title}` : 'none',
+                                        transition:'transform 0.1s',
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {/* 드래그 핸들 힌트 */}
+                            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-40 transition-opacity z-10 pointer-events-none select-none">
+                              <span style={{ fontSize:'13px', color:'#64748b', lineHeight:1 }}>⠿</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="mt-6 border-t border-slate-200 pt-5">
+                    <h4 className="text-[13px] font-bold text-slate-600 mb-2">{T.salesTypeShare}</h4>
+                    <div className="flex flex-col md:flex-row justify-between text-xs md:text-sm font-bold mb-2 md:mb-1">
+                      <span className="text-blue-600 mb-1 md:mb-0">Direct: ₩ {directKRW.toLocaleString()} ({directPer.toFixed(1)}%)</span>
+                      <span className="text-purple-600">Indirect: ₩ {indirectKRW.toLocaleString()} ({indirectPer.toFixed(1)}%)</span>
+                    </div>
+                    <div className="w-full h-3 md:h-4 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
+                      <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${directPer}%` }}></div>
+                      <div className="bg-purple-500 h-full transition-all duration-1000" style={{ width: `${indirectPer}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
+                  <div className="grid grid-cols-2 md:flex bg-gray-50 border-b">
+                    <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'product' ? 'bg-white text-blue-600 border-blue-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabByEquip}</button>
+                    <button onClick={() => setActiveStatTab('dealerAll')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'dealerAll' ? 'bg-white text-purple-600 border-purple-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabDealer}</button>
+                    <button onClick={() => setActiveStatTab('member')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab === 'member' ? 'bg-white text-emerald-600 border-emerald-600 md:border-b-2' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabMember}</button>
+                  </div>
+                  <div className="p-4 md:p-8">
+                    {activeStatTab === 'product' && renderBarChart(productStats, 'bg-blue-500')}
+                    {activeStatTab === 'dealerAll' && renderBarChart(dealerAllStats, 'bg-purple-500')}
+                    {activeStatTab === 'member' && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
+                  </div>
+                </div>
+                
+                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar">
+                  {Object.keys(teams).sort().map(team => (
+                    <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam === team ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
+                  ))}
+                  <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
+                </div>
+
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg md:text-xl font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
+                  <button onClick={addMember} className="text-xs md:text-sm bg-blue-100 text-blue-700 font-bold px-3 md:px-4 py-2 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-10">
+                  {teams[selectedTeam].length === 0 ? (
+                    <div className="col-span-1 md:col-span-2 p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
+                  ) : (
+                    teams[selectedTeam].map(member => (
+                      <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg hover:border-blue-400 hover:-translate-y-1 transition-all group relative">
+                        <div className="flex justify-between items-start">
+                          <div className="text-xl md:text-2xl font-bold text-gray-800 group-hover:text-blue-600">{member}</div>
+                          <div className="flex gap-1">
+                            <button onClick={(e) => editMemberName(member, e)} className="text-xs text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded transition border">{T.rename}</button>
+                            <button onClick={(e) => deleteMember(member, e)} className="text-xs text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-200">{T.delete}</button>
+                          </div>
+                        </div>
+                        <div className="text-xs md:text-sm text-gray-500 mt-2 font-medium">{T.memberSubtitle}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <button onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className="mb-4 flex items-center bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-slate-800 transition">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                  {T.backBtn}
+                </button>
+
+                <div className="bg-white p-4 md:p-8 rounded-xl shadow-md border border-gray-100 mb-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl md:text-3xl font-extrabold text-gray-800">{selectedMember} <span className="text-lg md:text-xl text-gray-500 font-medium block md:inline mt-1 md:mt-0">Account FCST</span></h3>
+                  </div>
+
+                  {memberTargets[selectedMember] !== undefined && (
+                    <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
+                      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
+                        <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative}</h4>
+                        <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
+                          <div className="flex flex-col bg-white px-2 py-2 rounded shadow-sm border-l-4 border-gray-500 border-2 flex-1 lg:flex-none">
+                            <span className="text-[10px] text-gray-500 block font-bold mb-1">{T.target100label}</span>
+                            <div className="flex items-center">
+                              <span className="font-bold text-sm mr-1 text-gray-700">₩</span>
+                              <input type="number" value={memberTargets[selectedMember] === 0 ? '' : memberTargets[selectedMember]} onChange={(e) => handleMemberTargetChange(selectedMember, e.target.value)} className="w-full md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-sm md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right" placeholder={T.targetPlaceholder2} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-green-500 flex-1 lg:flex-none"><span className="text-[10px] text-green-600 block font-bold">120% Target</span><span className="font-bold text-xs md:text-sm text-green-700 text-right">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-purple-500 flex-1 lg:flex-none"><span className="text-[10px] text-purple-600 block font-bold">140% Target</span><span className="font-bold text-xs md:text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-orange-500 flex-1 lg:flex-none"><span className="text-[10px] text-orange-500 block font-bold">150% Target</span><span className="font-bold text-xs md:text-sm text-orange-600 text-right">₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
+                        </div>
+                      </div>
+                      {renderProgressBar(memberACT, memberTargets[selectedMember])}
+                    </div>
+                  )}
+                  
+                  <form className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 bg-slate-50 p-4 md:p-6 rounded-lg border-2 transition ${editingId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'}`}>
+                    {editingId && <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-between items-center text-blue-600 font-bold mb-[-10px]"><span className="text-sm md:text-base">{T.editMode}</span></div>}
+                    
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel}</label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status === 'Pending' ? 'text-blue-600 bg-blue-50' : form.status === 'Back up' ? 'text-orange-600 bg-orange-50' : form.status === '미납' ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option><option value="미납">미납</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try & Buy</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel}</label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Sales Type</label><select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="Direct">Direct</option><option value="Indirect">Indirect</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
+                      <option value="">{T.selectRequired}</option>
+                      {form.salesType === 'Direct' ? (
+                        <>
+                          <option value="병원">병원</option>
+                          <option value="Innomed">Innomed</option>
+                          <option value="SEVEN U">SEVEN U</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="SEVEN U">SEVEN U</option>
+                          <option value="Innomed">Innomed</option>
+                          <option value="TMI">TMI</option>
+                          <option value="알펙스메디">알펙스메디</option>
+                          <option value="동안기획">동안기획</option>
+                          <option value="Bori">Bori</option>
+                          <option value="Beauko">Beauko</option>
+                          <option value="엠디마케팅">엠디마케팅</option>
+                          <option value="티모티">티모티</option>
+                          <option value="엘룩스코리아">엘룩스코리아</option>
+                          <option value="seed group">seed group</option>
+                          <option value="Human">Human</option>
+                          <option value="기타">기타</option>
+                        </>
+                      )}
+                    </select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.accountLabel}</label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)" /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_KR (₩)</label><input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder} /></div>
+                    <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`} /></div>
+                    
+                    <div className="col-span-1 md:col-span-2 lg:col-span-3 mt-2 text-right">
+                      <button type="button" onClick={handleSave} className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold w-full py-3 rounded shadow transition`}>{editingId ? T.saveEdit : T.saveNew}</button>
+                      {editingId && <button type="button" onClick={() => { setEditingId(null); setForm(initialForm); }} className="mt-4 text-sm text-gray-500 hover:underline ml-3">{T.cancelEdit}</button>}
+                    </div>
+                  </form>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-800">{T.deliveryStatus}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-blue-800 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT').length === 0 ? (
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'ACT');
+                            return getOrderedRows('ACT', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'ACT', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'ACT', row.id)}
+                                onDrop={e => handleRowDrop(e, 'ACT', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-green-50 hover:bg-green-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='ACT' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-green-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-green-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-700">{T.pendingList}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-blue-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-blue-700 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Pending').length === 0 ? (
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Pending');
+                            return getOrderedRows('Pending', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'Pending', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'Pending', row.id)}
+                                onDrop={e => handleRowDrop(e, 'Pending', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-blue-50 hover:bg-blue-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='Pending' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-blue-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-blue-200 hover:bg-blue-300 text-blue-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-orange-600">{T.backupList}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-orange-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-orange-500 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up').length === 0 ? (
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === 'Back up');
+                            return getOrderedRows('Backup', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'Backup', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'Backup', row.id)}
+                                onDrop={e => handleRowDrop(e, 'Backup', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-orange-50 hover:bg-orange-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='Backup' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-orange-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-orange-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-10">
+                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-red-600">{T.minalList}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-red-200 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead className="bg-red-500 text-white font-bold">
+                          <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+                        </thead>
+                        <tbody>
+                          {salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납').length === 0 ? (
+                            <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noMinal}</td></tr>
+                          ) : (() => {
+                            const rawRows = salesData.filter(d => d.quarter === selectedQuarter && d.member === selectedMember && d.status === '미납');
+                            return getOrderedRows('Minal', rawRows).map(row => (
+                              <tr key={row.id}
+                                draggable
+                                onDragStart={e => handleRowDragStart(e, 'Minal', row.id)}
+                                onDragOver={e => handleRowDragOver(e, 'Minal', row.id)}
+                                onDrop={e => handleRowDrop(e, 'Minal', row.id, rawRows)}
+                                onDragEnd={handleRowDragEnd}
+                                className={`border-b bg-red-50 hover:bg-red-100 transition cursor-grab active:cursor-grabbing ${rowDragState.type==='Minal' && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-red-400 opacity-70' : ''}`}>
+                                <td className="p-2 md:p-3 font-bold text-red-600 select-none">
+                                  <span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>
+                                  {row.status}
+                                </td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.contractDate || '-'}</td>
+                                <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || '-'}</td>
+                                <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType || '일반'}</td>
+                                <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType === 'Direct' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
+                                <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName || '-'}</td>
+                                <td className="p-2 md:p-3 font-mono text-gray-500">{row.so || '-'}</td>
+                                <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+                                <td className="p-2 md:p-3">{row.product}</td>
+                                <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {row.priceKRW.toLocaleString()}</td>
+                                <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {row.priceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className="p-2 md:p-3 text-center space-x-1"><button onClick={() => handleEdit(row)} className="text-[10px] md:text-xs bg-red-200 hover:bg-red-300 text-red-800 px-2 py-1 rounded font-bold transition">{T.editBtn}</button><button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+  
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</body>
+</html>
