@@ -54,16 +54,28 @@
       }}>{msg}</div>
     );
 
-    const LangBtn = ({ lang, setLang }) => (
-      <button
-        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
-        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999,
-          padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
-          background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
-          boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
-      >
-        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
-      </button>
+    const LangBtn = ({ lang, setLang, er }) => (
+      <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
+        {er && (
+          <div style={{
+            padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
+            background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
+            fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
+            boxShadow:'0 2px 8px rgba(0,0,0,0.3)'
+          }}>
+            <span style={{color:'#64748b'}}>ER</span>
+            <span style={{color:'#e2e8f0'}}>₩{er.toLocaleString()}</span>
+          </div>
+        )}
+        <button
+          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+          style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
+            background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
+            boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
+        >
+          {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+        </button>
+      </div>
     );
 
     const App = () => {
@@ -152,7 +164,7 @@
         er:                lang==='ko' ? '적용 환율 (ER) ✏️'           : 'Exchange Rate (ER) ✏️',
         targetKRWLabel:    lang==='ko' ? 'Target (KRW) ✏️'            : 'Target (KRW) ✏️',
         targetPlaceholder: lang==='ko' ? '목표 금액 기입'               : 'Enter target amount',
-        estimated:         lang==='ko' ? '예상치 KRW (ACT+Pending+SC)' : 'Estimated KRW (ACT+Pending+SC)',
+        estimated:         lang==='ko' ? '예상치 (ACT + Pending + SC)' : 'Estimated (ACT+Pending+SC)',
         gmppEstimated:     lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
         attainRate:        lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
         salesTypeShare:    lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
@@ -236,7 +248,7 @@
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
 
-      const DEFAULT_CARD_ORDER = ['er','targetKRW','targetUSD','incentiveKRW','incentiveUSD','estimatedKRW','estimatedUSD','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
+      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','shipConfirmKRW','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
       const [cardOrder, setCardOrder] = useState(() => { try { const s = localStorage.getItem('summaryCardOrder'); return s ? JSON.parse(s) : DEFAULT_CARD_ORDER; } catch { return DEFAULT_CARD_ORDER; } });
 
       const CARD_PALETTES = {
@@ -247,7 +259,7 @@
         purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
         rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
       };
-      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
+      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate', shipConfirmKRW:'slate' };
       const [cardColors, setCardColors]       = useState(() => { try { const s = localStorage.getItem('summaryCardColors'); return s ? JSON.parse(s) : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
@@ -303,7 +315,6 @@
         const errors = [];
         if (!form.account.trim())                              errors.push(T.valAccount);
         if (!form.status)                                      errors.push(T.valStatus);
-        if (!form.salesType)                                   errors.push(T.valSalesType);
         if (!form.dealerName)                                  errors.push(T.valDealer);
         if (!form.deliveryDate)                                errors.push(T.valDelivery);
         const krw = parseFloat(form.priceKRW);
@@ -315,8 +326,11 @@
 
         setIsSaving(true);
         const finalKRW = isNaN(krw) ? 0 : Math.round(krw);
+        const DIRECT_DEALERS = ['병원'];
+        const autoSalesType = DIRECT_DEALERS.includes(form.dealerName) ? 'Direct' : 'Indirect';
         const payload = {
           ...form,
+          salesType: autoSalesType,
           priceKRW: finalKRW,
           priceUSD: parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
           // [FIX #3] ID 생성: crypto.randomUUID() 로 충돌 방지
@@ -370,8 +384,6 @@
           const krwValue = value ? parseFloat(value) : 0;
           const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
           setForm({ ...form, priceKRW: value, priceUSD: usdValue });
-        } else if (name === 'salesType') {
-          setForm({ ...form, [name]: value, dealerName: '' });
         } else {
           setForm({ ...form, [name]: value });
         }
@@ -402,11 +414,11 @@
       const handleDrop      = (e, toIdx) => { e.preventDefault(); const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10); if (fromIdx === toIdx) { setDragOverIdx(null); return; } const next = [...cardOrder]; const [moved] = next.splice(fromIdx, 1); next.splice(toIdx, 0, moved); setCardOrder(next); localStorage.setItem('summaryCardOrder', JSON.stringify(next)); setDragOverIdx(null); };
       const handleDragEnd   = () => setDragOverIdx(null);
 
-      const [allListFilters, setAllListFilters] = useState({ team:[], member:[], status:[], account:[], product:[], salesType:[], dealer:[] });
+      const [allListFilters, setAllListFilters] = useState({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
       const [allListFilterOpen, setAllListFilterOpen] = useState(null);
       const toggleAllListFilter = (col, val) => setAllListFilters(prev => { const cur = prev[col]; return { ...prev, [col]: cur.includes(val) ? cur.filter(v => v!==val) : [...cur, val] }; });
       const clearAllListFilter  = (col) => setAllListFilters(prev => ({ ...prev, [col]: [] }));
-      const clearAllListFilters = () => setAllListFilters({ team:[], member:[], status:[], account:[], product:[], salesType:[], dealer:[] });
+      const clearAllListFilters = () => setAllListFilters({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
 
       const [rowOrders, setRowOrders]   = useState({ ACT:{}, Pending:{}, Backup:{}, Minal:{} });
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
@@ -459,7 +471,7 @@
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
-            <LangBtn lang={lang} setLang={setLang} />
+            <LangBtn lang={lang} setLang={setLang} er={activeER} />
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
               {!linkSent ? (
                 <>
@@ -530,12 +542,12 @@
       allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
       expectedData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
 
-      const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','알펙스메디','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
-      const allDealers = ['병원', ...ALL_INDIRECT_DEALERS];
+      const ALL_INDIRECT_DEALERS = ['병원','Innomed','SEVEN U','TMI','알펙스메디'];
+      const allDealers = ALL_INDIRECT_DEALERS;
       const dealerIndirectStats = {}; ALL_INDIRECT_DEALERS.forEach(d => dealerIndirectStats[d] = { count:0, sumKRW:0 });
       expectedData.filter(d => d.salesType==='Indirect').forEach(cur => { const dealer = cur.dealerName||'기타'; if (!dealerIndirectStats[dealer]) dealerIndirectStats[dealer] = { count:0, sumKRW:0 }; dealerIndirectStats[dealer].count += 1; dealerIndirectStats[dealer].sumKRW += (cur.priceKRW||0); });
       const dealerAllStats = {}; allDealers.forEach(d => dealerAllStats[d] = { count:0, sumKRW:0 });
-      expectedData.forEach(cur => { const dealer = cur.dealerName||(cur.salesType==='Direct'?'병원':'기타'); if (!dealerAllStats[dealer]) dealerAllStats[dealer] = { count:0, sumKRW:0 }; dealerAllStats[dealer].count += 1; dealerAllStats[dealer].sumKRW += (cur.priceKRW||0); });
+      expectedData.forEach(cur => { const dealer = cur.dealerName||'기타'; if (!dealerAllStats[dealer]) dealerAllStats[dealer] = { count:0, sumKRW:0 }; dealerAllStats[dealer].count += 1; dealerAllStats[dealer].sumKRW += (cur.priceKRW||0); });
       const allMembers = Object.values(teams).flat();
       const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0 });
       // 달성률 집계: Ship Confirm 기준 (Target 대비 매출)
@@ -636,14 +648,12 @@
           <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate||'-'}</td>
           <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType||'일반'}</td>
-          <td className="p-2 md:p-3 font-semibold"><span className={`px-2 py-1 rounded text-[10px] md:text-xs ${row.salesType==='Direct'?'bg-blue-100 text-blue-700':'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
           <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName||'-'}</td>
           <td className="p-2 md:p-3 font-mono text-gray-500">{row.so||'-'}</td>
           <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
           <td className="p-2 md:p-3">{row.product}</td>
           <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
-          <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
-          <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {(row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>₩ {(row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>$ {(row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
           <td className="p-2 md:p-3 text-center space-x-1">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
@@ -656,12 +666,12 @@
       );
 
       const TABLE_TH = () => (
-        <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+        <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">KRW / USD</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
       );
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} />
+          <LangBtn lang={lang} setLang={setLang} er={activeER} />
           {/* [FIX #10] 토스트 */}
           {toast && <Toast msg={toast.msg} type={toast.type} />}
 
@@ -790,18 +800,20 @@
                     const cardBase = "p-4 rounded-xl border flex flex-col justify-between shadow-sm min-h-[90px]";
                     const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
                     const allCards = {
-                      er: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.er}</span><input type="number" value={activeER===0?'':activeER} onChange={e=>handleTargetChange('er',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.erPlaceholder}/></div>; },
-                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.targetKRWLabel}</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/></div>; },
-                      targetUSD: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target (USD)</span><span className={valueCls} style={{color:c.value}}>$ {targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      incentiveKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target (KRW) <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>; },
-                      incentiveUSD: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target (USD)</span><span className={valueCls} style={{color:c.value}}>$ {incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.estimated}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span></div>; },
-                      estimatedUSD: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko'?'예상치 ($)':'Estimated ($)'}</span><span className={valueCls} style={{color:c.value}}>$ {expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      er: (id) => null,
+                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.targetKRWLabel}</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      targetUSD: (id) => null,
+                      incentiveKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      incentiveUSD: (id) => null,
+                      estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.estimated}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      estimatedUSD: (id) => null,
                       gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP (KRW)</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span></div>; },
                       attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.attainRate}</span><span className={valueCls} style={{color:percent>=100?'#16a34a':c.value}}>{percent.toFixed(1)}%</span></div>; },
                       gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.gmppEstimated} (Target) ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/></div>; },
                       gmppEstimated: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.gmppEstimated}</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span></div>; },
                       gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span></div>; },
+                      shipConfirmKRW: (id) => { return <div className={cardBase} style={{background:'#0f172a',borderColor:'#1d4ed8'}}><span style={{display:'block',fontWeight:'700',fontSize:'13px',color:'#93c5fd',marginBottom:'8px'}}>{lang==='ko'?'누적 달성 (Ship Confirm)':'Cumulative (Ship Confirm)'}</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',textAlign:'right',display:'block',color:'#60a5fa'}}>₩ {shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:'#475569',marginTop:'2px'}}>$ {shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})} · {shipConfirmPct.toFixed(1)}%</span></div>; },
+                      shipConfirmKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:'#0f172a',borderColor:'#1d4ed8'}}><span className={titleCls} style={{color:'#93c5fd'}}>{lang==='ko'?'누적 달성 (Ship Confirm)':'Cumulative (Ship Confirm)'}</span><span className={valueCls} style={{color:'#60a5fa'}}>₩ {shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:'#475569',marginTop:'2px'}}>$ {shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})} · {shipConfirmPct.toFixed(1)}%</span></div>; },
                     };
                     return (
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
@@ -927,9 +939,9 @@
                     const STATUS_ORDER = { 'Ship Confirm':0, 'ACT':1, 'Pending':2, 'Back up':3 };
                     const STATUS_COLOR = { 'Ship Confirm':{ row:'bg-blue-900/10', badge:'bg-blue-900 text-white' }, 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
                     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
-                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), salesType: uniq(baseRows.map(d=>d.salesType)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
+                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
                     const f = allListFilters;
-                    const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.salesType.length===0||f.salesType.includes(d.salesType))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
+                    const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
                     const hasAnyFilter = Object.values(f).some(v=>v.length>0);
                     const ColHeader = ({ col, label }) => {
                       const isOpen = allListFilterOpen===col;
@@ -984,13 +996,12 @@
                                   <ColHeader col="status"    label="Status"/>
                                   <ColHeader col="account"   label="Account"/>
                                   <ColHeader col="product"   label="Product"/>
-                                  <ColHeader col="salesType" label="Type"/>
                                   <ColHeader col="dealer"    label="Dealer"/>
                                   <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
+                                {filteredRows.length===0 ? <tr><td colSpan="7" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
                                   filteredRows.map((row,i) => {
                                     const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
                                     return (
@@ -1000,7 +1011,6 @@
                                         <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sc.badge}`}>{row.status}</span></td>
                                         <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
                                         <td className="px-3 py-2 text-gray-600">{row.product}</td>
-                                        <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.salesType==='Direct'?'bg-blue-100 text-blue-700':'bg-purple-100 text-purple-700'}`}>{row.salesType}</span></td>
                                         <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
                                         <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
                                       </tr>
@@ -1011,7 +1021,7 @@
                               {filteredRows.length>0 && (
                                 <tfoot>
                                   <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                    <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
+                                    <td colSpan="6" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
                                     <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
                                   </tr>
                                 </tfoot>
@@ -1061,12 +1071,15 @@
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Sales Type <span className="text-red-500">*</span></label><select name="salesType" value={form.salesType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="Direct">Direct</option><option value="Indirect">Indirect</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">{T.selectRequired}</option>
-                        {form.salesType==='Direct' ? (<><option value="병원">병원</option><option value="Innomed">Innomed</option><option value="SEVEN U">SEVEN U</option></>) : (<><option value="SEVEN U">SEVEN U</option><option value="Innomed">Innomed</option><option value="TMI">TMI</option><option value="알펙스메디">알펙스메디</option><option value="동안기획">동안기획</option><option value="Bori">Bori</option><option value="Beauko">Beauko</option><option value="엠디마케팅">엠디마케팅</option><option value="티모티">티모티</option><option value="엘룩스코리아">엘룩스코리아</option><option value="seed group">seed group</option><option value="Human">Human</option><option value="기타">기타</option></>)}
+                        <option value="병원">병원</option>
+                        <option value="Innomed">Innomed (이노메드)</option>
+                        <option value="SEVEN U">SEVEN U (세븐유)</option>
+                        <option value="TMI">TMI</option>
+                        <option value="알펙스메디">알펙스메디</option>
                       </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
@@ -1112,7 +1125,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Ship Confirm'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : rawRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true)); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Ship Confirm'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : rawRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true)); })()}
                         </tbody>
                       </table>
                     </div>
@@ -1125,7 +1138,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-800 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',rawRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',rawRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700')); })()}
                         </tbody>
                       </table>
                     </div>
@@ -1138,7 +1151,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-700 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',rawRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',rawRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800')); })()}
                         </tbody>
                       </table>
                     </div>
@@ -1151,7 +1164,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-orange-500 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',rawRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',rawRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800')); })()}
                         </tbody>
                       </table>
                     </div>
