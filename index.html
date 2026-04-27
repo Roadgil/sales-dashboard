@@ -249,7 +249,16 @@
       const [isSaving, setIsSaving]   = useState(false);
 
       const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
-      const [cardOrder, setCardOrder] = useState(() => { try { const s = localStorage.getItem('summaryCardOrder'); return s ? JSON.parse(s) : DEFAULT_CARD_ORDER; } catch { return DEFAULT_CARD_ORDER; } });
+      const [cardOrder, setCardOrder] = useState(() => {
+        try {
+          const s = localStorage.getItem('summaryCardOrder');
+          if (!s) return DEFAULT_CARD_ORDER;
+          const saved = JSON.parse(s);
+          const hasAllCards = DEFAULT_CARD_ORDER.every(id => saved.includes(id));
+          if (!hasAllCards) { localStorage.removeItem('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
+          return saved;
+        } catch { return DEFAULT_CARD_ORDER; }
+      });
 
       const CARD_PALETTES = {
         slate:  { bg: '#f8fafc', border: '#cbd5e1', title: '#475569', value: '#1e293b', inputBorder: '#94a3b8', label: 'Slate' },
