@@ -322,8 +322,8 @@
         const unsubLayout       = db.collection("settings").doc("layout").onSnapshot(doc => {
           if (doc.exists) {
             const data = doc.data();
-            if (data.teams)    setTeams(data.teams);
-            if (data.quarters) setQuarters(data.quarters);
+            if (data.teams && typeof data.teams === 'object') setTeams(data.teams);
+            if (data.quarters && Array.isArray(data.quarters)) setQuarters(data.quarters);
           } else {
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
@@ -455,7 +455,7 @@
 
       useEffect(() => {
         if (!isLoggedIn) return;
-        const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) setRowOrders(doc.data()); });
+        const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) { const d = doc.data(); if (d && typeof d === 'object') setRowOrders(d); } });
         return () => unsub();
       }, [isLoggedIn]);
 
@@ -463,7 +463,7 @@
       const getOrderedRows = (status, rawRows) => {
         const key = `${selectedQuarter}__${selectedMember}__${status}`;
         const orderMap = rowOrders[status]?.[key];
-        if (!orderMap || orderMap.length === 0) return rawRows;
+        if (!orderMap || !Array.isArray(orderMap) || orderMap.length === 0) return rawRows;
         const mapped = {}; rawRows.forEach(r => { mapped[String(r.id)] = r; });
         const ordered = orderMap.map(id => mapped[id]).filter(Boolean);
         const rest = rawRows.filter(r => !orderMap.includes(String(r.id)));
@@ -476,7 +476,8 @@
         const { fromId } = rowDragState; const toId = String(toRowId);
         if (!fromId || fromId===toId) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
         const key = `${selectedQuarter}__${selectedMember}__${status}`;
-        const currentOrder = (rowOrders[status]?.[key]) || rawRows.map(r => String(r.id));
+        const rawOrder = rowOrders[status]?.[key];
+        const currentOrder = (Array.isArray(rawOrder) ? rawOrder : null) || rawRows.map(r => String(r.id));
         const fi = currentOrder.indexOf(fromId); const ti = currentOrder.indexOf(toId);
         if (fi===-1 || ti===-1) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
         const next = [...currentOrder]; next.splice(fi, 1); next.splice(ti, 0, fromId);
@@ -485,7 +486,8 @@
       };
       const handleRowDragEnd = () => setRowDragState({ type:null, fromId:null, overId:null });
 
-      const groupedQuarters = quarters.reduce((acc, q) => { const [year, quarter] = q.split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
+      const safeQuarters = Array.isArray(quarters) ? quarters : [];
+      const groupedQuarters = safeQuarters.reduce((acc, q) => { const [year, quarter] = (q||'').split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
 
       // ── Auth 확인 중 ──────────────────────────────────────────────────────
       if (authChecking) {
