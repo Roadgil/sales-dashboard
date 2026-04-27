@@ -32,6 +32,7 @@
     const REVENUE_STATUSES = ['ACT', 'Pending'];
     function isRevenue(d) { return REVENUE_STATUSES.includes(d.status); }
     function isACT(d)     { return d.status === 'ACT'; }
+    function isShipConfirmed(d) { return d.status === 'ACT' && d.shipConfirm === 'Yes'; }
   </script>
 </head>
 <body className="bg-gray-100">
@@ -192,6 +193,12 @@
         backupList:        lang==='ko' ? '🗂️ Back up 리스트 (매출 미집계)' : '🗂️ Back up List (Excluded from Revenue)',
         noBackup:          lang==='ko' ? '등록된 Back up 데이터가 없습니다.' : 'No back up data registered.',
         minalList:         lang==='ko' ? '🔴 미납 리스트 (매출 미집계)' : '🔴 Unpaid List (Excluded from Revenue)',
+        shipConfirmList:   lang==='ko' ? '🚢 Ship Confirm 완료 현황' : '🚢 Ship Confirmed',
+        shipConfirmAmt:    lang==='ko' ? '누적 달성치 (Ship Confirm 완료)' : 'Cumulative Achievement (Ship Confirmed)',
+        shipConfirmUSDLabel: lang==='ko' ? '현재 누적 예상치 (USD)' : 'Cumulative Estimate (USD)',
+        noShipConfirm:     lang==='ko' ? 'Ship Confirm 완료된 데이터가 없습니다.' : 'No Ship Confirmed data.',
+        shipConfirmPwdTitle: lang==='ko' ? 'Ship Confirm 완료 수정/삭제' : 'Edit/Delete Ship Confirmed',
+        shipConfirmPwdDesc:  lang==='ko' ? 'Ship Confirm 완료 데이터를 수정/삭제하려면 비밀번호를 입력하세요.' : 'Enter password to edit/delete Ship Confirmed data.',
         noMinal:           lang==='ko' ? '등록된 미납 데이터가 없습니다.' : 'No unpaid data registered.',
         currentEst:        lang==='ko' ? '현재 누적 예상치'             : 'Current Cumulative Estimate',
         achievement:       lang==='ko' ? '달성률'                      : 'Achievement',
@@ -251,6 +258,22 @@
       const handleSummaryUnlock = () => {
         if (summaryPwdInput === SECRET_PASSWORD) { setSummaryLocked(false); setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }
         else { setSummaryPwdError(true); setSummaryPwdInput(''); }
+      };
+
+      // ── Ship Confirm 수정/삭제 비밀번호 모달 ──
+      const [showScPwdModal, setShowScPwdModal] = useState(false);
+      const [scPwdInput, setScPwdInput]         = useState('');
+      const [scPwdError, setScPwdError]         = useState(false);
+      const [pendingScAction, setPendingScAction] = useState(null); // { type:'edit'|'delete', data }
+
+      const requestScAction = (type, data) => { setPendingScAction({ type, data }); setShowScPwdModal(true); setScPwdInput(''); setScPwdError(false); };
+      const handleScUnlock = () => {
+        if (scPwdInput === SECRET_PASSWORD) {
+          setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false);
+          if (pendingScAction?.type === 'edit')   handleEdit(pendingScAction.data);
+          if (pendingScAction?.type === 'delete') deleteSalesData(pendingScAction.data.id);
+          setPendingScAction(null);
+        } else { setScPwdError(true); setScPwdInput(''); }
       };
       const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); localStorage.setItem('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
 
@@ -483,6 +506,12 @@
       const gmppExpectedKRW = expectedData.filter(d => d.product==='GMPP').reduce((s, d) => s + (d.priceKRW||0), 0);
       const gmppGapKRW      = gmppTargetKRW - gmppExpectedKRW;
 
+      // ★ 누적 달성치 = Ship Confirm 완료(Yes) 금액
+      const shipConfirmData = currentQData.filter(d => d.status === 'ACT' && d.shipConfirm === 'Yes');
+      const shipConfirmKRW  = shipConfirmData.reduce((s, d) => s + (d.priceKRW || 0), 0);
+      const shipConfirmUSD  = shipConfirmKRW / activeER;
+      const shipConfirmCount = shipConfirmData.length;
+
       const memberActFcstData = selectedMember ? expectedData.filter(d => d.member===selectedMember) : [];
       const memberACT         = memberActFcstData.reduce((s, d) => s + (d.priceKRW||0), 0);
 
@@ -507,15 +536,22 @@
       expectedData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
-      const renderProgressBar = (actKRW, tgtKRW) => {
+      const renderProgressBar = (actKRW, tgtKRW, er) => {
         if (!tgtKRW) return null;
+        const usedER = er || activeER || 1389;
         const target120 = tgtKRW * 1.2; const target140 = tgtKRW * 1.4; const target150 = tgtKRW * 1.5;
         const per = (actKRW / tgtKRW) * 100;
         const maxScale = Math.max(target150, actKRW * 1.05);
+        const actUSD = actKRW / usedER;
         return (
           <div className="w-full mt-6 md:mt-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
-              <span className="text-sm font-bold text-gray-600 mb-2 md:mb-0">{T.currentEst}: ₩ {actKRW.toLocaleString()}</span>
+              <div className="mb-2 md:mb-0">
+                <span className="text-sm font-bold text-gray-600">{T.currentEst}: ₩ {actKRW.toLocaleString()}</span>
+                <span className="ml-3 text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                  {lang==='ko'?'현재 누적 예상치 (USD)':'Cumulative Est. (USD)'}: $ {actUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                </span>
+              </div>
               <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{T.achievement}: {per.toFixed(1)}%</span>
               <div className="hidden md:block absolute w-full -bottom-6 left-0 h-5">
                 <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500"     style={{ left:`${(tgtKRW/maxScale)*100}%` }}>100%</div>
@@ -581,7 +617,7 @@
       };
 
       // ── 공통 테이블 행 렌더러 ──────────────────────────────────────────────
-      const renderTableRow = (row, status, colorCls, editCls) => (
+      const renderTableRow = (row, status, colorCls, editCls, requirePwd=false) => (
         <tr key={row.id}
           draggable
           onDragStart={e => handleRowDragStart(e, status, row.id)}
@@ -589,7 +625,6 @@
           onDrop={e => handleRowDrop(e, status, row.id, salesData.filter(d => d.quarter===selectedQuarter && d.member===selectedMember && d.status===(status==='Backup'?'Back up':status==='Minal'?'미납':status)))}
           onDragEnd={handleRowDragEnd}
           className={`border-b ${colorCls} hover:brightness-95 transition cursor-grab active:cursor-grabbing ${rowDragState.type===status && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}>
-          <td className="p-2 md:p-3 text-center"><span className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold ${row.shipConfirm==='Yes'?'bg-green-100 text-green-700':row.shipConfirm==='No'?'bg-red-100 text-red-600':'text-gray-400'}`}>{row.shipConfirm||'-'}</span></td>
           <td className="p-2 md:p-3 font-bold select-none"><span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>{row.status}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate||'-'}</td>
@@ -603,14 +638,18 @@
           <td className="p-2 md:p-3 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
           <td className="p-2 md:p-3 text-right font-mono text-gray-700">$ {(row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
           <td className="p-2 md:p-3 text-center space-x-1">
-            <button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
-            {row.shipConfirm==='Yes' ? <span className="text-[10px] md:text-xs bg-gray-100 text-gray-400 px-2 py-1 rounded font-bold cursor-not-allowed" title="Ship Confirm Yes — 삭제 불가">🔒</span> : <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button>}
+            {requirePwd
+              ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
+                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button></>
+              : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
+                  <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></>
+            }
           </td>
         </tr>
       );
 
       const TABLE_TH = () => (
-        <tr><th className="p-2 md:p-3 text-center">Ship Confirm</th><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
+        <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Type</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">Price (KRW)</th><th className="p-2 md:p-3 text-right">Price (USD)</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
       );
 
       return (
@@ -634,6 +673,26 @@
                 <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
                   <button onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
                   <button onClick={handleSummaryUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Ship Confirm 수정/삭제 비밀번호 모달 */}
+          {showScPwdModal && (
+            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
+              onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
+                onClick={e => e.stopPropagation()}>
+                <div style={{fontSize:'32px',marginBottom:'8px'}}>🚢</div>
+                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{T.shipConfirmPwdTitle}</h3>
+                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{T.shipConfirmPwdDesc}</p>
+                <input type="password" autoFocus value={scPwdInput} onChange={e => { setScPwdInput(e.target.value); setScPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleScUnlock()} placeholder="Password"
+                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:scPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
+                {scPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
+                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
+                  <button onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
+                  <button onClick={handleScUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#1e40af',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
                 </div>
               </div>
             </div>
@@ -687,7 +746,7 @@
           </div>
 
           {/* 메인 콘텐츠 */}
-          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
             {!selectedMember ? (
               <div>
                 <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
@@ -858,10 +917,10 @@
                   {/* All List */}
                   {(() => {
                     const baseRows = salesData.filter(d => d.quarter===selectedQuarter);
-                    const STATUS_ORDER = { 'ACT':0, 'Pending':1, 'Back up':2, '미납':3 };
-                    const STATUS_COLOR = { 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' }, '미납':{ row:'bg-red-50', badge:'bg-red-100 text-red-600' } };
+                    const STATUS_ORDER = { 'ACT':0, 'Pending':1, 'Back up':2 };
+                    const STATUS_COLOR = { 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
                     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
-                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['ACT','Pending','Back up','미납'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), salesType: uniq(baseRows.map(d=>d.salesType)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
+                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), salesType: uniq(baseRows.map(d=>d.salesType)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
                     const f = allListFilters;
                     const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.salesType.length===0||f.salesType.includes(d.salesType))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
                     const hasAnyFilter = Object.values(f).some(v=>v.length>0);
@@ -992,7 +1051,7 @@
                     {editingId && <div className="col-span-full flex justify-between items-center text-blue-600 font-bold mb-3"><span className="text-sm md:text-base">{T.editMode}</span></div>}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">🚢 Ship Confirm Status</label><select name="shipConfirm" value={form.shipConfirm} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.shipConfirm==='Yes'?'text-green-700 bg-green-50 border-green-400':form.shipConfirm==='No'?'text-red-600 bg-red-50 border-red-400':'text-gray-500 border-gray-300'}`}><option value="">- Select -</option><option value="Yes">✅ Yes</option><option value="No">❌ No</option></select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Pending'?'text-blue-600 bg-blue-50':form.status==='Back up'?'text-orange-600 bg-orange-50':form.status==='미납'?'text-red-600 bg-red-50':'text-green-600 bg-green-50'}`}><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option><option value="미납">미납</option></select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Pending'?'text-blue-600 bg-blue-50':form.status==='Back up'?'text-orange-600 bg-orange-50':'text-green-600 bg-green-50'}`}><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                     </div>
@@ -1024,6 +1083,32 @@
                     </div>
                   </form>
 
+                  {/* Ship Confirm 완료 테이블 (맨 위) */}
+                  <div className="mt-8">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                      <h4 className="text-lg md:text-xl font-bold flex items-center gap-2" style={{color:'#1d4ed8'}}>
+                        🚢 {T.shipConfirmList}
+                        <span className="text-sm font-normal text-gray-500">({shipConfirmCount}{T.cases})</span>
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow">
+                          {T.shipConfirmAmt}: ₩ {shipConfirmKRW.toLocaleString()}
+                        </div>
+                        <div className="bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow">
+                          {T.shipConfirmUSDLabel}: $ {shipConfirmUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-blue-900 hide-scrollbar">
+                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                        <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><TABLE_TH/></thead>
+                        <tbody>
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'&&d.shipConfirm==='Yes'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : rawRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true)); })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   {/* ACT 테이블 */}
                   <div className="mt-10">
                     <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-800">{T.deliveryStatus}</h4>
@@ -1031,7 +1116,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-800 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'); return rawRows.length===0 ? <tr><td colSpan="14" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',rawRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',rawRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700')); })()}
                         </tbody>
                       </table>
                     </div>
@@ -1044,7 +1129,7 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-blue-700 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending'); return rawRows.length===0 ? <tr><td colSpan="14" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',rawRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',rawRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800')); })()}
                         </tbody>
                       </table>
                     </div>
@@ -1057,24 +1142,13 @@
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                         <thead className="bg-orange-500 text-white font-bold"><TABLE_TH/></thead>
                         <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up'); return rawRows.length===0 ? <tr><td colSpan="14" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',rawRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800')); })()}
+                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up'); return rawRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',rawRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800')); })()}
                         </tbody>
                       </table>
                     </div>
                   </div>
 
-                  {/* 미납 테이블 */}
-                  <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-red-600">{T.minalList}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-red-200 hide-scrollbar">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-red-500 text-white font-bold"><TABLE_TH/></thead>
-                        <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='미납'); return rawRows.length===0 ? <tr><td colSpan="14" className="p-6 text-center text-gray-400">{T.noMinal}</td></tr> : getOrderedRows('Minal',rawRows).map(r=>renderTableRow(r,'Minal','bg-red-50','bg-red-200 hover:bg-red-300 text-red-800')); })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+
 
                 </div>
               </div>
@@ -1093,6 +1167,12 @@
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    html, body { overflow-x: hidden; max-width: 100vw; }
+    .main-content { min-width: 0; overflow-x: hidden; }
+    @media (max-width: 768px) {
+      .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+      table { font-size: 11px; }
+    }
   </style>
 </body>
 </html>
