@@ -90,7 +90,7 @@
     const App = () => {
       const SECRET_PASSWORD = "dladydcjf";
       // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
-      const CACHE_VERSION = 'v3';
+      const CACHE_VERSION = 'v4';
       if (safeLS.get('cacheVersion') !== CACHE_VERSION) {
         safeLS.remove('summaryCardOrder');
         safeLS.remove('summaryCardColors');
@@ -225,7 +225,7 @@
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
 
-      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
+      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','gmppTarget','gmppEstimated','gmppGap'];
       const [cardOrder, setCardOrder] = useState(() => {
         try {
           const s = safeLS.get('summaryCardOrder');
@@ -842,7 +842,7 @@
                       shipConfirmKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'SC 예상치' : 'SC Estimated'}</span><span className={valueCls} style={{color:c.value}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                     };
                     return (
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                         {cardOrder.map((id, idx) => allCards[id] ? (
                           <div key={id} draggable onDragStart={e=>handleDragStart(e,idx)} onDragOver={e=>handleDragOver(e,idx)} onDrop={e=>handleDrop(e,idx)} onDragEnd={handleDragEnd}
                             className={`relative cursor-grab active:cursor-grabbing ${dragOverIdx===idx?'ring-2 ring-blue-400 rounded-xl':''}`}>
@@ -1135,17 +1135,7 @@
                         🚢 {T.shipConfirmList}
                         <span className="text-sm font-normal text-gray-500">({shipConfirmCount}{T.cases})</span>
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow">
-                          {lang==='ko'?'누적 달성치':'Cumulative'}: ₩ {shipConfirmKRW.toLocaleString()}
-                        </div>
-                        <div className="bg-teal-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow">
-                          USD: $ {shipConfirmUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-                        </div>
-                        {targetKRW > 0 && <div className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow text-white ${shipConfirmPct>=100?'bg-green-600':shipConfirmPct>=80?'bg-blue-600':shipConfirmPct>=50?'bg-amber-600':'bg-red-500'}`}>
-                          Target 대비: {shipConfirmPct.toFixed(1)}%
-                        </div>}
-                      </div>
+
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-blue-900 hide-scrollbar">
                       <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
