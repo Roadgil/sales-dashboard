@@ -514,6 +514,8 @@
       const memberACT         = memberActFcstData.reduce((s, d) => s + (d.priceKRW||0), 0);
       // 개인 Ship Confirm 달성치 (Target 대비)
       const memberSCData      = selectedMember ? currentQData.filter(d => d.member===selectedMember && d.status==='Ship Confirm') : [];
+      const memberActData     = selectedMember ? currentQData.filter(d => d.member===selectedMember && d.status==='ACT') : [];
+      const memberActKRW      = memberActData.reduce((s, d) => s + (d.priceKRW||0), 0);
       const memberSCKRW       = memberSCData.reduce((s, d) => s + (d.priceKRW||0), 0);
 
       const directKRW   = expectedData.filter(d => d.salesType==='Direct').reduce((s, d) => s + (d.priceKRW||0), 0);
@@ -539,36 +541,40 @@
       scData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
-      const renderProgressBar = (pAmt, tgtKRW, er) => {
+      const renderProgressBar = (scAmt, actAmt, tgtKRW, er) => {
         if (!tgtKRW) return null;
         const usedER = er || activeER || 1389;
-        const target120 = tgtKRW * 1.2; const target140 = tgtKRW * 1.4; const target150 = tgtKRW * 1.5;
-        const per = (pAmt / tgtKRW) * 100;
-        const maxScale = Math.max(target150, pAmt * 1.05);
-        const pbUSD = pAmt / usedER;
+        const target120 = tgtKRW * 1.2; const target150 = tgtKRW * 1.5;
+        const maxScale = Math.max(target150, (scAmt + actAmt) * 1.05);
+        const scPer  = (scAmt / tgtKRW) * 100;
+        const actPer = (actAmt / tgtKRW) * 100;
+        const totalPer = scPer + actPer;
+        const scW  = (scAmt / maxScale) * 100;
+        const actW = (actAmt / maxScale) * 100;
         return (
           <div className="w-full mt-6 md:mt-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
-              <div className="mb-2 md:mb-0">
-                <span className="text-sm font-bold text-gray-600">{T.currentEst}: ₩ {pAmt.toLocaleString()}</span>
-                <span className="ml-3 text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                  {lang==='ko'?'현재 누적 예상치 (USD)':'Cumulative Est. (USD)'}: $ {pbUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-                </span>
+              <div className="mb-2 md:mb-0 flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
               </div>
-              <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{T.achievement}: {per.toFixed(1)}%</span>
+              <span className={`text-lg font-extrabold ${totalPer >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
               <div className="hidden md:block absolute w-full -bottom-6 left-0 h-5">
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500"     style={{ left:`${(tgtKRW/maxScale)*100}%` }}>100%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600"   style={{ left:`${(target120/maxScale)*100}%` }}>120%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-purple-600"  style={{ left:`${(target140/maxScale)*100}%` }}>140%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500"    style={{ left:`${(tgtKRW/maxScale)*100}%` }}>100%</div>
+                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600"  style={{ left:`${(target120/maxScale)*100}%` }}>120%</div>
                 <div className="absolute -translate-x-1/2 text-xs font-bold text-orange-500" style={{ left:`${(target150/maxScale)*100}%` }}>150%</div>
               </div>
             </div>
-            <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
-              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-xs md:text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width:`${(pAmt/maxScale)*100}%` }}>{per > 5 && `${per.toFixed(1)}%`}</div>
+            <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300" style={{display:'flex'}}>
+              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-blue-500" style={{ width:`${scW}%` }}>{scPer > 4 && `${scPer.toFixed(1)}%`}</div>
+              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-emerald-500" style={{ width:`${actW}%` }}>{actPer > 4 && `${actPer.toFixed(1)}%`}</div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500"    style={{ left:`${(tgtKRW/maxScale)*100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300"  style={{ left:`${(target120/maxScale)*100}%` }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left:`${(target140/maxScale)*100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-orange-400" style={{ left:`${(target150/maxScale)*100}%` }}></div>
+            </div>
+            <div className="flex gap-4 mt-2 text-xs">
+              <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#3b82f6'}}></span>{lang==='ko'?'SC (Ship Confirm)':'SC'}</span>
+              <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#10b981'}}></span>{lang==='ko'?'ACT (납품완료)':'ACT'}</span>
             </div>
           </div>
         );
@@ -794,9 +800,9 @@
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 mb-2">
                     <div className="bg-gray-50 px-4 py-3 rounded shadow-sm border-l-4 border-gray-500 flex-1"><span className="text-xs text-gray-500 font-bold block">100% Target</span><span className="font-bold text-gray-800 text-base md:text-lg">₩ {targetKRW.toLocaleString()}</span></div>
                     <div className="bg-green-50 px-4 py-3 rounded shadow-sm border-l-4 border-green-500 flex-1"><span className="text-xs text-green-600 font-bold block">120% Target</span><span className="font-bold text-green-700 text-base md:text-lg">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
-                    <div className="bg-purple-50 px-4 py-3 rounded shadow-sm border-l-4 border-purple-500 flex-1"><span className="text-xs text-purple-600 font-bold block">140% Target</span><span className="font-bold text-purple-700 text-base md:text-lg">₩ {(targetKRW*1.4).toLocaleString()}</span></div>
+                    <div className="bg-orange-50 px-4 py-3 rounded shadow-sm border-l-4 border-orange-500 flex-1"><span className="text-xs text-orange-600 font-bold block">150% Target</span><span className="font-bold text-orange-700 text-base md:text-lg">₩ {(targetKRW*1.5).toLocaleString()}</span></div>
                   </div>
-                  {renderProgressBar(shipConfirmKRW, targetKRW)}
+                  {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
                 </div>
 
                 {/* 분기 요약 지표 */}
@@ -1079,7 +1085,7 @@
                           <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-orange-500 flex-1 lg:flex-none"><span className="text-[10px] text-orange-500 block font-bold">150% Target</span><span className="font-bold text-xs md:text-sm text-orange-600 text-right">₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
                         </div>
                       </div>
-                      {renderProgressBar(memberSCKRW, memberTargets[selectedMember])}
+                      {renderProgressBar(memberSCKRW, memberActKRW, memberTargets[selectedMember])}
                     </div>
                   )}
 
