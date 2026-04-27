@@ -28,6 +28,10 @@ h1 span{color:var(--a1);}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .hdate{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
 
+/* [FIX #1] 집계 기준 안내 배너 */
+.data-note{background:rgba(91,79,207,.06);border:1px solid rgba(91,79,207,.2);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--a1);font-family:'DM Mono',monospace;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+.data-note::before{content:'ℹ';font-size:13px;}
+
 .loading{display:flex;align-items:center;justify-content:center;height:200px;flex-direction:column;gap:12px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;}
 .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--a1);border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -121,6 +125,9 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
   </div>
 </header>
 
+<!-- [FIX #1] 집계 기준 명시 배너 -->
+<div class="data-note" id="dataNoteBar">집계 기준: ACT + Pending 만 포함 (Back up · 미납 제외) — index.html 과 동일 기준 적용</div>
+
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
@@ -129,19 +136,13 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
   <div class="kpi k4"><div class="klabel">Top Performer</div><div class="kval v4" id="kpi-top">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
 </div>
 
-<!-- ROW1: 제품 + SR 담당자 -->
+<!-- ROW1 -->
 <div class="g g11">
-  <div class="card">
-    <div class="ctitle" id="ct-prodMix">제품 구성비</div>
-    <div style="position:relative;height:200px"><canvas id="prodChart"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="ctitle" id="ct-repPerf">담당자별 실적</div>
-    <div id="srList"><div class="loading"><div class="spinner"></div>Loading…</div></div>
-  </div>
+  <div class="card"><div class="ctitle" id="ct-prodMix">제품 구성비</div><div style="position:relative;height:200px"><canvas id="prodChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" id="ct-repPerf">담당자별 실적</div><div id="srList"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
 </div>
 
-<!-- ROW2: Sales Type + 제품 테이블 -->
+<!-- ROW2 -->
 <div class="g g11">
   <div class="card">
     <div class="ctitle">Sales Type (Direct vs Indirect)</div>
@@ -151,13 +152,10 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
       <div class="sp"><div class="splabel">Indirect (Dealer)</div><div class="spval" id="split-indirect-pct" style="color:var(--a3)">--</div><div class="spsub" id="split-indirect-sub">--</div></div>
     </div>
   </div>
-  <div class="card">
-    <div class="ctitle" id="ct-revByProd">제품별 매출</div>
-    <div id="productTable"><div class="loading"><div class="spinner"></div>Loading…</div></div>
-  </div>
+  <div class="card"><div class="ctitle" id="ct-revByProd">제품별 매출</div><div id="productTable"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
 </div>
 
-<!-- ROW3: 딜러 (참고용) -->
+<!-- ROW3 -->
 <div class="g g21">
   <div class="card">
     <div class="ctitle" id="ct-dealerChart">Dealer별 매출 <span class="warn-tag" id="wt-dealerChart">※ 데이터 검증 중 · 참고용</span></div>
@@ -165,14 +163,12 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
   </div>
   <div class="card">
     <div class="ctitle" id="ct-dealerDetail">Dealer 상세 <span class="warn-tag" id="wt-dealerDetail">참고용</span></div>
-    <table>
-      <thead><tr><th id="th-dealer">딜러</th><th id="th-amount">금액</th><th id="th-ratio">비율</th><th></th></tr></thead>
-      <tbody id="dealerTb"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
-    </table>
+    <table><thead><tr><th id="th-dealer">딜러</th><th id="th-amount">금액</th><th id="th-ratio">비율</th><th></th></tr></thead>
+    <tbody id="dealerTb"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody></table>
   </div>
 </div>
 
-<!-- ROW4: 담당자별 탭 -->
+<!-- ROW4 -->
 <div class="card" style="margin-bottom:14px">
   <div class="ctitle" id="ct-repDetail">담당자별 상세</div>
   <div class="tab-nav" id="memberTabNav"></div>
@@ -185,22 +181,16 @@ footer{margin-top:32px;padding-top:18px;border-top:1px solid var(--border);displ
 </footer>
 </div>
 
-<!-- Language Toggle Button -->
-<button id="langToggleBtn" onclick="toggleLang()" style="
-  position:fixed; top:16px; right:16px; z-index:9999;
-  padding:6px 14px; border-radius:20px; border:1.5px solid #e4e6eb;
-  background:white; cursor:pointer; font-weight:bold; font-size:12px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.12); font-family:'DM Mono',monospace;
-  display:flex; align-items:center; gap:6px;
-">🇺🇸 EN</button>
+<button id="langToggleBtn" onclick="toggleLang()" style="position:fixed;top:16px;right:16px;z-index:9999;padding:6px 14px;border-radius:20px;border:1.5px solid #e4e6eb;background:white;cursor:pointer;font-weight:bold;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-family:'DM Mono',monospace;display:flex;align-items:center;gap:6px;">🇺🇸 EN</button>
 
 <script>
-// ── Language Toggle ───────────────────────────────────────────────
+// ── [FIX #6] 다국어 ────────────────────────────────────────────────────────
 let _lang = localStorage.getItem('lang') || 'ko';
 
 const DICT = {
   backLink:       { ko:'← Dashboard로 돌아가기',  en:'← Back to Dashboard' },
   dealerNote:     { ko:'※ Dealer 매출 수치는 데이터 검증 중 (참고용)', en:'※ Dealer figures under verification (reference only)' },
+  dataNoteBar:    { ko:'집계 기준: ACT + Pending 만 포함 (Back up · 미납 제외) — index.html 과 동일 기준 적용', en:'Revenue basis: ACT + Pending only (Back up · Unpaid excluded) — aligned with index.html' },
   prodMix:        { ko:'제품 구성비',              en:'Product Mix' },
   repPerf:        { ko:'담당자별 실적',            en:'Performance by Rep' },
   revByProd:      { ko:'제품별 매출',              en:'Revenue by Product' },
@@ -221,6 +211,7 @@ const DICT = {
   current:        { ko:'현재',                      en:'Current' },
   target:         { ko:'목표',                      en:'Target' },
   byProduct:      { ko:'제품별',                    en:'By Product' },
+  countLabel:     { ko:'건 (ACT + Pending)',         en:'cases (ACT + Pending)' },
 };
 
 function t(key) { return DICT[key] ? (DICT[key][_lang] || DICT[key].ko) : key; }
@@ -228,53 +219,37 @@ function t(key) { return DICT[key] ? (DICT[key][_lang] || DICT[key].ko) : key; }
 function applyLang() {
   const isKo = _lang === 'ko';
   document.getElementById('langToggleBtn').textContent = isKo ? '🇺🇸 EN' : '🇰🇷 KO';
-
   const bl = document.querySelector('.back-link');
   if (bl) bl.textContent = t('backLink');
-
   const dn = document.getElementById('dealerNote');
   if (dn) dn.textContent = t('dealerNote');
-
+  const nb = document.getElementById('dataNoteBar');
+  if (nb) nb.textContent = t('dataNoteBar');
   const fs = document.getElementById('footerSource');
   if (fs) fs.textContent = t('footerSrc');
-
   const ids = {
-    'ct-prodMix':    t('prodMix'),   'ct-repPerf':    t('repPerf'),
-    'ct-revByProd':  t('revByProd'), 'ct-repDetail':  t('repDetail'),
-    'th-dealer':     t('dealer'),    'th-amount':     t('amount'),
-    'th-ratio':      t('ratio'),
-    'kpi-count-sub': isKo ? '건 (ACT + Pending)' : 'cases (ACT + Pending)',
+    'ct-prodMix': t('prodMix'), 'ct-repPerf': t('repPerf'),
+    'ct-revByProd': t('revByProd'), 'ct-repDetail': t('repDetail'),
+    'th-dealer': t('dealer'), 'th-amount': t('amount'), 'th-ratio': t('ratio'),
+    'kpi-count-sub': t('countLabel'),
   };
-  Object.entries(ids).forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  });
-
-  // warn-tag elements
+  Object.entries(ids).forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.textContent = val; });
   const wtChart = document.getElementById('wt-dealerChart');
   if (wtChart) wtChart.textContent = t('verifyNote');
   const wtDetail = document.getElementById('wt-dealerDetail');
   if (wtDetail) wtDetail.textContent = t('refOnly');
-
-  // Dealer chart ctitle text node
   const ctDChart = document.getElementById('ct-dealerChart');
   if (ctDChart) ctDChart.childNodes[0].textContent = isKo ? 'Dealer별 매출 ' : 'Revenue by Dealer ';
   const ctDDetail = document.getElementById('ct-dealerDetail');
   if (ctDDetail) ctDDetail.childNodes[0].textContent = isKo ? 'Dealer 상세 ' : 'Dealer Detail ';
-
-  // Re-render data (to update dynamic Korean strings in cards)
   if (typeof _loaded !== 'undefined' && _loaded.s && _loaded.t) render(_sales, _targets);
 }
 
-function toggleLang() {
-  _lang = _lang === 'ko' ? 'en' : 'ko';
-  localStorage.setItem('lang', _lang);
-  applyLang();
-}
+function toggleLang() { _lang = _lang==='ko' ? 'en' : 'ko'; localStorage.setItem('lang', _lang); applyLang(); }
 </script>
 
 <script>
-// ── Firebase ──────────────────────────────────────────────────────
+// ── [FIX #5] Firebase 설정 — 단일 위치 ────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
   authDomain: "sales-dashboard-d0d13.firebaseapp.com",
@@ -286,9 +261,17 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// ── URL 파라미터 → 분기 ───────────────────────────────────────────
-const QUARTER = new URLSearchParams(window.location.search).get('quarter') || '2026 Q1';
-document.getElementById('pageTitle').textContent = `Detail Report · ${QUARTER} · Candela Korea`;
+// ── [FIX #4] URL 파라미터 → 분기. 없으면 현재 분기 자동 계산 ──────────────
+function getCurrentQuarter() {
+  const now = new Date();
+  const m   = now.getMonth() + 1;
+  const y   = now.getFullYear();
+  const q   = m <= 3 ? 'Q1' : m <= 6 ? 'Q2' : m <= 9 ? 'Q3' : 'Q4';
+  return `${y} ${q}`;
+}
+const QUARTER = new URLSearchParams(window.location.search).get('quarter') || getCurrentQuarter();
+
+document.getElementById('pageTitle').textContent   = `Detail Report · ${QUARTER} · Candela Korea`;
 document.getElementById('quarterBadge').textContent = QUARTER;
 document.getElementById('quarterSubLabel').textContent = QUARTER;
 const QM = { Q1:['01','03'], Q2:['04','06'], Q3:['07','09'], Q4:['10','12'] };
@@ -296,15 +279,15 @@ const [YR, QK] = QUARTER.split(' ');
 const [MS, ME] = QM[QK] || ['01','03'];
 document.getElementById('quarterDate').textContent = `${YR}.${MS} — ${YR}.${ME}`;
 
-// ── 유틸 ──────────────────────────────────────────────────────────
-const fmt억 = v => v >= 100000000 ? `₩${(v/100000000).toFixed(2)}억` : `₩${Math.round(v/10000).toLocaleString()}만`;
+// ── 유틸 ──────────────────────────────────────────────────────────────────
+const fmt억  = v => v >= 100000000 ? `₩${(v/100000000).toFixed(2)}억` : `₩${Math.round(v/10000).toLocaleString()}만`;
 const fmtKRW = v => `₩ ${v.toLocaleString()}`;
-let _er = 1389; // index.html과 동일한 기본값, quarterTargets에서 실시간 업데이트
+let _er = 1389;
 const fmtUSD     = v => v >= 1000000 ? `$${(v/1000000).toFixed(2)}M` : `$${Math.round(v/1000).toLocaleString()}K`;
 const fmtUSDFull = v => `$ ${Math.round(v).toLocaleString()}`;
-const fmtAmt     = krw => _lang === 'en' ? fmtUSD(krw / _er)     : fmt억(krw);
-const fmtAmtFull = krw => _lang === 'en' ? fmtUSDFull(krw / _er) : fmtKRW(krw);
-const COLORS = ['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0','#aaa6e0','#c0c5d8'];
+const fmtAmt     = krw => _lang==='en' ? fmtUSD(krw/_er)     : fmt억(krw);
+const fmtAmtFull = krw => _lang==='en' ? fmtUSDFull(krw/_er) : fmtKRW(krw);
+const COLORS   = ['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0','#aaa6e0','#c0c5d8'];
 const M_COLORS = ['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
 const TT = { backgroundColor:'#fff', borderColor:'#e4e6eb', borderWidth:1, padding:10, titleColor:'#1a1a2e', bodyColor:'#1a1a2e' };
 Chart.defaults.color = '#8a8fa8';
@@ -318,205 +301,161 @@ function makeChart(id, cfg) {
   if (el) chartInst[id] = new Chart(el, cfg);
 }
 
-// ── 메인 렌더 ─────────────────────────────────────────────────────
+// ── [FIX #1] 메인 렌더 — ACT + Pending 만 집계 (FCST 제거, Backup/미납 제외) ──
 function render(salesData, memberTargets) {
-  const qData = salesData.filter(d => d.quarter === QUARTER && (d.status === 'ACT' || d.status === 'Pending' || d.status === 'FCST'));
+  // ★ 핵심 필터: ACT + Pending 만 — index.html, report.html 과 통일
+  const REVENUE_STATUSES = ['ACT', 'Pending'];
+  const qData = salesData.filter(d =>
+    d.quarter === QUARTER && REVENUE_STATUSES.includes(d.status)
+  );
 
-  // KPI 계산
-  const totalKRW = qData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-  const totalCount = qData.length;
-  const directKRW = qData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
+  const totalKRW    = qData.reduce((s,d) => s + (d.priceKRW||0), 0);
+  const totalCount  = qData.length;
+  const directKRW   = qData.filter(d => d.salesType==='Direct').reduce((s,d) => s + (d.priceKRW||0), 0);
   const indirectKRW = totalKRW - directKRW;
-  const directCount = qData.filter(d => d.salesType === 'Direct').length;
+  const directCount = qData.filter(d => d.salesType==='Direct').length;
   const indirectCount = totalCount - directCount;
-  const directPct = totalKRW ? directKRW / totalKRW * 100 : 0;
+  const directPct   = totalKRW ? directKRW / totalKRW * 100 : 0;
   const indirectPct = 100 - directPct;
 
-  // 멤버별 합계
   const memberSum = {};
-  qData.forEach(d => { memberSum[d.member] = (memberSum[d.member] || 0) + (d.priceKRW || 0); });
-  const sortedMembers = Object.entries(memberSum).sort((a, b) => b[1] - a[1]);
+  qData.forEach(d => { memberSum[d.member] = (memberSum[d.member]||0) + (d.priceKRW||0); });
+  const sortedMembers = Object.entries(memberSum).sort((a,b) => b[1]-a[1]);
   const topMember = sortedMembers[0];
 
-  // ── KPI 업데이트
-  document.getElementById('kpi-total').textContent = fmtAmt(totalKRW);
-  document.getElementById('kpi-total-sub').textContent = fmtAmtFull(totalKRW);
-  document.getElementById('kpi-count').textContent = totalCount;
-  document.getElementById('kpi-direct').textContent = `${directPct.toFixed(1)}%`;
+  document.getElementById('kpi-total').textContent      = fmtAmt(totalKRW);
+  document.getElementById('kpi-total-sub').textContent  = fmtAmtFull(totalKRW);
+  document.getElementById('kpi-count').textContent      = totalCount;
+  document.getElementById('kpi-direct').textContent     = `${directPct.toFixed(1)}%`;
   document.getElementById('kpi-direct-sub').textContent = `${fmtAmt(directKRW)} · ${directCount}${_lang==='ko'?'건':'cs'}`;
-  document.getElementById('kpi-top').textContent = topMember ? topMember[0] : '-';
-  document.getElementById('kpi-top-sub').textContent = topMember
-    ? `${fmtAmt(topMember[1])} · ${((topMember[1] / totalKRW) * 100).toFixed(1)}%` : '-';
+  document.getElementById('kpi-top').textContent        = topMember ? topMember[0] : '-';
+  document.getElementById('kpi-top-sub').textContent    = topMember ? `${fmtAmt(topMember[1])} · ${((topMember[1]/totalKRW)*100).toFixed(1)}%` : '-';
 
-  // ── 제품 도넛
+  // 제품 도넛
   const prodSum = {}, prodCount = {};
-  qData.forEach(d => {
-    prodSum[d.product] = (prodSum[d.product] || 0) + (d.priceKRW || 0);
-    prodCount[d.product] = (prodCount[d.product] || 0) + 1;
-  });
-  const prodEntries = Object.entries(prodSum).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  qData.forEach(d => { prodSum[d.product] = (prodSum[d.product]||0)+(d.priceKRW||0); prodCount[d.product] = (prodCount[d.product]||0)+1; });
+  const prodEntries = Object.entries(prodSum).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   makeChart('prodChart', {
-    type: 'doughnut',
-    data: {
-      labels: prodEntries.map(([k]) => k),
-      datasets: [{ data: prodEntries.map(([, v]) => totalKRW ? parseFloat((v / totalKRW * 100).toFixed(1)) : 0), backgroundColor: COLORS, borderColor: '#fff', borderWidth: 3, hoverOffset: 8 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
-      plugins: { legend: { position: 'right', labels: { color: '#8a8fa8', usePointStyle: true, pointStyle: 'circle', padding: 10 } },
-        tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
+    type:'doughnut',
+    data:{ labels:prodEntries.map(([k])=>k), datasets:[{ data:prodEntries.map(([,v])=>totalKRW?parseFloat((v/totalKRW*100).toFixed(1)):0), backgroundColor:COLORS, borderColor:'#fff', borderWidth:3, hoverOffset:8 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{ position:'right', labels:{ color:'#8a8fa8', usePointStyle:true, pointStyle:'circle', padding:10 } }, tooltip:{ ...TT, callbacks:{ label: c=>` ${c.raw}%` } } } }
   });
 
-  // ── 제품 테이블
+  // 제품 테이블
   const maxProd = prodEntries[0]?.[1] || 1;
   document.getElementById('productTable').innerHTML =
     `<table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
-    ${prodEntries.map(([k, v]) => `<tr>
+    ${prodEntries.map(([k,v])=>`<tr>
       <td>${k}</td><td class="mono">${fmtAmt(v)}</td><td class="dim">${prodCount[k]}${_lang==='ko'?'건':'cs'}</td>
-      <td class="dim">${totalKRW ? (v / totalKRW * 100).toFixed(1) : 0}%</td>
-      <td><div class="mbar" style="width:${Math.round(v / maxProd * 70)}px"></div></td>
+      <td class="dim">${totalKRW?(v/totalKRW*100).toFixed(1):0}%</td>
+      <td><div class="mbar" style="width:${Math.round(v/maxProd*70)}px"></div></td>
     </tr>`).join('')}</tbody></table>`;
 
-  // ── SR 담당자 리스트
+  // SR 담당자 리스트
   const maxMember = sortedMembers[0]?.[1] || 1;
-  document.getElementById('srList').innerHTML = sortedMembers.map(([name, val], i) => {
+  document.getElementById('srList').innerHTML = sortedMembers.map(([name,val],i) => {
     const col = M_COLORS[i % M_COLORS.length];
     return `<div class="srow">
-      <div class="savt" style="background:${col}22;color:${col}">${name[0] || '?'}</div>
+      <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
       <div class="sinfo">
         <div class="sname">${name}</div>
-        <div class="sbw"><div class="sbf" style="width:${(val / maxMember * 100).toFixed(0)}%;background:${col}"></div></div>
+        <div class="sbw"><div class="sbf" style="width:${(val/maxMember*100).toFixed(0)}%;background:${col}"></div></div>
       </div>
       <div class="samt">
         <div>${fmtAmt(val)}</div>
-        <div class="spct">${totalKRW ? (val / totalKRW * 100).toFixed(1) : 0}%</div>
+        <div class="spct">${totalKRW?(val/totalKRW*100).toFixed(1):0}%</div>
       </div>
     </div>`;
   }).join('') || `<div style="padding:20px;color:var(--muted);text-align:center">${t('noData')}</div>`;
 
-  // ── Sales Type 도넛
+  // Sales Type 도넛
   makeChart('trueChart', {
-    type: 'doughnut',
-    data: { labels: ['Direct (SR)', 'Indirect (Dealer)'], datasets: [{ data: [parseFloat(directPct.toFixed(1)), parseFloat(indirectPct.toFixed(1))], backgroundColor: ['#0faaa0', '#e84d6f'], borderColor: '#fff', borderWidth: 3, hoverOffset: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
-      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
+    type:'doughnut',
+    data:{ labels:['Direct (SR)','Indirect (Dealer)'], datasets:[{ data:[parseFloat(directPct.toFixed(1)),parseFloat(indirectPct.toFixed(1))], backgroundColor:['#0faaa0','#e84d6f'], borderColor:'#fff', borderWidth:3, hoverOffset:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{ display:false }, tooltip:{ ...TT, callbacks:{ label:c=>` ${c.raw}%` } } } }
   });
-  document.getElementById('split-direct-pct').textContent = `${directPct.toFixed(1)}%`;
-  document.getElementById('split-direct-sub').textContent = `${fmtAmt(directKRW)} · ${directCount}${_lang==='ko'?'건':'cs'}`;
+  document.getElementById('split-direct-pct').textContent   = `${directPct.toFixed(1)}%`;
+  document.getElementById('split-direct-sub').textContent   = `${fmtAmt(directKRW)} · ${directCount}${_lang==='ko'?'건':'cs'}`;
   document.getElementById('split-indirect-pct').textContent = `${indirectPct.toFixed(1)}%`;
   document.getElementById('split-indirect-sub').textContent = `${fmtAmt(indirectKRW)} · ${indirectCount}${_lang==='ko'?'건':'cs'}`;
 
-  // ── 딜러 (Indirect 데이터) - 전체 딜러 목록 기준으로 집계
+  // 딜러
   const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','알펙스메디','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
   const dealerSum = {}, dealerCount = {};
-  // 전체 딜러를 0으로 미리 초기화
-  ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d] = 0; dealerCount[d] = 0; });
-  // 실제 데이터로 집계 (목록 외 딜러명도 동적 추가)
-  qData.filter(d => d.salesType === 'Indirect').forEach(d => {
-    const n = d.dealerName || '기타';
-    if (!dealerSum[n]) { dealerSum[n] = 0; dealerCount[n] = 0; }
-    dealerSum[n] += (d.priceKRW || 0);
-    dealerCount[n] += 1;
+  ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d]=0; dealerCount[d]=0; });
+  qData.filter(d => d.salesType==='Indirect').forEach(d => {
+    const n = d.dealerName||'기타';
+    if (!dealerSum[n]) { dealerSum[n]=0; dealerCount[n]=0; }
+    dealerSum[n] += (d.priceKRW||0); dealerCount[n] += 1;
   });
-  // 매출 있는 딜러만 차트에 표시 (0인 딜러는 테이블에만 표시)
-  const dealerEntries = Object.entries(dealerSum).sort((a, b) => b[1] - a[1]);
-  const dealerEntriesWithData = dealerEntries.filter(([, v]) => v > 0);
+  const dealerEntries         = Object.entries(dealerSum).sort((a,b)=>b[1]-a[1]);
+  const dealerEntriesWithData = dealerEntries.filter(([,v])=>v>0);
   const maxDealer = dealerEntriesWithData[0]?.[1] || 1;
-
-  const dealerUnitDiv = _lang === 'en' ? (_er * 1000000) : 100000000;
-  const dealerUnit   = _lang === 'en' ? 'M' : '억';
-  const dealerPfx    = _lang === 'en' ? '$' : '₩';
+  const dealerUnitDiv = _lang==='en' ? (_er*1000000) : 100000000;
+  const dealerUnit   = _lang==='en' ? 'M' : '억';
+  const dealerPfx    = _lang==='en' ? '$' : '₩';
   makeChart('dealerChart', {
-    type: 'bar',
-    data: { labels: dealerEntriesWithData.map(([k]) => k), datasets: [{ label: '매출', data: dealerEntriesWithData.map(([, v]) => parseFloat((v / dealerUnitDiv).toFixed(2))), backgroundColor: COLORS, borderRadius: 6 }] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { ...TT, callbacks: { label: c => ` ${dealerPfx}${c.raw}${dealerUnit}` } } },
-      scales: { x: { grid: { color: '#f0f1f5' }, ticks: { color: '#8a8fa8', callback: v => `${dealerPfx}${v}${dealerUnit}` } }, y: { grid: { display: false }, ticks: { color: '#1a1a2e', font: { size: 11 } } } } }
+    type:'bar',
+    data:{ labels:dealerEntriesWithData.map(([k])=>k), datasets:[{ label:'매출', data:dealerEntriesWithData.map(([,v])=>parseFloat((v/dealerUnitDiv).toFixed(2))), backgroundColor:COLORS, borderRadius:6 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ ...TT, callbacks:{ label:c=>` ${dealerPfx}${c.raw}${dealerUnit}` } } }, scales:{ x:{ grid:{ color:'#f0f1f5' }, ticks:{ color:'#8a8fa8', callback:v=>`${dealerPfx}${v}${dealerUnit}` } }, y:{ grid:{ display:false }, ticks:{ color:'#1a1a2e', font:{ size:11 } } } } }
   });
   document.getElementById('dealerTb').innerHTML = dealerEntries.length
-    ? dealerEntries.map(([k, v]) => `<tr style="${v === 0 ? 'opacity:0.4' : ''}">
+    ? dealerEntries.map(([k,v])=>`<tr style="${v===0?'opacity:0.4':''}">
         <td>${k}</td>
-        <td class="mono">${v > 0 ? fmtAmt(v) : '-'}</td>
-        <td class="dim">${v > 0 && indirectKRW ? (v / indirectKRW * 100).toFixed(1) + '%' : '-'}</td>
-        <td><div class="mbar" style="width:${v > 0 ? Math.round(v / maxDealer * 70) : 0}px"></div></td>
+        <td class="mono">${v>0?fmtAmt(v):'-'}</td>
+        <td class="dim">${v>0&&indirectKRW?(v/indirectKRW*100).toFixed(1)+'%':'-'}</td>
+        <td><div class="mbar" style="width:${v>0?Math.round(v/maxDealer*70):0}px"></div></td>
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">${t('noIndirect')}</td></tr>`;
 
-  // ── 담당자별 탭
-  const allMembers = sortedMembers.map(([m]) => m);
-  const nav = document.getElementById('memberTabNav');
+  // 담당자별 탭
+  const allMembers = sortedMembers.map(([m])=>m);
+  const nav     = document.getElementById('memberTabNav');
   const content = document.getElementById('memberTabContent');
 
   if (!allMembers.length) {
-    nav.innerHTML = '';
-    content.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">${t('noData')}</div>`;
-    return;
+    nav.innerHTML = ''; content.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">${t('noData')}</div>`; return;
   }
-
-  nav.innerHTML = allMembers.map((m, i) =>
-    `<button class="tab-btn${i === 0 ? ' active' : ''}" onclick="switchMemberTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`
-  ).join('');
-
-  content.innerHTML = allMembers.map((m, mi) => {
-    const mData = qData.filter(d => d.member === m);
-    const mTotal = mData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-    const mDirect = mData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
+  nav.innerHTML = allMembers.map((m,i)=>`<button class="tab-btn${i===0?' active':''}" onclick="switchMemberTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`).join('');
+  content.innerHTML = allMembers.map((m,mi) => {
+    const mData     = qData.filter(d=>d.member===m);
+    const mTotal    = mData.reduce((s,d)=>s+(d.priceKRW||0),0);
+    const mDirect   = mData.filter(d=>d.salesType==='Direct').reduce((s,d)=>s+(d.priceKRW||0),0);
     const mIndirect = mTotal - mDirect;
-    const mDirectPct = mTotal ? (mDirect / mTotal * 100).toFixed(1) : '0.0';
-    const mIndirectPct = mTotal ? (mIndirect / mTotal * 100).toFixed(1) : '0.0';
-    const target = memberTargets[m] || 0;
-    const achievePct = target ? (mTotal / target * 100) : null;
+    const mDirectPct   = mTotal?(mDirect/mTotal*100).toFixed(1):'0.0';
+    const mIndirectPct = mTotal?(mIndirect/mTotal*100).toFixed(1):'0.0';
+    const target    = memberTargets[m] || 0;
+    const achievePct = target ? (mTotal/target*100) : null;
     const col = M_COLORS[mi % M_COLORS.length];
-
     const mProdSum = {}, mProdCount = {};
-    mData.forEach(d => {
-      mProdSum[d.product] = (mProdSum[d.product] || 0) + (d.priceKRW || 0);
-      mProdCount[d.product] = (mProdCount[d.product] || 0) + 1;
-    });
-    const mProdEntries = Object.entries(mProdSum).sort((a, b) => b[1] - a[1]);
+    mData.forEach(d => { mProdSum[d.product]=(mProdSum[d.product]||0)+(d.priceKRW||0); mProdCount[d.product]=(mProdCount[d.product]||0)+1; });
+    const mProdEntries = Object.entries(mProdSum).sort((a,b)=>b[1]-a[1]);
     const mMaxProd = mProdEntries[0]?.[1] || 1;
-    const sid = m.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-
-    return `<div class="tab-pane${mi === 0 ? ' active' : ''}" id="tab-m-${sid}">
+    const sid = m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+    return `<div class="tab-pane${mi===0?' active':''}" id="tab-m-${sid}">
       <div class="sr-kpis">
-        <div class="sr-kpi">
-          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
-          <div class="klabel">Total</div>
-          <div class="kval" style="color:${col}">${fmtAmt(mTotal)}</div>
-          <div class="ksub">${mData.length}건</div>
-        </div>
-        <div class="sr-kpi">
-          <div class="klabel">Direct (SR)</div>
-          <div class="kval" style="color:var(--a2)">${mDirectPct}%</div>
-          <div class="ksub">${fmtAmt(mDirect)}</div>
-        </div>
-        <div class="sr-kpi">
-          <div class="klabel">Indirect (Dealer)</div>
-          <div class="kval" style="color:var(--a3)">${mIndirectPct}%</div>
-          <div class="ksub">${fmtAmt(mIndirect)}</div>
-        </div>
+        <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div><div class="klabel">Total</div><div class="kval" style="color:${col}">${fmtAmt(mTotal)}</div><div class="ksub">${mData.length}${_lang==='ko'?'건':'cs'}</div></div>
+        <div class="sr-kpi"><div class="klabel">Direct (SR)</div><div class="kval" style="color:var(--a2)">${mDirectPct}%</div><div class="ksub">${fmtAmt(mDirect)}</div></div>
+        <div class="sr-kpi"><div class="klabel">Indirect (Dealer)</div><div class="kval" style="color:var(--a3)">${mIndirectPct}%</div><div class="ksub">${fmtAmt(mIndirect)}</div></div>
       </div>
-      ${target ? `<div style="margin-bottom:16px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
+      ${target?`<div style="margin-bottom:16px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
           <span style="color:var(--muted);font-family:'DM Mono',monospace">TARGET ACHIEVEMENT</span>
-          <span style="font-weight:700;color:${achievePct >= 100 ? 'var(--green)' : col}">${achievePct.toFixed(1)}%</span>
+          <span style="font-weight:700;color:${achievePct>=100?'var(--green)':col}">${achievePct.toFixed(1)}%</span>
         </div>
-        <div class="pbar-bg"><div class="pbar-fill" style="width:${Math.min(achievePct, 100)}%;background:${achievePct >= 100 ? 'var(--green)' : col}"></div></div>
+        <div class="pbar-bg"><div class="pbar-fill" style="width:${Math.min(achievePct,100)}%;background:${achievePct>=100?'var(--green)':col}"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
           <span>${t('current')}: ${fmtAmtFull(mTotal)}</span><span>${t('target')}: ${fmtAmtFull(target)}</span>
         </div>
-      </div>` : ''}
+      </div>`:''}
       <div class="g g11">
-        <div class="card">
-          <div class="ctitle">Sales Type</div>
-          <div style="position:relative;height:160px"><canvas id="c-tr-${sid}"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="ctitle">${t('byProduct')}</div>
+        <div class="card"><div class="ctitle">Sales Type</div><div style="position:relative;height:160px"><canvas id="c-tr-${sid}"></canvas></div></div>
+        <div class="card"><div class="ctitle">${t('byProduct')}</div>
           <table><thead><tr><th>${t('product')}</th><th>${t('amount')}</th><th>${t('count')}</th><th>${t('ratio')}</th><th></th></tr></thead><tbody>
-          ${mProdEntries.map(([k, v]) => `<tr>
+          ${mProdEntries.map(([k,v])=>`<tr>
             <td>${k}</td><td class="mono">${fmtAmt(v)}</td><td class="dim">${mProdCount[k]}${_lang==='ko'?'건':'cs'}</td>
-            <td class="dim">${mTotal ? (v / mTotal * 100).toFixed(1) : 0}%</td>
-            <td><div class="mbar" style="width:${Math.round(v / mMaxProd * 70)}px"></div></td>
+            <td class="dim">${mTotal?(v/mTotal*100).toFixed(1):0}%</td>
+            <td><div class="mbar" style="width:${Math.round(v/mMaxProd*70)}px"></div></td>
           </tr>`).join('')}
           </tbody></table>
         </div>
@@ -524,58 +463,45 @@ function render(salesData, memberTargets) {
     </div>`;
   }).join('');
 
-  // 담당자별 도넛 차트 (DOM 생성 후)
   requestAnimationFrame(() => {
-    allMembers.forEach((m, mi) => {
-      const mData = qData.filter(d => d.member === m);
-      const mTotal = mData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const mDirect = mData.filter(d => d.salesType === 'Direct').reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const dp = mTotal ? parseFloat((mDirect / mTotal * 100).toFixed(1)) : 0;
-      const ip = parseFloat((100 - dp).toFixed(1));
-      const sid = m.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    allMembers.forEach((m,mi) => {
+      const mData   = qData.filter(d=>d.member===m);
+      const mTotal  = mData.reduce((s,d)=>s+(d.priceKRW||0),0);
+      const mDirect = mData.filter(d=>d.salesType==='Direct').reduce((s,d)=>s+(d.priceKRW||0),0);
+      const dp = mTotal?parseFloat((mDirect/mTotal*100).toFixed(1)):0;
+      const ip = parseFloat((100-dp).toFixed(1));
+      const sid = m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
       makeChart(`c-tr-${sid}`, {
-        type: 'doughnut',
-        data: { labels: ['Direct', 'Indirect'], datasets: [{ data: [dp, ip], backgroundColor: ['#0faaa0', '#e84d6f'], borderColor: '#fff', borderWidth: 3, hoverOffset: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
-          plugins: { legend: { labels: { color: '#8a8fa8', usePointStyle: true, pointStyle: 'circle', padding: 12 } },
-            tooltip: { ...TT, callbacks: { label: c => ` ${c.raw}%` } } } }
+        type:'doughnut',
+        data:{ labels:['Direct','Indirect'], datasets:[{ data:[dp,ip], backgroundColor:['#0faaa0','#e84d6f'], borderColor:'#fff', borderWidth:3, hoverOffset:6 }] },
+        options:{ responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{ labels:{ color:'#8a8fa8', usePointStyle:true, pointStyle:'circle', padding:12 } }, tooltip:{ ...TT, callbacks:{ label:c=>` ${c.raw}%` } } } }
       });
     });
   });
 }
 
 function switchMemberTab(id, btn) {
-  document.querySelectorAll('#memberTabContent .tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('#memberTabNav .tab-btn').forEach(b => b.classList.remove('active'));
-  const sid = id.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-  const pane = document.getElementById('tab-m-' + sid);
+  document.querySelectorAll('#memberTabContent .tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('#memberTabNav .tab-btn').forEach(b=>b.classList.remove('active'));
+  const sid = id.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+  const pane = document.getElementById('tab-m-'+sid);
   if (pane) pane.classList.add('active');
   btn.classList.add('active');
 }
 
-// ── Firebase 실시간 로드 ─────────────────────────────────────────
-let _sales = [], _targets = {}, _loaded = { s: false, t: false, q: false };
+// ── Firebase 실시간 로드 ────────────────────────────────────────────────────
+let _sales = [], _targets = {}, _loaded = { s:false, t:false, q:false };
 const tryRender = () => { if (_loaded.s && _loaded.t && _loaded.q) { render(_sales, _targets); applyLang(); } };
 
-// quarterTargets에서 현재 분기 ER 실시간 동기화 (index.html과 동일한 소스)
 db.collection("targets").doc("quarterTargets").onSnapshot(doc => {
-  if (doc.exists) {
-    const qTargets = doc.data();
-    _er = qTargets?.[QUARTER]?.er || 1389;
-  }
-  _loaded.q = true;
-  tryRender();
+  if (doc.exists) { const qT = doc.data(); _er = qT?.[QUARTER]?.er || 1389; }
+  _loaded.q = true; tryRender();
 });
-
 db.collection("sales").onSnapshot(snap => {
-  _sales = snap.docs.map(d => d.data());
-  _loaded.s = true;
-  tryRender();
+  _sales = snap.docs.map(d => d.data()); _loaded.s = true; tryRender();
 });
 db.collection("targets").doc("memberTargets").onSnapshot(doc => {
-  if (doc.exists) _targets = doc.data();
-  _loaded.t = true;
-  tryRender();
+  if (doc.exists) _targets = doc.data(); _loaded.t = true; tryRender();
 });
 </script>
 </body>
