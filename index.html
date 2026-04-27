@@ -57,17 +57,13 @@
     const LangBtn = ({ lang, setLang, er, onErClick }) => (
       <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
         {er && (
-          <button
-            onClick={onErClick}
-            title={lang==='ko' ? '환율 수정 (클릭)' : 'Edit Exchange Rate'}
-            style={{
-              padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
+          <button onClick={onErClick} title={lang==='ko' ? '환율 수정' : 'Edit ER'}
+            style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
               background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
               fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
-              boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer'
-            }}>
+              boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer' }}>
             <span style={{color:'#64748b'}}>ER</span>
-            <span style={{color:'#e2e8f0'}}>₩{er.toLocaleString()}</span>
+            <span style={{color:'#e2e8f0'}}>{'₩' + er.toLocaleString()}</span>
             <span style={{color:'#475569',fontSize:'9px',marginLeft:'2px'}}>✏️</span>
           </button>
         )}
@@ -168,7 +164,7 @@
         er:                lang==='ko' ? '적용 환율 (ER) ✏️'           : 'Exchange Rate (ER) ✏️',
         targetKRWLabel:    lang==='ko' ? 'Target (KRW) ✏️'            : 'Target (KRW) ✏️',
         targetPlaceholder: lang==='ko' ? '목표 금액 기입'               : 'Enter target amount',
-        estimated:         lang==='ko' ? '예상치 (ACT + Pending + SC)' : 'Estimated (ACT+Pending+SC)',
+        estimated:         lang==='ko' ? '예상치 KRW (ACT+Pending+SC)' : 'Estimated KRW (ACT+Pending+SC)',
         gmppEstimated:     lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
         attainRate:        lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
         salesTypeShare:    lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
@@ -247,7 +243,7 @@
       const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
       const [salesData, setSalesData]           = useState([]);
 
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', salesType: 'Direct', dealerName: '' };
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '' };
       const [form, setForm]         = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
@@ -263,7 +259,7 @@
         purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
         rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
       };
-      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', actEstimatedKRW:'rose', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate', shipConfirmKRW:'slate' };
+      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
       const [cardColors, setCardColors]       = useState(() => { try { const s = localStorage.getItem('summaryCardColors'); return s ? JSON.parse(s) : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
@@ -274,16 +270,6 @@
       const [erPwdError, setErPwdError]   = useState(false);
       const [erInputVal, setErInputVal]   = useState('');
       const [erUnlocked, setErUnlocked]   = useState(false);
-      const handleErUnlock = () => {
-        if (erPwdInput === SECRET_PASSWORD) {
-          setErUnlocked(true); setErPwdInput(''); setErPwdError(false);
-        } else { setErPwdError(true); setErPwdInput(''); }
-      };
-      const handleErSave = () => {
-        const v = parseFloat(erInputVal);
-        if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
-        setShowErModal(false); setErUnlocked(false); setErInputVal('');
-      };
       const [summaryPwdInput, setSummaryPwdInput]       = useState('');
       const [summaryPwdError, setSummaryPwdError]       = useState(false);
 
@@ -352,7 +338,6 @@
           salesType: autoSalesType,
           priceKRW: finalKRW,
           priceUSD: parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
-          // [FIX #3] ID 생성: crypto.randomUUID() 로 충돌 방지
           id:       editingId ? editingId : crypto.randomUUID(),
           quarter:  selectedQuarter,
           team:     selectedTeam,
@@ -378,6 +363,15 @@
       };
 
       const handleTargetChange  = (field, value) => { const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n); };
+      const handleErUnlock = () => {
+        if (erPwdInput === SECRET_PASSWORD) { setErUnlocked(true); setErPwdInput(''); setErPwdError(false); }
+        else { setErPwdError(true); setErPwdInput(''); }
+      };
+      const handleErSave = () => {
+        const v = parseFloat(erInputVal);
+        if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
+        setShowErModal(false); setErUnlocked(false); setErInputVal('');
+      };
       const handleMemberTargetChange = (member, value) => { const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
       const handleTeamTargetChange   = (team, quarter, value) => { const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -490,7 +484,7 @@
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
-            <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }} />
+            <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
             <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
               {!linkSent ? (
                 <>
@@ -541,10 +535,6 @@
       const gapUSD          = gapKRW / activeER;
       const gmppGapUSD      = gmppGapKRW / activeER;
       const gmppExpectedUSD = gmppExpectedKRW / activeER;
-      const gmppTargetUSD   = gmppTargetKRW / activeER;
-      const gapUSD          = gapKRW / activeER;
-      const gmppGapUSD      = gmppGapKRW / activeER;
-      const gmppExpectedUSD = gmppExpectedKRW / activeER;
 
       // ★ 누적 달성치 = status === 'Ship Confirm' 인 것만 (Target 대비 매출 기준)
       const shipConfirmData  = currentQData.filter(d => d.status === 'Ship Confirm');
@@ -552,12 +542,10 @@
       const shipConfirmUSD   = shipConfirmKRW / activeER;
       const shipConfirmCount = shipConfirmData.length;
       const shipConfirmPct   = targetKRW ? (shipConfirmKRW / targetKRW) * 100 : 0;
-
-      // ACT 예상치 (ACT만)
-      const actData    = currentQData.filter(d => d.status === 'ACT');
-      const actKRW     = actData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const actUSD     = actKRW / activeER;
-      const actPct     = targetKRW ? (actKRW / targetKRW) * 100 : 0;
+      const actData          = currentQData.filter(d => d.status === 'ACT');
+      const actKRW           = actData.reduce((s, d) => s + (d.priceKRW || 0), 0);
+      const actUSD           = actKRW / activeER;
+      const actPct           = targetKRW ? (actKRW / targetKRW) * 100 : 0;
 
       const memberActFcstData = selectedMember ? expectedData.filter(d => d.member===selectedMember) : [];
       const memberACT         = memberActFcstData.reduce((s, d) => s + (d.priceKRW||0), 0);
@@ -588,20 +576,20 @@
       scData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
-      const renderProgressBar = (pActKRW, tgtKRW, er) => {
+      const renderProgressBar = (pAmt, tgtKRW, er) => {
         if (!tgtKRW) return null;
         const usedER = er || activeER || 1389;
         const target120 = tgtKRW * 1.2; const target140 = tgtKRW * 1.4; const target150 = tgtKRW * 1.5;
-        const per = (pActKRW / tgtKRW) * 100;
-        const maxScale = Math.max(target150, pActKRW * 1.05);
-        const actUSD = pActKRW / usedER;
+        const per = (pAmt / tgtKRW) * 100;
+        const maxScale = Math.max(target150, pAmt * 1.05);
+        const pbUSD = pAmt / usedER;
         return (
           <div className="w-full mt-6 md:mt-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
               <div className="mb-2 md:mb-0">
-                <span className="text-sm font-bold text-gray-600">{T.currentEst}: ₩ {pActKRW.toLocaleString()}</span>
+                <span className="text-sm font-bold text-gray-600">{T.currentEst}: ₩ {pAmt.toLocaleString()}</span>
                 <span className="ml-3 text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                  {lang==='ko'?'현재 누적 예상치 (USD)':'Cumulative Est. (USD)'}: $ {actUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  {lang==='ko'?'현재 누적 예상치 (USD)':'Cumulative Est. (USD)'}: $ {pbUSD.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
                 </span>
               </div>
               <span className={`text-lg font-extrabold ${per >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{T.achievement}: {per.toFixed(1)}%</span>
@@ -613,7 +601,7 @@
               </div>
             </div>
             <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
-              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-xs md:text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width:`${(pActKRW/maxScale)*100}%` }}>{per > 5 && `${per.toFixed(1)}%`}</div>
+              <div className={`h-full transition-all duration-1000 ease-out flex items-center justify-end pr-3 text-white font-bold text-xs md:text-sm ${per >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width:`${(pAmt/maxScale)*100}%` }}>{per > 5 && `${per.toFixed(1)}%`}</div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500"    style={{ left:`${(tgtKRW/maxScale)*100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300"  style={{ left:`${(target120/maxScale)*100}%` }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-purple-300" style={{ left:`${(target140/maxScale)*100}%` }}></div>
@@ -686,7 +674,7 @@
           <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
           <td className="p-2 md:p-3">{row.product}</td>
           <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
-          <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>₩ {(row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>$ {(row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
+          <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>{'₩ ' + (row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>{'$ ' + (row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
           <td className="p-2 md:p-3 text-center space-x-1">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
@@ -704,11 +692,11 @@
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }} />
+          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
           {/* [FIX #10] 토스트 */}
           {toast && <Toast msg={toast.msg} type={toast.type} />}
 
-          {/* 환율 편집 모달 */}
+          {/* ER 환율 편집 모달 */}
           {showErModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
               onClick={() => { setShowErModal(false); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }}>
@@ -721,7 +709,7 @@
                     <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '환율을 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit the exchange rate.'}</p>
                     <input type="password" autoFocus value={erPwdInput} onChange={e => { setErPwdInput(e.target.value); setErPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleErUnlock()} placeholder="Password"
                       style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:erPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                    {erPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>❌ {lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.'}</p>}
+                    {erPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{'❌ ' + (lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.')}</p>}
                     <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
                       <button onClick={() => { setShowErModal(false); setErPwdInput(''); setErPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
                       <button onClick={handleErUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
@@ -729,44 +717,7 @@
                   </>
                 ) : (
                   <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? '새 환율을 입력하세요 (현재: ₩' + activeER.toLocaleString() + ')' : 'Enter new exchange rate (current: ₩' + activeER.toLocaleString() + ')'}</p>
-                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px'}}>
-                      <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
-                      <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
-                        style={{flex:1,padding:'10px 14px',borderRadius:'8px',border:'2px solid #93c5fd',fontFamily:'monospace',fontSize:'18px',fontWeight:'700',textAlign:'center',outline:'none',boxSizing:'border-box',color:'#1e3a5f'}} />
-                    </div>
-                    <div style={{display:'flex',gap:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErUnlocked(false); setErInputVal(''); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErSave} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '저장' : 'Save'}</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 환율 편집 모달 */}
-          {showErModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowErModal(false); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>💱</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '환율 (ER) 수정' : 'Edit Exchange Rate'}</h3>
-                {!erUnlocked ? (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '환율을 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit the exchange rate.'}</p>
-                    <input type="password" autoFocus value={erPwdInput} onChange={e => { setErPwdInput(e.target.value); setErPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleErUnlock()} placeholder="Password"
-                      style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:erPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                    {erPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>❌ {lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.'}</p>}
-                    <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErPwdInput(''); setErPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? `새 환율을 입력하세요 (현재: ₩${activeER.toLocaleString()})` : `Enter new exchange rate (current: ₩${activeER.toLocaleString()})`}</p>
+                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? ('새 환율 입력 (현재: ₩' + activeER.toLocaleString() + ')') : ('New exchange rate (current: ₩' + activeER.toLocaleString() + ')')}</p>
                     <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',justifyContent:'center'}}>
                       <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
                       <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
@@ -908,19 +859,19 @@
                     const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
                     const allCards = {
                       er: (id) => null,
-                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{T.targetKRWLabel}</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target ✏️</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       targetUSD: (id) => null,
-                      incentiveKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      incentiveKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       incentiveUSD: (id) => null,
-                      estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko'?'예상치 (ACT+Pending+SC)':'Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '예상치 (ACT+Pending+SC)' : 'Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       estimatedUSD: (id) => null,
-                      gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko'?'% 달성률':'% Attainment'}</span><div style={{display:'flex',flexDirection:'column',gap:'4px',marginTop:'4px'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'15px',color:actPct>=100?'#16a34a':c.value}}>{actPct.toFixed(1)}%</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#60a5fa',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'15px',color:shipConfirmPct>=100?'#16a34a':'#2563eb'}}>{shipConfirmPct.toFixed(1)}%</span></div></div></div>; },
-                      gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      gmppEstimated: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      actEstimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko'?'ACT 예상치':'ACT Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>$ {actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      shipConfirmKRW: (id) => { return <div className={cardBase} style={{background:'#0f172a',borderColor:'#1d4ed8'}}><span style={{display:'block',fontWeight:'700',fontSize:'13px',color:'#93c5fd',marginBottom:'8px'}}>{lang==='ko'?'SC 예상치 (Ship Confirm)':'SC Estimated'}</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',textAlign:'right',display:'block',color:'#60a5fa'}}>₩ {shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:'#94a3b8',marginTop:'2px'}}>$ {shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{marginTop:'6px'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'15px',color:actPct>=100?'#16a34a':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'4px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#3b82f6',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'15px',color:shipConfirmPct>=100?'#16a34a':'#2563eb'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div></div>; },
+                      gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      gmppEstimated: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      actEstimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      shipConfirmKRW: (id) => { return <div className={cardBase} style={{background:'#0f172a',borderColor:'#1d4ed8'}}><span style={{display:'block',fontWeight:'700',fontSize:'13px',color:'#93c5fd',marginBottom:'8px'}}>{lang==='ko' ? 'SC 예상치' : 'SC Estimated'}</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',textAlign:'right',display:'block',color:'#60a5fa'}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:'#94a3b8',marginTop:'2px'}}>{'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                     };
                     return (
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
