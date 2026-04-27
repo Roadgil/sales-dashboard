@@ -218,7 +218,11 @@ html,body{overflow-x:hidden;max-width:100vw;}
 </footer>
 </div>
 
-<button id="langToggleBtn" onclick="toggleLang()" style="position:fixed;top:16px;right:16px;z-index:9999;padding:6px 14px;border-radius:20px;border:1.5px solid #e4e6eb;background:white;cursor:pointer;font-weight:bold;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-family:'DM Mono',monospace;display:flex;align-items:center;gap:6px;">🇺🇸 EN</button>
+<div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;">
+  <div id="erDisplay" style="padding:5px 12px;border-radius:20px;border:1.5px solid #334155;background:#0f172a;font-weight:700;font-size:11px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><span style="color:#64748b">ER</span><span id="erValue" style="color:#e2e8f0">₩1,389</span></div>
+  <button id="langToggleBtn" onclick="toggleLang()" style="padding:6px 14px;border-radius:20px;border:1.5px solid #e4e6eb;background:white;cursor:pointer;font-weight:bold;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-family:'DM Mono',monospace;display:flex;align-items:center;gap:6px;">🇺🇸 EN</button>
+</div>
+<div id="erDisplay" style="position:fixed;top:16px;right:120px;z-index:9999;padding:5px 12px;border-radius:20px;border:1.5px solid #e4e6eb;background:#0f172a;font-weight:700;font-size:11px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2)"><span style="color:#64748b">ER</span><span id="erValue" style="color:#e2e8f0">₩1,389</span></div>
 
 <script>
 // ── [FIX #6] 다국어 ────────────────────────────────────────────────────────
@@ -495,7 +499,7 @@ function render(salesData, memberTargets) {
   document.getElementById('split-indirect-sub').textContent = `${fmtAmt(indirectKRW)} · ${indirectCount}${_lang==='ko'?'건':'cs'}`;
 
   // 딜러
-  const ALL_INDIRECT_DEALERS = ['SEVEN U','Innomed','TMI','알펙스메디','동안기획','Bori','Beauko','엠디마케팅','티모티','엘룩스코리아','seed group','Human','기타'];
+  const ALL_INDIRECT_DEALERS = ['병원','Innomed','SEVEN U','TMI','알펙스메디'];
   const dealerSum = {}, dealerCount = {};
   ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d]=0; dealerCount[d]=0; });
   qData.filter(d => d.salesType==='Indirect').forEach(d => {
@@ -606,7 +610,7 @@ function switchMemberTab(id, btn) {
 
 // ── Firebase 실시간 로드 ────────────────────────────────────────────────────
 let _sales = [], _targets = {}, _loaded = { s:false, t:false, q:false };
-const tryRender = () => { if (_loaded.s && _loaded.t && _loaded.q) { render(_sales, _targets); applyLang(); } };
+const tryRender = () => { if (_loaded.s && _loaded.t && _loaded.q) { render(_sales, _targets); applyLang(); const erEl = document.getElementById('erValue'); if(erEl) erEl.textContent = '₩' + _er.toLocaleString(); } };
 
 db.collection("targets").doc("quarterTargets").onSnapshot(doc => {
   if (doc.exists) { const qT = doc.data(); _er = qT?.[QUARTER]?.er || 1389; }
