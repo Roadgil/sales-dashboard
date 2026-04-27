@@ -116,48 +116,9 @@
 
       const ALLOWED_DOMAIN = 'candelamedical.com';
 
-      useEffect(() => {
-        if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
-          let email = safeLS.get('emailForSignIn');
-          if (!email) email = window.prompt('보안 확인: 이메일 주소를 다시 입력해주세요.');
-          if (email) {
-            firebase.auth().signInWithEmailLink(email, window.location.href)
-              .then(() => {
-                safeLS.remove('emailForSignIn');
-                window.history.replaceState({}, document.title, window.location.pathname);
-              })
-              .catch(() => {
-                setEmailError('인증 링크가 만료되었거나 이미 사용된 링크입니다. 다시 요청해주세요.');
-                setAuthChecking(false);
-              });
-          } else { setAuthChecking(false); }
-        }
-        const unsubAuth = firebase.auth().onAuthStateChanged(user => {
-          if (user && user.email && user.email.endsWith('@' + ALLOWED_DOMAIN)) {
-            setIsLoggedIn(true); setAuthUser(user.email);
-          } else {
-            setIsLoggedIn(false); setAuthUser(null);
-            if (user) firebase.auth().signOut();
-          }
-          setAuthChecking(false);
-        });
-        return () => unsubAuth();
-      }, []);
+      // 인증 없음 - 모든 사용자 접근 허용
 
-      const handleSendLink = (e) => {
-        e.preventDefault();
-        const email = emailInput.trim().toLowerCase();
-        if (!email) { setEmailError(lang==='ko' ? '이메일을 입력해주세요.' : 'Please enter your email.'); return; }
-        if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
-          setEmailError(lang==='ko' ? `@${ALLOWED_DOMAIN} 이메일만 접근 가능합니다.` : `Only @${ALLOWED_DOMAIN} emails are allowed.`);
-          return;
-        }
-        setSendingLink(true); setEmailError('');
-        const actionCodeSettings = { url: window.location.origin + window.location.pathname, handleCodeInApp: true };
-        firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings)
-          .then(() => { safeLS.set('emailForSignIn', email); setLinkSent(true); setSendingLink(false); })
-          .catch(() => { setEmailError(lang==='ko' ? '이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.' : 'Failed to send email. Please try again.'); setSendingLink(false); });
-      };
+
 
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -323,7 +284,6 @@
 
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
-        if (!isLoggedIn) return;
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
         const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
@@ -471,7 +431,6 @@
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
 
       useEffect(() => {
-        if (!isLoggedIn) return;
         const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) { const d = doc.data(); if (d && typeof d === 'object') setRowOrders(d); } });
         return () => unsub();
       }, [isLoggedIn]);
@@ -513,38 +472,6 @@
             <div style={{width:'40px',height:'40px',border:'4px solid rgba(255,255,255,0.15)',borderTop:'4px solid #60a5fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
             <p style={{color:'#94a3b8',fontSize:'14px',fontWeight:'600'}}>인증 확인 중...</p>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          </div>
-        );
-      }
-
-      if (!isLoggedIn) {
-        return (
-          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
-            <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
-            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
-              {!linkSent ? (
-                <>
-                  <div className="text-4xl mb-4">🔐</div>
-                  <h2 className="text-2xl font-extrabold text-slate-800 mb-1">{lang==='ko' ? '영업 납품처 Dashboard' : 'Sales Delivery Dashboard'}</h2>
-                  <p className="text-blue-600 text-xs font-bold mb-7 bg-blue-50 py-1.5 px-3 rounded-full inline-block">@{ALLOWED_DOMAIN} 이메일만 접근 가능</p>
-                  <form onSubmit={handleSendLink} className="flex flex-col space-y-3">
-                    <input type="email" value={emailInput} onChange={e => { setEmailInput(e.target.value); setEmailError(''); }} className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 text-center text-sm font-mono transition" placeholder={`example@${ALLOWED_DOMAIN}`} autoFocus />
-                    {emailError && <p className="text-red-500 text-xs font-bold bg-red-50 py-2 px-3 rounded-lg">{emailError}</p>}
-                    <button type="submit" disabled={sendingLink} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-xl shadow-md transition duration-200 flex items-center justify-center gap-2">
-                      {sendingLink ? <><span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}} /> {lang==='ko' ? '발송 중...' : 'Sending...'}</> : (lang==='ko' ? '✉️ 로그인 링크 받기' : '✉️ Send Login Link')}
-                    </button>
-                  </form>
-                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-                </>
-              ) : (
-                <>
-                  <div className="text-5xl mb-5">📬</div>
-                  <h2 className="text-xl font-extrabold text-slate-800 mb-3">{lang==='ko' ? '이메일을 확인해주세요!' : 'Check your email!'}</h2>
-                  <p className="text-blue-600 font-bold text-sm mb-6 bg-blue-50 py-2 px-4 rounded-lg inline-block">{emailInput}</p>
-                  <button onClick={() => { setLinkSent(false); setEmailInput(''); setEmailError(''); }} className="text-sm text-slate-400 hover:text-blue-600 underline transition">{lang==='ko' ? '다른 이메일로 다시 시도' : 'Try a different email'}</button>
-                </>
-              )}
-            </div>
           </div>
         );
       }
@@ -851,8 +778,7 @@
                   </div>
                 )}
               </div>
-              <button onClick={() => firebase.auth().signOut()} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
-              {authUser && <p className="text-slate-500 text-[10px] mt-2 text-center truncate px-1">{authUser}</p>}
+
             </div>
           </div>
 
