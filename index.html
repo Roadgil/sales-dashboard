@@ -89,9 +89,9 @@
       }
 
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
-      const [isLoggedIn, setIsLoggedIn]     = useState(true);
-      const [authChecking, setAuthChecking] = useState(false);
-      const [authUser, setAuthUser]         = useState('local');
+      const [isLoggedIn, setIsLoggedIn]     = useState(false);
+      const [authChecking, setAuthChecking] = useState(true);
+      const [authUser, setAuthUser]         = useState(null);
 
       const [emailInput, setEmailInput] = useState('');
       const [linkSent, setLinkSent]     = useState(false);
@@ -107,7 +107,33 @@
 
       const ALLOWED_DOMAIN = 'candelamedical.com';
 
-      // 인증 없음 - 모든 사용자 접근 허용
+      useEffect(() => {
+        if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
+          let email = localStorage.getItem('emailForSignIn');
+          if (!email) email = window.prompt('보안 확인: 이메일 주소를 다시 입력해주세요.');
+          if (email) {
+            firebase.auth().signInWithEmailLink(email, window.location.href)
+              .then(() => {
+                localStorage.removeItem('emailForSignIn');
+                window.history.replaceState({}, document.title, window.location.pathname);
+              })
+              .catch(() => {
+                setEmailError('인증 링크가 만료되었거나 이미 사용된 링크입니다. 다시 요청해주세요.');
+                setAuthChecking(false);
+              });
+          } else { setAuthChecking(false); }
+        }
+        const unsubAuth = firebase.auth().onAuthStateChanged(user => {
+          if (user && user.email && user.email.endsWith('@' + ALLOWED_DOMAIN)) {
+            setIsLoggedIn(true); setAuthUser(user.email);
+          } else {
+            setIsLoggedIn(false); setAuthUser(null);
+            if (user) firebase.auth().signOut();
+          }
+          setAuthChecking(false);
+        });
+        return () => unsubAuth();
+      }, []);
 
       const handleSendLink = (e) => {
         e.preventDefault();
@@ -288,6 +314,7 @@
 
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
+        if (!isLoggedIn) return;
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
         const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
@@ -435,6 +462,7 @@
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
 
       useEffect(() => {
+        if (!isLoggedIn) return;
         const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) { const d = doc.data(); if (d && typeof d === 'object') setRowOrders(d); } });
         return () => unsub();
       }, [isLoggedIn]);
@@ -470,9 +498,47 @@
       const groupedQuarters = safeQuarters.reduce((acc, q) => { const [year, quarter] = (q||'').split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
 
       // ── Auth 확인 중 ──────────────────────────────────────────────────────
+      if (authChecking) {
+        return (
+          <div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center',background:'#1e293b',flexDirection:'column',gap:'16px'}}>
+            <div style={{width:'40px',height:'40px',border:'4px solid rgba(255,255,255,0.15)',borderTop:'4px solid #60a5fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
+            <p style={{color:'#94a3b8',fontSize:'14px',fontWeight:'600'}}>인증 확인 중...</p>
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        );
+      }
 
-
-
+      if (!isLoggedIn) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800 font-sans px-4">
+            <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
+            <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md text-center">
+              {!linkSent ? (
+                <>
+                  <div className="text-4xl mb-4">🔐</div>
+                  <h2 className="text-2xl font-extrabold text-slate-800 mb-1">{lang==='ko' ? '영업 납품처 Dashboard' : 'Sales Delivery Dashboard'}</h2>
+                  <p className="text-blue-600 text-xs font-bold mb-7 bg-blue-50 py-1.5 px-3 rounded-full inline-block">@{ALLOWED_DOMAIN} 이메일만 접근 가능</p>
+                  <form onSubmit={handleSendLink} className="flex flex-col space-y-3">
+                    <input type="email" value={emailInput} onChange={e => { setEmailInput(e.target.value); setEmailError(''); }} className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 text-center text-sm font-mono transition" placeholder={`example@${ALLOWED_DOMAIN}`} autoFocus />
+                    {emailError && <p className="text-red-500 text-xs font-bold bg-red-50 py-2 px-3 rounded-lg">{emailError}</p>}
+                    <button type="submit" disabled={sendingLink} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-xl shadow-md transition duration-200 flex items-center justify-center gap-2">
+                      {sendingLink ? <><span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}} /> {lang==='ko' ? '발송 중...' : 'Sending...'}</> : (lang==='ko' ? '✉️ 로그인 링크 받기' : '✉️ Send Login Link')}
+                    </button>
+                  </form>
+                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl mb-5">📬</div>
+                  <h2 className="text-xl font-extrabold text-slate-800 mb-3">{lang==='ko' ? '이메일을 확인해주세요!' : 'Check your email!'}</h2>
+                  <p className="text-blue-600 font-bold text-sm mb-6 bg-blue-50 py-2 px-4 rounded-lg inline-block">{emailInput}</p>
+                  <button onClick={() => { setLinkSent(false); setEmailInput(''); setEmailError(''); }} className="text-sm text-slate-400 hover:text-blue-600 underline transition">{lang==='ko' ? '다른 이메일로 다시 시도' : 'Try a different email'}</button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
 
       // ── [FIX #1] 집계 기준: ACT + Pending 만 (Backup/미납 제외) ──────────
       const currentQData   = salesData.filter(d => d.quarter === selectedQuarter);
@@ -694,8 +760,6 @@
             </div>
           )}
 
-
-
           {/* 분기 요약 비밀번호 모달 */}
           {showSummaryPwdModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
@@ -704,7 +768,7 @@
                 onClick={e => e.stopPropagation()}>
                 <div style={{fontSize:'32px',marginBottom:'8px'}}>🔐</div>
                 <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '수정 잠금 해제' : 'Unlock Editing'}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '지표를 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit values.'}</p>
+                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '분기 요약 지표를 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit Quarter Summary values.'}</p>
                 <input type="password" autoFocus value={summaryPwdInput} onChange={e => { setSummaryPwdInput(e.target.value); setSummaryPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleSummaryUnlock()} placeholder="Password"
                   style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:summaryPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
                 {summaryPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
@@ -778,7 +842,8 @@
                   </div>
                 )}
               </div>
-
+              <button onClick={() => firebase.auth().signOut()} className="w-full mt-4 border border-slate-600 text-slate-400 py-2 rounded text-sm hover:bg-slate-700 transition">{T.logout}</button>
+              {authUser && <p className="text-slate-500 text-[10px] mt-2 text-center truncate px-1">{authUser}</p>}
             </div>
           </div>
 
@@ -807,7 +872,6 @@
                       {summaryLocked
                         ? <button onClick={() => setShowSummaryPwdModal(true)} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
                         : <button onClick={() => setSummaryLocked(true)} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #86efac',background:'#f0fdf4',color:'#15803d',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔓</button>}
-                      
                     </h3>
                     {/* [FIX #4] 현재 selectedQuarter를 파라미터로 전달 */}
                     <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
@@ -824,14 +888,14 @@
                       er: (id) => null,
                       targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target ✏️</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       targetUSD: (id) => null,
-                      incentiveKRW: (id) => { const c=C(id); const incentivePct = incentiveTargetKRW ? (expectedKRW / incentiveTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:incentivePct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'ACT+SC: ' + incentivePct.toFixed(1) + '%'}</span></div>; },
+                      incentiveKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       incentiveUSD: (id) => null,
                       estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '예상치 (ACT+SC)' : 'Estimated (ACT+SC)'}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       estimatedUSD: (id) => null,
                       gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px',marginBottom:'2px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:actPct>=100?'#16a34a':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'2px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#3b82f6',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:shipConfirmPct>=100?'#16a34a':'#2563eb'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div>; },
                       gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:gmppPct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'vs Target: ' + gmppPct.toFixed(1) + '%'}</span></div>; },
+                      gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치 (ACT+SC)</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:gmppPct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'vs Target: ' + gmppPct.toFixed(1) + '%'}</span></div>; },
                       gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       actEstimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       shipConfirmKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'SC 예상치' : 'SC Estimated'}</span><span className={valueCls} style={{color:c.value}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
