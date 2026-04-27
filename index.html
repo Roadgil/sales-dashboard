@@ -99,7 +99,7 @@
 
       const [lang, setLang] = useState(safeLS.get('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn]     = useState(true);
-      const [authChecking, setAuthChecking] = useState(true);
+      const [authChecking, setAuthChecking] = useState(false);
       const [authUser, setAuthUser]         = useState(null);
 
       const [emailInput, setEmailInput] = useState('');
