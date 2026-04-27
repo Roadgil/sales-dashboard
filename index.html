@@ -48,6 +48,20 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
 
+    // localStorage 안전 헬퍼 (Edge 추적방지 등으로 막혀도 크래시 안 나도록)
+    const safeStorage = {
+      get: (key) => { try { return localStorage.getItem(key); } catch { return null; } },
+      set: (key, val) => { try { localStorage.setItem(key, val); } catch {} },
+      remove: (key) => { try { localStorage.removeItem(key); } catch {} },
+    };
+
+    // localStorage 안전 헬퍼 (Edge 추적방지 등으로 막혀도 크래시 안 나도록)
+    const safeStorage = {
+      get: (key) => { try { return localStorage.getItem(key); } catch { return null; } },
+      set: (key, val) => { try { localStorage.setItem(key, val); } catch {} },
+      remove: (key) => { try { localStorage.removeItem(key); } catch {} },
+    };
+
     // ── [FIX #10] 토스트 컴포넌트 ──────────────────────────────────────────
     const Toast = ({ msg, type }) => (
       <div style={{
@@ -74,7 +88,7 @@
           </button>
         )}
         <button
-          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); safeStorage.set('lang',next); }}
           style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
             background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
             boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
@@ -88,13 +102,13 @@
       const SECRET_PASSWORD = "dladydcjf";
       // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
       const CACHE_VERSION = 'v3';
-      if (localStorage.getItem('cacheVersion') !== CACHE_VERSION) {
-        localStorage.removeItem('summaryCardOrder');
+      if (safeStorage.get('cacheVersion') !== CACHE_VERSION) {
+        safeStorage.remove('summaryCardOrder');
         localStorage.removeItem('summaryCardColors');
-        localStorage.setItem('cacheVersion', CACHE_VERSION);
+        safeStorage.set('cacheVersion', CACHE_VERSION);
       }
 
-      const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
+      const [lang, setLang] = useState(safeStorage.get('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn]     = useState(false);
       const [authChecking, setAuthChecking] = useState(true);
       const [authUser, setAuthUser]         = useState(null);
@@ -115,12 +129,12 @@
 
       useEffect(() => {
         if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
-          let email = localStorage.getItem('emailForSignIn');
+          let email = safeStorage.get('emailForSignIn');
           if (!email) email = window.prompt('보안 확인: 이메일 주소를 다시 입력해주세요.');
           if (email) {
             firebase.auth().signInWithEmailLink(email, window.location.href)
               .then(() => {
-                localStorage.removeItem('emailForSignIn');
+                safeStorage.remove('emailForSignIn');
                 window.history.replaceState({}, document.title, window.location.pathname);
               })
               .catch(() => {
@@ -152,7 +166,7 @@
         setSendingLink(true); setEmailError('');
         const actionCodeSettings = { url: window.location.origin + window.location.pathname, handleCodeInApp: true };
         firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings)
-          .then(() => { localStorage.setItem('emailForSignIn', email); setLinkSent(true); setSendingLink(false); })
+          .then(() => { safeStorage.set('emailForSignIn', email); setLinkSent(true); setSendingLink(false); })
           .catch(() => { setEmailError(lang==='ko' ? '이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.' : 'Failed to send email. Please try again.'); setSendingLink(false); });
       };
 
@@ -264,12 +278,12 @@
       const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','attainRate','gmppTarget','gmppEstimated','gmppGap'];
       const [cardOrder, setCardOrder] = useState(() => {
         try {
-          const s = localStorage.getItem('summaryCardOrder');
+          const s = safeStorage.get('summaryCardOrder');
           if (!s) return DEFAULT_CARD_ORDER;
           const saved = JSON.parse(s);
-          if (!Array.isArray(saved)) { localStorage.removeItem('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
+          if (!Array.isArray(saved)) { safeStorage.remove('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
           const hasAllCards = DEFAULT_CARD_ORDER.every(id => saved.includes(id));
-          if (!hasAllCards) { localStorage.removeItem('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
+          if (!hasAllCards) { safeStorage.remove('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
           return saved;
         } catch { return DEFAULT_CARD_ORDER; }
       });
@@ -283,7 +297,7 @@
         rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
       };
       const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', actEstimatedKRW:'rose', shipConfirmKRW:'blue', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
-      const [cardColors, setCardColors]       = useState(() => { try { const s = localStorage.getItem('summaryCardColors'); if (!s) return DEFAULT_CARD_COLORS; const p = JSON.parse(s); return (typeof p === 'object' && !Array.isArray(p)) ? {...DEFAULT_CARD_COLORS, ...p} : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
+      const [cardColors, setCardColors]       = useState(() => { try { const s = safeStorage.get('summaryCardColors'); if (!s) return DEFAULT_CARD_COLORS; const p = JSON.parse(s); return (typeof p === 'object' && !Array.isArray(p)) ? {...DEFAULT_CARD_COLORS, ...p} : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
       const [summaryLocked, setSummaryLocked]           = useState(true);
@@ -316,7 +330,7 @@
           setPendingScAction(null);
         } else { setScPwdError(true); setScPwdInput(''); }
       };
-      const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); localStorage.setItem('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
+      const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); safeStorage.set('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
 
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
@@ -451,11 +465,11 @@
 
       const [showCsvMenu, setShowCsvMenu] = useState(false);
 
-      const moveCard = (idx, dir) => { const next = [...cardOrder]; const to = idx + dir; if (to < 0 || to >= next.length) return; [next[idx], next[to]] = [next[to], next[idx]]; setCardOrder(next); localStorage.setItem('summaryCardOrder', JSON.stringify(next)); };
+      const moveCard = (idx, dir) => { const next = [...cardOrder]; const to = idx + dir; if (to < 0 || to >= next.length) return; [next[idx], next[to]] = [next[to], next[idx]]; setCardOrder(next); safeStorage.set('summaryCardOrder', JSON.stringify(next)); };
       const [dragOverIdx, setDragOverIdx] = useState(null);
       const handleDragStart = (e, idx) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); };
       const handleDragOver  = (e, idx) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverIdx(idx); };
-      const handleDrop      = (e, toIdx) => { e.preventDefault(); const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10); if (fromIdx === toIdx) { setDragOverIdx(null); return; } const next = [...cardOrder]; const [moved] = next.splice(fromIdx, 1); next.splice(toIdx, 0, moved); setCardOrder(next); localStorage.setItem('summaryCardOrder', JSON.stringify(next)); setDragOverIdx(null); };
+      const handleDrop      = (e, toIdx) => { e.preventDefault(); const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10); if (fromIdx === toIdx) { setDragOverIdx(null); return; } const next = [...cardOrder]; const [moved] = next.splice(fromIdx, 1); next.splice(toIdx, 0, moved); setCardOrder(next); safeStorage.set('summaryCardOrder', JSON.stringify(next)); setDragOverIdx(null); };
       const handleDragEnd   = () => setDragOverIdx(null);
 
       const [allListFilters, setAllListFilters] = useState({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
