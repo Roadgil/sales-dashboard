@@ -351,14 +351,22 @@
         const DIRECT_DEALERS = ['병원'];
         const autoSalesType = DIRECT_DEALERS.includes(form.dealerName) ? 'Direct' : 'Indirect';
         const payload = {
-          ...form,
-          salesType: autoSalesType,
-          priceKRW: finalKRW,
-          priceUSD: parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
-          id:       editingId ? editingId : crypto.randomUUID(),
-          quarter:  selectedQuarter,
-          team:     selectedTeam,
-          member:   selectedMember,
+          status:       String(form.status || ''),
+          contractType: String(form.contractType || '일반'),
+          contractDate: String(form.contractDate || ''),
+          deliveryDate: String(form.deliveryDate || ''),
+          so:           String(form.so || ''),
+          account:      String(form.account || ''),
+          product:      String(form.product || 'GMPP'),
+          accType:      String(form.accType || ''),
+          dealerName:   String(form.dealerName || ''),
+          salesType:    autoSalesType,
+          priceKRW:     finalKRW,
+          priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
+          id:           editingId ? String(editingId) : crypto.randomUUID(),
+          quarter:      selectedQuarter,
+          team:         selectedTeam,
+          member:       selectedMember,
         };
 
         db.collection("sales").doc(payload.id).set(payload)
