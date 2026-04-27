@@ -56,13 +56,26 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const LangBtn = ({ lang, setLang }) => (
-      <button
-        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
-        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
-      >
-        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
-      </button>
+    const LangBtn = ({ lang, setLang, er }) => (
+      <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
+        {er && (
+          <div style={{
+            padding:'5px 12px', borderRadius:'20px', border:'1.5px solid #cbd5e1',
+            background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
+            fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
+            boxShadow:'0 2px 8px rgba(0,0,0,0.2)'
+          }}>
+            <span style={{color:'#64748b'}}>ER</span>
+            <span style={{color:'#e2e8f0'}}>₩{er.toLocaleString()}</span>
+          </div>
+        )}
+        <button
+          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+          style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
+        >
+          {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+        </button>
+      </div>
     );
 
     const ReportApp = () => {
@@ -127,7 +140,7 @@
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800">
-            <LangBtn lang={lang} setLang={setLang} />
+            <LangBtn lang={lang} setLang={setLang} er={quarterTargets[selectedQuarter]?.er || 1389} />
             <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
               <h2 className="text-xl font-bold mb-4">{T.loginTitle}</h2>
               <input type="password" value={pwdInput} onChange={e=>setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password"/>
@@ -208,7 +221,7 @@
 
       return (
         <div className="p-6 md:p-8">
-          <LangBtn lang={lang} setLang={setLang} />
+          <LangBtn lang={lang} setLang={setLang} er={quarterTargets[selectedQuarter]?.er || 1389} />
           <div className="flex justify-between items-end mb-4">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
