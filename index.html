@@ -80,6 +80,13 @@
 
     const App = () => {
       const SECRET_PASSWORD = "dladydcjf";
+      // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
+      const CACHE_VERSION = 'v3';
+      if (localStorage.getItem('cacheVersion') !== CACHE_VERSION) {
+        localStorage.removeItem('summaryCardOrder');
+        localStorage.removeItem('summaryCardColors');
+        localStorage.setItem('cacheVersion', CACHE_VERSION);
+      }
 
       const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn]     = useState(false);
@@ -168,9 +175,9 @@
         gmppEstimated:     lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
         attainRate:        lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
         salesTypeShare:    lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
-        tabByEquip:        lang==='ko' ? '📊 장비별 전체'              : '📊 By Equipment',
-        tabDealer:         lang==='ko' ? '🤝 딜러 (전체)'              : '🤝 Dealers (All)',
-        tabMember:         lang==='ko' ? '🧑‍💼 멤버 달성률'              : '🧑‍💼 Member Achievement',
+        tabByEquip:        lang==='ko' ? '📊 장비별 (ACT+SC)'          : '📊 By Equipment (ACT+SC)',
+        tabDealer:         lang==='ko' ? '🤝 딜러별 (ACT+SC)'          : '🤝 Dealers (ACT+SC)',
+        tabMember:         lang==='ko' ? '🧑‍💼 멤버 달성률 (SC 기준)'     : '🧑‍💼 Member Achievement (SC)',
         addTab:            lang==='ko' ? '+ 탭 추가'                   : '+ Add Tab',
         addMember:         lang==='ko' ? '+ 항목 추가'                  : '+ Add Member',
         memberList:        lang==='ko' ? '목록'                        : 'List',
@@ -254,6 +261,7 @@
           const s = localStorage.getItem('summaryCardOrder');
           if (!s) return DEFAULT_CARD_ORDER;
           const saved = JSON.parse(s);
+          if (!Array.isArray(saved)) { localStorage.removeItem('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
           const hasAllCards = DEFAULT_CARD_ORDER.every(id => saved.includes(id));
           if (!hasAllCards) { localStorage.removeItem('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
           return saved;
@@ -269,7 +277,7 @@
         rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
       };
       const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', actEstimatedKRW:'rose', shipConfirmKRW:'blue', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
-      const [cardColors, setCardColors]       = useState(() => { try { const s = localStorage.getItem('summaryCardColors'); return s ? JSON.parse(s) : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
+      const [cardColors, setCardColors]       = useState(() => { try { const s = localStorage.getItem('summaryCardColors'); if (!s) return DEFAULT_CARD_COLORS; const p = JSON.parse(s); return (typeof p === 'object' && !Array.isArray(p)) ? {...DEFAULT_CARD_COLORS, ...p} : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
       const [summaryLocked, setSummaryLocked]           = useState(true);
