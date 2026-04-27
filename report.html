@@ -11,9 +11,24 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
+  <!-- [FIX #5] Firebase 초기화 단일 위치 -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
+      authDomain: "sales-dashboard-d0d13.firebaseapp.com",
+      projectId: "sales-dashboard-d0d13",
+      storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
+      messagingSenderId: "870275096697",
+      appId: "1:870275096697:web:cd7373b77358681e21b4a8",
+      measurementId: "G-K5G6BMNBX9"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
+
   <style>
     body { background-color: #f1f5f9; font-family: 'Arial', sans-serif; }
-    .excel-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;}
+    .excel-container { overflow-x: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; }
     .excel-table { border-collapse: collapse; white-space: nowrap; width: max-content; }
     .excel-table th, .excel-table td { border: 1px solid #94a3b8; padding: 6px 12px; font-size: 12px; text-align: right; }
     .excel-table th { background-color: #dbeafe; color: #1e293b; font-weight: bold; text-align: center; }
@@ -28,94 +43,64 @@
     .font-bold { font-weight: bold !important; }
     ::-webkit-scrollbar { height: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
-
-    /* ① 주차 날짜 자동 표시 */
-    .week-date-label {
-      display: block;
-      font-size: 9px;
-      font-weight: normal;
-      color: #1e293b;
-      margin-top: 3px;
-      letter-spacing: 0.2px;
-    }
-
-    /* ③ Progress 셀 */
+    .week-date-label { display: block; font-size: 9px; font-weight: normal; color: #1e293b; margin-top: 3px; letter-spacing: 0.2px; }
     .progress-cell { background-color: #eff6ff !important; color: #1d4ed8 !important; font-weight: bold !important; }
+
+    /* [FIX #1] 집계 기준 배너 */
+    .basis-note { background: #eef1ff; border: 1px solid #c2ccf7; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #3d6aff; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
-      authDomain: "sales-dashboard-d0d13.firebaseapp.com",
-      projectId: "sales-dashboard-d0d13",
-      storageBucket: "sales-dashboard-d0d13.firebasestorage.app",
-      messagingSenderId: "870275096697",
-      appId: "1:870275096697:web:cd7373b77358681e21b4a8",
-      measurementId: "G-K5G6BMNBX9"
-    };
-
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
     const { useState, useEffect } = React;
 
     const LangBtn = ({ lang, setLang }) => (
       <button
-        onClick={() => { const next = lang === 'ko' ? 'en' : 'ko'; setLang(next); localStorage.setItem('lang', next); }}
-        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999,
-          padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8',
-          background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
-          boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
+        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
       >
-        {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
       </button>
     );
 
     const ReportApp = () => {
-      const SECRET_PASSWORD = "dladydcjf"; 
-      const [lang, setLang] = useState(localStorage.getItem('lang') || 'ko');
+      const SECRET_PASSWORD = "dladydcjf";
+      const [lang, setLang]           = useState(localStorage.getItem('lang') || 'ko');
       const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
-      const [pwdInput, setPwdInput] = useState('');
+      const [pwdInput, setPwdInput]   = useState('');
 
       const T = {
-        loginTitle:   lang==='ko' ? '📈 보고용 리포트 보안접속'  : '📈 Secure Access — Sales Report',
-        loginBtn:     lang==='ko' ? '접속하기'                  : 'Log In',
-        wrongPwd:     lang==='ko' ? '비밀번호 불일치!'            : 'Incorrect password!',
-        closeBtn:     lang==='ko' ? '닫기'                      : 'Close',
-        unitSuffix:   lang==='ko' ? '대'                        : 'unit(s)',
-        noData:       lang==='ko' ? '-'                         : '-',
-        systemRequired: lang==='ko' ? 'System Required (# of unit)' : 'System Required (# of unit)',
-        salesCount:   lang==='ko' ? 'Sales Count'               : 'Sales Count',
+        loginTitle:     lang==='ko' ? '📈 보고용 리포트 보안접속'  : '📈 Secure Access — Sales Report',
+        loginBtn:       lang==='ko' ? '접속하기'                   : 'Log In',
+        wrongPwd:       lang==='ko' ? '비밀번호 불일치!'            : 'Incorrect password!',
+        closeBtn:       lang==='ko' ? '닫기'                       : 'Close',
+        unitSuffix:     lang==='ko' ? '대'                         : 'unit(s)',
+        noData:         lang==='ko' ? '-'                          : '-',
+        // [FIX #1] 집계 기준 명시
+        basisNote:      lang==='ko'
+          ? 'ℹ 집계 기준: shipConfirm=Yes 데이터 (ACT 확정 납품분). index.html 예상치와 기준이 다를 수 있습니다.'
+          : 'ℹ Revenue basis: shipConfirm=Yes records (confirmed ACT deliveries). May differ from index.html estimated figures.',
       };
 
-      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
+      const [quarters, setQuarters]             = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
-      const [salesData, setSalesData] = useState([]);
+      const [salesData, setSalesData]           = useState([]);
       const [quarterTargets, setQuarterTargets] = useState({});
-      const [memberTargets, setMemberTargets] = useState({});
-      const [teams, setTeams] = useState({
-        'Team 1': ['Kim SH', 'Oh SG'],
-        'Team 2': ['Baek SC', 'Lee GR'],
-        'Team 3': ['YC lim']
-      });
+      const [memberTargets, setMemberTargets]   = useState({});
+      const [teams, setTeams] = useState({ 'Team 1':['Kim SH','Oh SG'], 'Team 2':['Baek SC','Lee GR'], 'Team 3':['YC lim'] });
 
-      // ① 주차별 날짜 자동 계산
       const getWeekRanges = (year, month) => {
-        const pad = (n) => String(n).padStart(2, '0');
-        const lastDay = new Date(year, month, 0).getDate(); // 해당 월 마지막 날
+        const pad = n => String(n).padStart(2,'0');
+        const lastDay = new Date(year, month, 0).getDate();
         const ranges = [
           `${pad(month)}/01~${pad(month)}/07`,
           `${pad(month)}/08~${pad(month)}/14`,
           `${pad(month)}/15~${pad(month)}/21`,
           `${pad(month)}/22~${pad(month)}/28`,
         ];
-        if (lastDay >= 29) {
-          ranges.push(`${pad(month)}/29~${pad(month)}/${lastDay}`);
-        } else {
-          ranges.push(null); // 5주차 없는 달
-        }
+        ranges.push(lastDay >= 29 ? `${pad(month)}/29~${pad(month)}/${lastDay}` : null);
         return ranges;
       };
 
@@ -129,20 +114,13 @@
       };
 
       useEffect(() => {
-        if (!isLoggedIn) return; 
-        const unsubSales = db.collection("sales").onSnapshot((snap) => setSalesData(snap.docs.map(doc => doc.data())));
-        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot((doc) => { if(doc.exists) setQuarterTargets(doc.data()); });
-        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot((doc) => { if(doc.exists) setMemberTargets(doc.data()); });
-        
-        // ✨ 팀 구조 및 분기 자동 동기화
-        const unsubLayout = db.collection("settings").doc("layout").onSnapshot((doc) => {
-          if (doc.exists) {
-            const data = doc.data();
-            if (data.teams) setTeams(data.teams);
-            if (data.quarters) setQuarters(data.quarters);
-          }
+        if (!isLoggedIn) return;
+        const unsubSales   = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
+        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
+        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
+        const unsubLayout  = db.collection("settings").doc("layout").onSnapshot(doc => {
+          if (doc.exists) { const d = doc.data(); if (d.teams) setTeams(d.teams); if (d.quarters) setQuarters(d.quarters); }
         });
-
         return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
       }, [isLoggedIn]);
 
@@ -152,122 +130,103 @@
             <LangBtn lang={lang} setLang={setLang} />
             <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
               <h2 className="text-xl font-bold mb-4">{T.loginTitle}</h2>
-              <input type="password" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password" />
+              <input type="password" value={pwdInput} onChange={e=>setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password"/>
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition">{T.loginBtn}</button>
             </form>
           </div>
         );
       }
 
-      // 월별 및 주차별 분류 로직
+      // 월 설정
       const qStr = selectedQuarter.split(' ')[1] || 'Q1';
-      let m1=1, m2=2, m3=3;
-      let m1Name='Jan', m2Name='Feb', m3Name='Mar';
-      if(qStr === 'Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
-      if(qStr === 'Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
-      if(qStr === 'Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
+      let m1=1, m2=2, m3=3, m1Name='Jan', m2Name='Feb', m3Name='Mar';
+      if (qStr==='Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
+      if (qStr==='Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
+      if (qStr==='Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
 
       const year = parseInt(selectedQuarter.split(' ')[0], 10) || new Date().getFullYear();
       const weekRangesM1 = getWeekRanges(year, m1);
       const weekRangesM2 = getWeekRanges(year, m2);
       const weekRangesM3 = getWeekRanges(year, m3);
 
-      const getMonthIdx = (dStr) => {
-        if(!dStr) return -1;
-        const m = parseInt(dStr.split('-')[1], 10);
-        return isNaN(m) ? -1 : m;
-      };
-      const getWeekIdx = (dStr) => {
-        if(!dStr) return 0;
-        const d = parseInt(dStr.split('-')[2], 10);
-        if(isNaN(d)) return 0;
-        if(d <= 7) return 1;
-        if(d <= 14) return 2;
-        if(d <= 21) return 3;
-        if(d <= 28) return 4;
-        return 5;
+      const getMonthIdx = dStr => { if (!dStr) return -1; const m = parseInt(dStr.split('-')[1],10); return isNaN(m) ? -1 : m; };
+      const getWeekIdx  = dStr => {
+        if (!dStr) return 0;
+        const d = parseInt(dStr.split('-')[2],10);
+        if (isNaN(d)) return 0;
+        if (d<=7) return 1; if (d<=14) return 2; if (d<=21) return 3; if (d<=28) return 4; return 5;
       };
 
-      // 백만원(M) 단위 변환
-      const toM = (val) => val / 1000000;
-      const formatM = (val) => val === 0 ? '-' : val.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
-      const formatP = (val) => (val * 100).toFixed(1) + '%';
-      // ③ 월 Total / Q Budget 퍼센트
-      const formatPct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '-';
+      const toM     = val => val / 1000000;
+      const formatM = val => val===0 ? '-' : val.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+      const formatP = val => (val*100).toFixed(1)+'%';
+      const formatPct = (num, den) => den>0 ? (num/den*100).toFixed(1)+'%' : '-';
 
-      const currentQData = salesData.filter(d => d.quarter === selectedQuarter && d.shipConfirm === 'Yes');
+      // ── [FIX #1] report.html 집계 기준 명시:
+      //    shipConfirm=Yes → 확정 납품분 집계 (index.html 예상치와 다를 수 있음)
+      //    팀 협의를 통해 기준을 통일하려면 아래 필터를 변경하세요:
+      //    예) d.status==='ACT' || d.status==='Pending' 으로 바꾸면 index.html 기준과 일치
+      const currentQData = salesData.filter(d =>
+        d.quarter === selectedQuarter && d.shipConfirm === 'Yes'
+      );
 
       let rows = [];
-      // ② Team 1부터 오름차순 정렬
-      Object.entries(teams).sort(([a], [b]) => a.localeCompare(b)).forEach(([team, members]) => {
+      Object.entries(teams).sort(([a],[b])=>a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
-          const mData = currentQData.filter(d => d.member === member);
-          
-          const calcMonth = (m) => mData.filter(d => getMonthIdx(d.deliveryDate) === m).reduce((a,b)=>a+toM(b.priceKRW),0);
-          const calcWeek = (m, w) => mData.filter(d => getMonthIdx(d.deliveryDate) === m && getWeekIdx(d.deliveryDate) === w).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const mData = currentQData.filter(d => d.member===member);
+          const calcMonth = m => mData.filter(d=>getMonthIdx(d.deliveryDate)===m).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const calcWeek  = (m,w) => mData.filter(d=>getMonthIdx(d.deliveryDate)===m&&getWeekIdx(d.deliveryDate)===w).reduce((a,b)=>a+toM(b.priceKRW),0);
 
-          const valM1 = calcMonth(m1);
-          const valM2 = calcMonth(m2);
-          const valM3 = calcMonth(m3);
-          const valTBD = mData.filter(d => getMonthIdx(d.deliveryDate) === -1).reduce((a,b)=>a+toM(b.priceKRW),0);
-
-          const total = valM1 + valM2 + valM3 + valTBD;
-          const budget = toM(memberTargets[member] || 0);
-          const gap = budget - total; 
-          const progress = budget ? total / budget : 0;
-
-          const weeksM1 = [calcWeek(m1,1), calcWeek(m1,2), calcWeek(m1,3), calcWeek(m1,4), calcWeek(m1,5)];
-          const weeksM2 = [calcWeek(m2,1), calcWeek(m2,2), calcWeek(m2,3), calcWeek(m2,4), calcWeek(m2,5)];
-          const weeksM3 = [calcWeek(m3,1), calcWeek(m3,2), calcWeek(m3,3), calcWeek(m3,4), calcWeek(m3,5)];
-
-          rows.push({
-            team, member, valM1, valM2, valM3, valTBD, total, budget, gap, progress,
-            weeksM1, weeksM2, weeksM3
-          });
+          const valM1 = calcMonth(m1), valM2 = calcMonth(m2), valM3 = calcMonth(m3);
+          const valTBD = mData.filter(d=>getMonthIdx(d.deliveryDate)===-1).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const total   = valM1 + valM2 + valM3 + valTBD;
+          const budget  = toM(memberTargets[member] || 0);
+          const gap     = budget - total;
+          const progress = budget ? total/budget : 0;
+          const weeksM1 = [1,2,3,4,5].map(w=>calcWeek(m1,w));
+          const weeksM2 = [1,2,3,4,5].map(w=>calcWeek(m2,w));
+          const weeksM3 = [1,2,3,4,5].map(w=>calcWeek(m3,w));
+          rows.push({ team, member, valM1, valM2, valM3, valTBD, total, budget, gap, progress, weeksM1, weeksM2, weeksM3 });
         });
       });
 
-      // 합계 계산
-      const sumM1 = rows.reduce((a,b)=>a+b.valM1,0);
-      const sumM2 = rows.reduce((a,b)=>a+b.valM2,0);
-      const sumM3 = rows.reduce((a,b)=>a+b.valM3,0);
-      const sumTBD = rows.reduce((a,b)=>a+b.valTBD,0);
-      const sumTotal = rows.reduce((a,b)=>a+b.total,0);
-      
+      const sumM1     = rows.reduce((a,b)=>a+b.valM1,0);
+      const sumM2     = rows.reduce((a,b)=>a+b.valM2,0);
+      const sumM3     = rows.reduce((a,b)=>a+b.valM3,0);
+      const sumTBD    = rows.reduce((a,b)=>a+b.valTBD,0);
+      const sumTotal  = rows.reduce((a,b)=>a+b.total,0);
       const currentTargets = quarterTargets[selectedQuarter] || {};
       const sumBudget = toM(currentTargets.target || 0);
-      const sumGap = sumBudget - sumTotal;
-      const sumProgress = sumBudget ? sumTotal / sumBudget : 0;
+      const sumGap    = sumBudget - sumTotal;
+      const sumProgress = sumBudget ? sumTotal/sumBudget : 0;
+      const sumWeeksM1 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM1[i-1],0));
+      const sumWeeksM2 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM2[i-1],0));
+      const sumWeeksM3 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM3[i-1],0));
 
-      const sumWeeksM1 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM1[i-1], 0));
-      const sumWeeksM2 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM2[i-1], 0));
-      const sumWeeksM3 = [1, 2, 3, 4, 5].map(i => rows.reduce((a,b)=>a+b.weeksM3[i-1], 0));
-
-      // Product 카운트
-      const allProducts = ['GMPP', 'Picoway', 'Cryo7', 'VBP', 'Hand Piece', 'Nordlys', 'Nordlys Mini', 'GMP'];
+      const allProducts = ['GMPP','Picoway','Cryo7','VBP','Hand Piece','Nordlys','Nordlys Mini','GMP'];
       const productCounts = {};
-      allProducts.forEach(p => productCounts[p] = { count: 0 });
-      currentQData.forEach(d => {
-        if(productCounts[d.product]) productCounts[d.product].count += 1;
-      });
-
-      const weekLabels = ['1st w', '2nd w', '3rd w', '4th w', '5th w'];
+      allProducts.forEach(p => productCounts[p] = { count:0 });
+      currentQData.forEach(d => { if (productCounts[d.product]) productCounts[d.product].count += 1; });
+      const weekLabels = ['1st w','2nd w','3rd w','4th w','5th w'];
 
       return (
         <div className="p-6 md:p-8">
           <LangBtn lang={lang} setLang={setLang} />
-          <div className="flex justify-between items-end mb-6">
+          <div className="flex justify-between items-end mb-4">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
               <p className="text-slate-500 text-sm font-bold mt-1">Candela Korea - Capital Sales Only <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded ml-2">(Unit: M₩)</span></p>
             </div>
             <div className="flex gap-3">
-              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer hover:border-blue-500 transition">
-                {quarters.map(q => <option key={q} value={q}>{q}</option>)}
+              <select value={selectedQuarter} onChange={e=>setSelectedQuarter(e.target.value)} className="px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer hover:border-blue-500 transition">
+                {quarters.map(q=><option key={q} value={q}>{q}</option>)}
               </select>
-              <button onClick={() => window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">{T.closeBtn}</button>
+              <button onClick={()=>window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">{T.closeBtn}</button>
             </div>
           </div>
+
+          {/* [FIX #1] 집계 기준 배너 */}
+          <div className="basis-note">{T.basisNote}</div>
 
           <div className="excel-container">
             <table className="excel-table">
@@ -278,107 +237,73 @@
                   <th rowSpan="2">{m1Name}</th>
                   <th rowSpan="2">{m2Name}</th>
                   <th rowSpan="2">{m3Name}</th>
-                  {/* ② TBD 칼럼 제거 */}
                   <th rowSpan="2" className="bg-yellow">Q Total</th>
                   <th rowSpan="2" className="bg-blue">Q Budget</th>
                   <th rowSpan="2">%</th>
                   <th rowSpan="2" className="bg-red-light text-red">Gap</th>
-                  {/* ③ colSpan 6 → 7 (Progress 칼럼 추가) */}
                   <th colSpan="7" className="header-dark">{m1Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
                   <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
                 </tr>
                 <tr>
-                  {/* ① m1 주차 헤더 + 자동 날짜 */}
-                  {weekLabels.map((label, idx) => (
-                    <th key={`m1w${idx}`}>
-                      {label}
-                      {weekRangesM1[idx] && (
-                        <span className="week-date-label">{weekRangesM1[idx]}</span>
-                      )}
-                    </th>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m1w${idx}`}>{label}{weekRangesM1[idx]&&<span className="week-date-label">{weekRangesM1[idx]}</span>}</th>
                   ))}
                   <th className="bg-yellow text-slate-800">Total</th>
                   <th className="bg-blue text-blue-800">Progress</th>
-
-                  {/* ① m2 주차 헤더 + 자동 날짜 */}
-                  {weekLabels.map((label, idx) => (
-                    <th key={`m2w${idx}`}>
-                      {label}
-                      {weekRangesM2[idx] && (
-                        <span className="week-date-label">{weekRangesM2[idx]}</span>
-                      )}
-                    </th>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m2w${idx}`}>{label}{weekRangesM2[idx]&&<span className="week-date-label">{weekRangesM2[idx]}</span>}</th>
                   ))}
                   <th className="bg-yellow text-slate-800">Total</th>
                   <th className="bg-blue text-blue-800">Progress</th>
-
-                  {/* ① m3 주차 헤더 + 자동 날짜 */}
-                  {weekLabels.map((label, idx) => (
-                    <th key={`m3w${idx}`}>
-                      {label}
-                      {weekRangesM3[idx] && (
-                        <span className="week-date-label">{weekRangesM3[idx]}</span>
-                      )}
-                    </th>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m3w${idx}`}>{label}{weekRangesM3[idx]&&<span className="week-date-label">{weekRangesM3[idx]}</span>}</th>
                   ))}
                   <th className="bg-yellow text-slate-800">Total</th>
                   <th className="bg-blue text-blue-800">Progress</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r,i)=>(
                   <tr key={i} className="hover:bg-slate-50 transition">
                     <td className="text-left text-slate-500 font-bold">{r.team}</td>
                     <td className="text-left font-bold">{r.member}</td>
-                    <td className={r.valM1 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM1)}</td>
-                    <td className={r.valM2 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM2)}</td>
-                    <td className={r.valM3 ? 'text-slate-800 font-bold' : 'text-slate-300'}>{formatM(r.valM3)}</td>
-                    {/* ② TBD td 제거 */}
+                    <td className={r.valM1?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM1)}</td>
+                    <td className={r.valM2?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM2)}</td>
+                    <td className={r.valM3?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM3)}</td>
                     <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
                     <td className="bg-blue">{formatM(r.budget)}</td>
                     <td className="text-blue">{formatP(r.progress)}</td>
                     <td className="bg-red-light text-red">{formatM(r.gap)}</td>
-                    
-                    {r.weeksM1.map((w, idx) => <td key={'m1'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    {r.weeksM1.map((w,idx)=><td key={'m1'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
-                    {/* ③ m1 Progress */}
-                    <td className="progress-cell">{formatPct(r.valM1, r.budget)}</td>
-                    
-                    {r.weeksM2.map((w, idx) => <td key={'m2'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="progress-cell">{formatPct(r.valM1,r.budget)}</td>
+                    {r.weeksM2.map((w,idx)=><td key={'m2'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
-                    {/* ③ m2 Progress */}
-                    <td className="progress-cell">{formatPct(r.valM2, r.budget)}</td>
-
-                    {r.weeksM3.map((w, idx) => <td key={'m3'+idx} className={w ? '' : 'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="progress-cell">{formatPct(r.valM2,r.budget)}</td>
+                    {r.weeksM3.map((w,idx)=><td key={'m3'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
                     <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
-                    {/* ③ m3 Progress */}
-                    <td className="progress-cell">{formatPct(r.valM3, r.budget)}</td>
+                    <td className="progress-cell">{formatPct(r.valM3,r.budget)}</td>
                   </tr>
                 ))}
-                
                 <tr className="header-dark font-bold text-[13px]">
                   <td colSpan="2" className="text-center">TOTAL</td>
                   <td>{formatM(sumM1)}</td>
                   <td>{formatM(sumM2)}</td>
                   <td>{formatM(sumM3)}</td>
-                  {/* ② TBD td 제거 */}
                   <td className="text-yellow-300">{formatM(sumTotal)}</td>
                   <td className="text-blue-300">{formatM(sumBudget)}</td>
                   <td className="text-green-300">{formatP(sumProgress)}</td>
                   <td className="text-red-300">{formatM(sumGap)}</td>
-
-                  {sumWeeksM1.map((w, idx) => <td key={'sm1'+idx}>{formatM(w)}</td>)}
+                  {sumWeeksM1.map((w,idx)=><td key={'sm1'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM1)}</td>
-                  <td className="text-blue-300">{formatPct(sumM1, sumBudget)}</td>
-                  
-                  {sumWeeksM2.map((w, idx) => <td key={'sm2'+idx}>{formatM(w)}</td>)}
+                  <td className="text-blue-300">{formatPct(sumM1,sumBudget)}</td>
+                  {sumWeeksM2.map((w,idx)=><td key={'sm2'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM2)}</td>
-                  <td className="text-blue-300">{formatPct(sumM2, sumBudget)}</td>
-
-                  {sumWeeksM3.map((w, idx) => <td key={'sm3'+idx}>{formatM(w)}</td>)}
+                  <td className="text-blue-300">{formatPct(sumM2,sumBudget)}</td>
+                  {sumWeeksM3.map((w,idx)=><td key={'sm3'+idx}>{formatM(w)}</td>)}
                   <td className="text-yellow-300">{formatM(sumM3)}</td>
-                  <td className="text-blue-300">{formatPct(sumM3, sumBudget)}</td>
+                  <td className="text-blue-300">{formatPct(sumM3,sumBudget)}</td>
                 </tr>
               </tbody>
             </table>
@@ -387,20 +312,12 @@
           <div className="excel-container w-full md:w-1/3">
             <table className="excel-table w-full">
               <thead>
-                <tr>
-                  <th colSpan="2" className="header-dark bg-slate-600">System Required (# of unit)</th>
-                </tr>
-                <tr>
-                  <th className="text-left w-1/2">Product</th>
-                  <th className="w-1/2">Sales Count</th>
-                </tr>
+                <tr><th colSpan="2" className="header-dark bg-slate-600">System Required (# of unit)</th></tr>
+                <tr><th className="text-left w-1/2">Product</th><th className="w-1/2">Sales Count</th></tr>
               </thead>
               <tbody>
-                {Object.entries(productCounts).sort((a,b)=>b[1].count - a[1].count).map(([p, data]) => (
-                  <tr key={p}>
-                    <td className="text-left font-bold">{p}</td>
-                    <td className="font-bold text-blue-600">{data.count > 0 ? `${data.count} ${T.unitSuffix}` : '-'}</td>
-                  </tr>
+                {Object.entries(productCounts).sort((a,b)=>b[1].count-a[1].count).map(([p,data])=>(
+                  <tr key={p}><td className="text-left font-bold">{p}</td><td className="font-bold text-blue-600">{data.count>0?`${data.count} ${T.unitSuffix}`:'-'}</td></tr>
                 ))}
               </tbody>
             </table>
