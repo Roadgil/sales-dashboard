@@ -392,8 +392,25 @@
           member:       selectedMember,
         };
 
+        // 수정 전 스냅샷 (edit인 경우)
+        const beforeSnap = editingId ? salesData.find(d => String(d.id) === String(editingId)) : null;
+        const auditAction = editingId ? 'edit' : 'create';
+
         db.collection("sales").doc(payload.id).set(payload)
           .then(() => {
+            // ── Audit Log 기록 ──
+            const logEntry = {
+              action:    auditAction,
+              timestamp: new Date().toISOString(),
+              member:    payload.member,
+              team:      payload.team,
+              quarter:   payload.quarter,
+              account:   payload.account,
+              after:     payload,
+            };
+            if (beforeSnap) logEntry.before = beforeSnap;
+            db.collection("audit_logs").add(logEntry);
+
             showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
             setEditingId(null);
             setForm(initialForm);
@@ -405,8 +422,23 @@
 
       const deleteSalesData = (id) => {
         if (window.confirm(T.confirmDelete)) {
+          const targetData = salesData.find(d => String(d.id) === String(id));
           db.collection("sales").doc(String(id)).delete()
-            .then(() => showToast(lang==='ko' ? '삭제 완료 ✓' : 'Deleted ✓'))
+            .then(() => {
+              // ── Audit Log 기록 ──
+              if (targetData) {
+                db.collection("audit_logs").add({
+                  action:    'delete',
+                  timestamp: new Date().toISOString(),
+                  member:    targetData.member,
+                  team:      targetData.team,
+                  quarter:   targetData.quarter,
+                  account:   targetData.account,
+                  before:    targetData,
+                });
+              }
+              showToast(lang==='ko' ? '삭제 완료 ✓' : 'Deleted ✓');
+            })
             .catch(e => showToast((lang==='ko' ? '삭제 실패: ' : 'Delete failed: ') + e.message, 'error'));
         }
       };
