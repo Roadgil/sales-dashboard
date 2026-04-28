@@ -144,12 +144,11 @@ html,body{overflow-x:hidden;max-width:100vw;}
   <div style="text-align:right">
     <div class="hbadge" id="quarterBadge">--</div>
     <div class="hdate" id="quarterDate">--</div>
-    <div style="margin-top:6px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;" id="dealerNote">※ Dealer 매출 수치는 데이터 검증 중 (참고용)</div>
   </div>
 </header>
 
-<!-- [FIX #1] 집계 기준 명시 배너 -->
-<div class="data-note" id="dataNoteBar">집계 기준: ACT + Pending 만 포함 (Back up · 미납 제외) — index.html 과 동일 기준 적용</div>
+<!-- 집계 기준 명시 배너 -->
+<div class="data-note" id="dataNoteBar">집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외) — index.html 동일 기준</div>
 
 <!-- View Toggle: Year / Quarter -->
 <div class="view-toggle" id="viewToggleBar">
@@ -168,7 +167,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
-  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (ACT+SC 기준)</div></div>
+  <div class="kpi k2"><div class="klabel">Total Count</div><div class="kval v2" id="kpi-count">--</div><div class="ksub" id="kpi-count-sub">건 (SC 기준)</div></div>
   <div class="kpi k3"><div class="klabel">Direct (SR)</div><div class="kval v3" id="kpi-direct">--</div><div class="ksub" id="kpi-direct-sub">--</div></div>
   <div class="kpi k4"><div class="klabel">Top Performer</div><div class="kval v4" id="kpi-top">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
 </div>
@@ -195,11 +194,11 @@ html,body{overflow-x:hidden;max-width:100vw;}
 <!-- ROW3 -->
 <div class="g g21">
   <div class="card">
-    <div class="ctitle" id="ct-dealerChart">Dealer별 매출 <span class="warn-tag" id="wt-dealerChart">※ 데이터 검증 중 · 참고용</span></div>
+    <div class="ctitle" id="ct-dealerChart">Dealer별 매출</div>
     <div style="position:relative;height:300px"><canvas id="dealerChart"></canvas></div>
   </div>
   <div class="card">
-    <div class="ctitle" id="ct-dealerDetail">Dealer 상세 <span class="warn-tag" id="wt-dealerDetail">참고용</span></div>
+    <div class="ctitle" id="ct-dealerDetail">Dealer 상세</div>
     <table><thead><tr><th id="th-dealer">딜러</th><th id="th-amount">금액</th><th id="th-ratio">비율</th><th></th></tr></thead>
     <tbody id="dealerTb"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody></table>
   </div>
@@ -230,7 +229,7 @@ let _lang = localStorage.getItem('lang') || 'ko';
 const DICT = {
   backLink:       { ko:'← Dashboard로 돌아가기',  en:'← Back to Dashboard' },
   dealerNote:     { ko:'※ Dealer 매출 수치는 데이터 검증 중 (참고용)', en:'※ Dealer figures under verification (reference only)' },
-  dataNoteBar:    { ko:'집계 기준: ACT + Ship Confirm (Pending·Back up 제외)', en:'Revenue basis: ACT + Ship Confirm only (Pending·Back up excluded)' },
+  dataNoteBar:    { ko:'집계 기준: Ship Confirm만 매출 반영 (ACT·Pending·Back up 제외)', en:'Revenue basis: Ship Confirm only (ACT·Pending·Back up excluded)' },
   prodMix:        { ko:'제품 구성비',              en:'Product Mix' },
   repPerf:        { ko:'담당자별 실적',            en:'Performance by Rep' },
   revByProd:      { ko:'제품별 매출',              en:'Revenue by Product' },
@@ -251,7 +250,7 @@ const DICT = {
   current:        { ko:'현재',                      en:'Current' },
   target:         { ko:'목표',                      en:'Target' },
   byProduct:      { ko:'제품별',                    en:'By Product' },
-  countLabel:     { ko:'건 (ACT+SC 기준)',           en:'cases (ACT+SC)' },
+  countLabel:     { ko:'건 (SC 기준)',           en:'cases (SC only)' },
 };
 
 function t(key) { return DICT[key] ? (DICT[key][_lang] || DICT[key].ko) : key; }
@@ -390,10 +389,9 @@ function makeChart(id, cfg) {
   if (el) chartInst[id] = new Chart(el, cfg);
 }
 
-// ── 메인 렌더 — ACT + SC 집계 (index.html 동일 기준) ──
+// ── 메인 렌더 — Ship Confirm만 매출 집계 (index.html 동일 기준) ──
 function render(salesData, memberTargets) {
-  const SC_ONLY = ['Ship Confirm'];
-  const REVENUE_STATUSES = ['ACT', 'Ship Confirm'];
+  const REVENUE_STATUSES = ['Ship Confirm'];
 
   // Year view: aggregate all quarters of the year
   let qData;
@@ -407,25 +405,25 @@ function render(salesData, memberTargets) {
     if (grid) {
       grid.innerHTML = qs.map(q => {
         const fq = `${YR} ${q}`;
-        const qRows = salesData.filter(d => d.quarter===fq && SC_ONLY.includes(d.status));
+        const qRows = salesData.filter(d => d.quarter===fq && REVENUE_STATUSES.includes(d.status));
         const qTotal = qRows.reduce((s,d)=>s+(d.priceKRW||0),0);
         const qCount = qRows.length;
         const isActive = fq === _activeQuarterInYear;
         return `<div class="qbreak-card${isActive?' active-q':''}" data-q="${fq}" onclick="jumpToQuarter('${fq}')">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${q}</div>
           <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--a1);line-height:1;margin-bottom:4px">${qTotal>=100000000?'₩'+(qTotal/100000000).toFixed(1)+'억':qTotal>0?'₩'+(qTotal/10000).toFixed(0)+'만':'-'}</div>
-          <div style="font-size:10px;color:var(--muted)">${qCount}건 (ACT+SC)</div>
+          <div style="font-size:10px;color:var(--muted)">${qCount}건 (SC 기준)</div>
         </div>`;
       }).join('');
     }
-    document.getElementById('dataNoteBar').textContent = `${_lang==='ko'?'집계 기준':'Revenue basis'}: ${YR} 전체 연도 합산 (ACT + SC) — 4개 분기 통합`;
+    document.getElementById('dataNoteBar').textContent = `${_lang==='ko'?'집계 기준':'Revenue basis'}: ${YR} 전체 연도 합산 (Ship Confirm만) — 4개 분기 통합`;
   } else {
     qData = salesData.filter(d =>
       d.quarter === QUARTER && REVENUE_STATUSES.includes(d.status)
     );
     document.getElementById('dataNoteBar').textContent = _lang==='ko'
-      ? '집계 기준: ACT + Ship Confirm (Back up · Pending 제외) — index.html 동일 기준'
-      : 'Revenue basis: ACT + Ship Confirm only — aligned with index.html';
+      ? '집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외) — index.html 동일 기준'
+      : 'Revenue basis: Ship Confirm only (ACT · Pending · Back up excluded) — aligned with index.html';
   }
 
   const totalKRW    = qData.reduce((s,d) => s + (d.priceKRW||0), 0);
@@ -498,8 +496,8 @@ function render(salesData, memberTargets) {
   document.getElementById('split-indirect-pct').textContent = `${indirectPct.toFixed(1)}%`;
   document.getElementById('split-indirect-sub').textContent = `${fmtAmt(indirectKRW)} · ${indirectCount}${_lang==='ko'?'건':'cs'}`;
 
-  // 딜러
-  const ALL_INDIRECT_DEALERS = ['병원','Innomed','SEVEN U','TMI','알펙스메디'];
+  // 딜러 (Indirect only — index.html 동일: 병원은 Direct라 제외)
+  const ALL_INDIRECT_DEALERS = ['Innomed', 'SEVEN U', 'TMI', '알펙스메디'];
   const dealerSum = {}, dealerCount = {};
   ALL_INDIRECT_DEALERS.forEach(d => { dealerSum[d]=0; dealerCount[d]=0; });
   qData.filter(d => d.salesType==='Indirect').forEach(d => {
@@ -527,7 +525,7 @@ function render(salesData, memberTargets) {
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">${t('noIndirect')}</td></tr>`;
 
-  // 담당자별 탭
+  // 담당자별 탭 (SC 기준)
   const allMembers = sortedMembers.map(([m])=>m);
   const nav     = document.getElementById('memberTabNav');
   const content = document.getElementById('memberTabContent');
@@ -537,7 +535,7 @@ function render(salesData, memberTargets) {
   }
   nav.innerHTML = allMembers.map((m,i)=>`<button class="tab-btn${i===0?' active':''}" onclick="switchMemberTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`).join('');
   content.innerHTML = allMembers.map((m,mi) => {
-    const mData     = qData.filter(d=>d.member===m);
+    const mData     = qData.filter(d=>d.member===m);  // 이미 SC만 필터된 qData
     const mTotal    = mData.reduce((s,d)=>s+(d.priceKRW||0),0);
     const mDirect   = mData.filter(d=>d.salesType==='Direct').reduce((s,d)=>s+(d.priceKRW||0),0);
     const mIndirect = mTotal - mDirect;
@@ -584,7 +582,7 @@ function render(salesData, memberTargets) {
 
   requestAnimationFrame(() => {
     allMembers.forEach((m,mi) => {
-      const mData   = qData.filter(d=>d.member===m);
+      const mData   = qData.filter(d=>d.member===m);  // SC만
       const mTotal  = mData.reduce((s,d)=>s+(d.priceKRW||0),0);
       const mDirect = mData.filter(d=>d.salesType==='Direct').reduce((s,d)=>s+(d.priceKRW||0),0);
       const dp = mTotal?parseFloat((mDirect/mTotal*100).toFixed(1)):0;
