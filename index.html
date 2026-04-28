@@ -300,6 +300,60 @@
         return () => { unsubSales(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
       }, [isLoggedIn]);
 
+      // ── Back up 자동 이월 (분기 시작일 감지) ──────────────────────────────
+      useEffect(() => {
+        if (salesData.length === 0) return;
+
+        // 현재 날짜 기준으로 해당 분기 계산
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1; // 1~12
+        const qNum = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
+        const currentQ = `${year} Q${qNum}`;
+
+        // 이전 분기 계산
+        let prevYear = year, prevQNum = qNum - 1;
+        if (prevQNum === 0) { prevQNum = 4; prevYear = year - 1; }
+        const prevQ = `${prevYear} Q${prevQNum}`;
+
+        // 이미 이월 처리했는지 확인 (Firestore 플래그)
+        const rolloverKey = `rollover_${currentQ.replace(' ', '_')}`;
+        db.collection("settings").doc("rollover").get().then(doc => {
+          const flags = doc.exists ? doc.data() : {};
+          if (flags[rolloverKey]) return; // 이미 처리됨
+
+          // 이전 분기의 Back up 데이터 찾기
+          const backups = salesData.filter(d => d.quarter === prevQ && d.status === 'Back up');
+          if (backups.length === 0) return;
+
+          // quarters 목록에 현재 분기 없으면 추가
+          const needsQuarter = !quarters.includes(currentQ);
+
+          const batch = db.batch();
+
+          backups.forEach(d => {
+            const newId = crypto.randomUUID();
+            const newDoc = { ...d, id: newId, quarter: currentQ };
+            batch.set(db.collection("sales").doc(newId), newDoc);
+          });
+
+          // 롤오버 플래그 저장
+          batch.set(db.collection("settings").doc("rollover"), { ...flags, [rolloverKey]: true }, { merge: true });
+
+          batch.commit().then(() => {
+            if (needsQuarter) {
+              const nq = [...quarters, currentQ].sort();
+              setQuarters(nq);
+              db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
+            }
+            showToast(
+              `${prevQ} Back up ${backups.length}건 → ${currentQ}으로 자동 이월됐습니다 ✓`,
+              'success'
+            );
+          });
+        });
+      }, [salesData.length]);
+
       // ── [FIX #2] 강화된 저장 검증 ────────────────────────────────────────
       const handleSave = () => {
         if (isSaving) return;
