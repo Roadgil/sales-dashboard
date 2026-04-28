@@ -343,6 +343,7 @@
             showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
             setEditingId(null);
             setForm(initialForm);
+            setShowEditModal(false);
           })
           .catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error'))
           .finally(() => setIsSaving(false));
@@ -368,7 +369,8 @@
       };
       const handleMemberTargetChange = (member, value) => { const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
       const handleTeamTargetChange   = (team, quarter, value) => { const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
-      const handleEdit = (data) => { setForm(data); setEditingId(data.id); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      const [showEditModal, setShowEditModal] = useState(false);
+      const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
 
       const addTeam = () => { const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
       const addMember = () => { const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
@@ -1089,9 +1091,54 @@
                     </div>
                   )}
 
+                  {/* 수정 모달 */}
+                  {showEditModal && (
+                    <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
+                      onClick={(e)=>{ if(e.target===e.currentTarget){setShowEditModal(false);setEditingId(null);setForm(initialForm);} }}>
+                      <div style={{background:'#fff',borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'680px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                          <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>✨ {T.editMode}</span>
+                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
+                            <option value="">{T.selectRequired}</option>
+                            <option value="병원">병원</option>
+                            <option value="Innomed">Innomed (이노메드)</option>
+                            <option value="SEVEN U">SEVEN U (세븐유)</option>
+                            <option value="TMI">TMI</option>
+                            <option value="알펙스메디">알펙스메디</option>
+                          </select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.accountLabel} <span className="text-red-500">*</span></label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price_KR (₩) <span className="text-red-500">*</span></label><input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} readOnly className="w-full p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`}/></div>
+                        </div>
+                        <div className="flex gap-3 mt-2">
+                          <button type="button" onClick={handleSave} disabled={isSaving} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded shadow transition flex items-center justify-center gap-2">
+                            {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
+                            {T.saveEdit}
+                          </button>
+                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* [FIX #2] 입력 폼 — min="0" 추가, 저장 중 비활성화 */}
-                  <form className={`bg-slate-50 p-4 md:p-6 rounded-lg border-2 transition ${editingId?'border-blue-400 bg-blue-50':'border-gray-200'}`}>
-                    {editingId && <div className="col-span-full flex justify-between items-center text-blue-600 font-bold mb-3"><span className="text-sm md:text-base">{T.editMode}</span></div>}
+                  <form className="bg-slate-50 p-4 md:p-6 rounded-lg border-2 border-gray-200 transition">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
@@ -1120,11 +1167,10 @@
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} readOnly className="w-full p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`}/></div>
                     </div>
                     <div className="mt-2 text-right">
-                      <button type="button" onClick={handleSave} disabled={isSaving} className={`${editingId?'bg-green-600 hover:bg-green-700':'bg-blue-600 hover:bg-blue-700'} disabled:opacity-60 text-white font-bold w-full py-3 rounded shadow transition flex items-center justify-center gap-2`}>
+                      <button type="button" onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold w-full py-3 rounded shadow transition flex items-center justify-center gap-2">
                         {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
-                        {editingId ? T.saveEdit : T.saveNew}
+                        {T.saveNew}
                       </button>
-                      {editingId && <button type="button" onClick={()=>{setEditingId(null);setForm(initialForm);}} className="mt-4 text-sm text-gray-500 hover:underline ml-3">{T.cancelEdit}</button>}
                     </div>
                   </form>
 
