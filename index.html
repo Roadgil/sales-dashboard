@@ -256,9 +256,6 @@
       const [showTransferModal, setShowTransferModal] = useState(false);
       const [transferRow, setTransferRow]             = useState(null);
       const [transferTarget, setTransferTarget]       = useState('');
-      const [showTransferModal, setShowTransferModal] = useState(false);
-      const [transferRow, setTransferRow]             = useState(null);
-      const [transferTarget, setTransferTarget]       = useState('');
       const [erPwdInput, setErPwdInput]   = useState('');
       const [erPwdError, setErPwdError]   = useState(false);
       const [erInputVal, setErInputVal]   = useState('');
@@ -463,13 +460,6 @@
       const handleTransferSave = () => {
         if (!transferTarget || !transferRow) return;
         db.collection('sales').doc(transferRow.id).set({ ...transferRow, member: transferTarget });
-        setShowTransferModal(false); setTransferRow(null); setTransferTarget('');
-      };
-      const handleTransferOpen = (row) => { setTransferRow(row); setTransferTarget(row.member||''); setShowTransferModal(true); };
-      const handleTransferSave = () => {
-        if (!transferTarget || !transferRow) return;
-        const updated = { ...transferRow, member: transferTarget };
-        db.collection('sales').doc(transferRow.id).set(updated);
         setShowTransferModal(false); setTransferRow(null); setTransferTarget('');
       };
 
@@ -751,12 +741,10 @@
           <td className="p-2 md:p-3 text-center space-x-1">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
-                <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button>
                   <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1">🔄</button></>
+                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title="담당자 변경">🔄</button></>
               : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
-                <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1">🔄</button>
-                <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button>
+                <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title="담당자 변경">🔄</button>
                   <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></>
             }
           </td>
@@ -780,43 +768,13 @@
               <div style={{background:'#fff',borderRadius:'16px',padding:'32px 28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw'}}
                 onClick={e => e.stopPropagation()}>
                 <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>🔄</div>
-                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'4px',textAlign:'center'}}>{lang==='ko' ? '담당자 변경' : 'Transfer Owner'}</h3>
-                <p style={{fontSize:'12px',color:'#64748b',marginBottom:'16px',textAlign:'center',background:'#f8fafc',padding:'8px',borderRadius:'8px'}}>
-                  <span style={{fontWeight:'700',color:'#1e293b'}}>{transferRow.account}</span><br/>
-                  <span style={{color:'#94a3b8'}}>{transferRow.product} · {(transferRow.priceKRW||0).toLocaleString()}₩</span>
-                </p>
-                <div style={{marginBottom:'6px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{color:'#7c3aed'}}>{transferRow.member}</span></div>
-                <div style={{marginBottom:'16px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'Select new owner'}:</div>
-                <select value={transferTarget} onChange={e => setTransferTarget(e.target.value)}
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #a78bfa',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'16px',outline:'none',boxSizing:'border-box'}}>
-                  {Object.entries(teams).map(([team, members]) => (
-                    <optgroup key={team} label={team}>
-                      {members.map(m => <option key={m} value={m} style={{fontWeight: m===transferRow.member ? '800':'400'}}>{m}{m===transferRow.member ? ' (현재)':''}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <div style={{display:'flex',gap:'8px'}}>
-                  <button onClick={() => setShowTransferModal(false)} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleTransferSave} disabled={transferTarget===transferRow.member} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:transferTarget===transferRow.member?'#c4b5fd':'#7c3aed',color:'white',fontWeight:'800',cursor:transferTarget===transferRow.member?'not-allowed':'pointer',fontSize:'14px'}}>{lang==='ko' ? '변경 저장' : 'Save'}</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 담당자 변경 모달 */}
-          {showTransferModal && transferRow && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => setShowTransferModal(false)}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'32px 28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>🔄</div>
                 <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>{lang==='ko' ? '담당자 변경' : 'Transfer Owner'}</h3>
                 <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
                   <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{transferRow.account}</div>
                   <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{transferRow.product} · {'₩' + (transferRow.priceKRW||0).toLocaleString()}</div>
                 </div>
-                <div style={{marginBottom:'6px',fontSize:'12px',color:'#64748b'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{fontWeight:'800',color:'#7c3aed'}}>{transferRow.member}</span></div>
-                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'Select new owner'}</div>
+                <div style={{marginBottom:'8px',fontSize:'12px',color:'#64748b'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{fontWeight:'800',color:'#7c3aed'}}>{transferRow.member}</span></div>
+                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'New owner'}</div>
                 <select value={transferTarget} onChange={e => setTransferTarget(e.target.value)}
                   style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #a78bfa',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
                   {Object.entries(teams).map(([team, members]) => (
