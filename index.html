@@ -459,7 +459,9 @@
       const handleTransferOpen = (row) => { setTransferRow(row); setTransferTarget(row.member||''); setShowTransferModal(true); };
       const handleTransferSave = () => {
         if (!transferTarget || !transferRow) return;
-        db.collection('sales').doc(transferRow.id).set({ ...transferRow, member: transferTarget });
+        // 새 담당자가 속한 팀 자동 탐색
+        const newTeam = Object.entries(teams).find(([, members]) => Array.isArray(members) && members.includes(transferTarget))?.[0] || transferRow.team;
+        db.collection('sales').doc(transferRow.id).set({ ...transferRow, member: transferTarget, team: newTeam });
         setShowTransferModal(false); setTransferRow(null); setTransferTarget('');
       };
 
