@@ -253,9 +253,6 @@
       const [summaryLocked, setSummaryLocked]           = useState(true);
       const [showSummaryPwdModal, setShowSummaryPwdModal] = useState(false);
       const [showErModal, setShowErModal] = useState(false);
-      const [showTransferModal, setShowTransferModal] = useState(false);
-      const [transferRow, setTransferRow]             = useState(null);
-      const [transferTarget, setTransferTarget]       = useState('');
       const [erPwdInput, setErPwdInput]   = useState('');
       const [erPwdError, setErPwdError]   = useState(false);
       const [erInputVal, setErInputVal]   = useState('');
@@ -303,7 +300,7 @@
         return () => { unsubSales(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
       }, [isLoggedIn]);
 
-      // ── Back up 자동 이월 (분기 시작일 감지) ──────────────────────────────
+      // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
       useEffect(() => {
         if (salesData.length === 0) return;
 
@@ -325,19 +322,18 @@
           const flags = doc.exists ? doc.data() : {};
           if (flags[rolloverKey]) return; // 이미 처리됨
 
-          // 이전 분기의 Back up 데이터 찾기
-          const backups = salesData.filter(d => d.quarter === prevQ && d.status === 'Back up');
-          if (backups.length === 0) return;
+          // 이전 분기의 미선적(Ship Confirm 아님) 데이터 = ACT + Pending + Back up
+          const carryOver = salesData.filter(d => d.quarter === prevQ && d.status !== 'Ship Confirm');
+          if (carryOver.length === 0) return;
 
           // quarters 목록에 현재 분기 없으면 추가
           const needsQuarter = !quarters.includes(currentQ);
 
           const batch = db.batch();
 
-          backups.forEach(d => {
-            const newId = crypto.randomUUID();
-            const newDoc = { ...d, id: newId, quarter: currentQ };
-            batch.set(db.collection("sales").doc(newId), newDoc);
+          // 이동: 기존 문서의 분기만 현재 분기로 변경 (이전 분기에서는 빠지고 현재 분기에만 남음)
+          carryOver.forEach(d => {
+            batch.update(db.collection("sales").doc(String(d.id)), { quarter: currentQ });
           });
 
           // 롤오버 플래그 저장
@@ -350,7 +346,7 @@
               db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
             }
             showToast(
-              `${prevQ} Back up ${backups.length}건 → ${currentQ}으로 자동 이월됐습니다 ✓`,
+              `${prevQ} 미선적 ${carryOver.length}건(ACT·Pending·Back up) → ${currentQ}으로 이동됐습니다 ✓`,
               'success'
             );
           });
@@ -456,14 +452,6 @@
       const handleTeamTargetChange   = (team, quarter, value) => { const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
-      const handleTransferOpen = (row) => { setTransferRow(row); setTransferTarget(row.member||''); setShowTransferModal(true); };
-      const handleTransferSave = () => {
-        if (!transferTarget || !transferRow) return;
-        // 새 담당자가 속한 팀 자동 탐색
-        const newTeam = Object.entries(teams).find(([, members]) => Array.isArray(members) && members.includes(transferTarget))?.[0] || transferRow.team;
-        db.collection('sales').doc(transferRow.id).set({ ...transferRow, member: transferTarget, team: newTeam });
-        setShowTransferModal(false); setTransferRow(null); setTransferTarget('');
-      };
 
       const addTeam = () => { const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
       const addMember = () => { const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
@@ -743,10 +731,8 @@
           <td className="p-2 md:p-3 text-center space-x-1">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
-                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title="담당자 변경">🔄</button></>
+                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button></>
               : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
-                <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition ml-1" title="담당자 변경">🔄</button>
                   <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></>
             }
           </td>
@@ -762,36 +748,6 @@
           <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
           {/* [FIX #10] 토스트 */}
           {toast && <Toast msg={toast.msg} type={toast.type} />}
-
-          {/* 담당자 변경 모달 */}
-          {showTransferModal && transferRow && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => setShowTransferModal(false)}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'32px 28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>🔄</div>
-                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>{lang==='ko' ? '담당자 변경' : 'Transfer Owner'}</h3>
-                <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
-                  <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{transferRow.account}</div>
-                  <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{transferRow.product} · {'₩' + (transferRow.priceKRW||0).toLocaleString()}</div>
-                </div>
-                <div style={{marginBottom:'8px',fontSize:'12px',color:'#64748b'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{fontWeight:'800',color:'#7c3aed'}}>{transferRow.member}</span></div>
-                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'New owner'}</div>
-                <select value={transferTarget} onChange={e => setTransferTarget(e.target.value)}
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #a78bfa',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
-                  {Object.entries(teams).map(([team, members]) => (
-                    <optgroup key={team} label={team}>
-                      {(Array.isArray(members)?members:[]).map(m => <option key={m} value={m}>{m}{m===transferRow.member?' (현재)':''}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <div style={{display:'flex',gap:'8px'}}>
-                  <button onClick={() => setShowTransferModal(false)} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleTransferSave} disabled={transferTarget===transferRow.member} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:transferTarget===transferRow.member?'#c4b5fd':'#7c3aed',color:'white',fontWeight:'800',cursor:transferTarget===transferRow.member?'not-allowed':'pointer',fontSize:'14px'}}>{lang==='ko' ? '변경 저장' : 'Save'}</button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ER 환율 편집 모달 */}
           {showErModal && (
