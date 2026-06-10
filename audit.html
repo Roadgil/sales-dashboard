@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Audit Log · Candela Korea</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -115,6 +116,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
     <div class="login-icon">🔐</div>
     <div class="login-title">Audit <span style="color:var(--a1)">Log</span></div>
     <div class="login-sub">Candela Korea · 변경 이력 뷰어</div>
+    <input type="email" class="login-input" id="emailInput" placeholder="Email" onkeydown="if(event.key==='Enter')doLogin()" style="margin-bottom:8px"/>
     <input type="password" class="login-input" id="pwdInput" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"/>
     <div class="login-err" id="loginErr"></div>
     <button class="login-btn" onclick="doLogin()">접속하기</button>
@@ -194,8 +196,6 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
 </div>
 
 <script>
-const SECRET_PASSWORD = "candelaoperation";
-const SESSION_KEY     = "auditLogAuth";
 const PAGE_SIZE       = 30;
 
 // ── Firebase ──────────────────────────────────────────────────────────────
@@ -209,31 +209,43 @@ const firebaseConfig = {
 };
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 
-// ── 로그인 ────────────────────────────────────────────────────────────────
-function doLogin() {
-  const val = document.getElementById('pwdInput').value;
+// ── 로그인 (Firebase Auth) ─────────────────────────────────────────────────
+let logsLoaded = false;
+function showLoginError(msg) {
   const inp = document.getElementById('pwdInput');
-  if (val === SECRET_PASSWORD) {
-    sessionStorage.setItem(SESSION_KEY, 'true');
-    document.getElementById('loginWrap').style.display = 'none';
-    document.getElementById('mainWrap').style.display  = 'block';
-    loadLogs();
-  } else {
-    inp.classList.add('error');
-    document.getElementById('loginErr').textContent = '❌ 비밀번호가 틀렸습니다.';
-    inp.value = '';
-    setTimeout(() => { inp.classList.remove('error'); document.getElementById('loginErr').textContent = ''; }, 2000);
-  }
+  inp.classList.add('error');
+  document.getElementById('loginErr').textContent = msg;
+  inp.value = '';
+  setTimeout(() => { inp.classList.remove('error'); document.getElementById('loginErr').textContent = ''; }, 2500);
+}
+function doLogin() {
+  const email = document.getElementById('emailInput').value.trim();
+  const pwd   = document.getElementById('pwdInput').value;
+  if (!email || !pwd) { showLoginError('❌ 이메일과 비밀번호를 입력하세요.'); return; }
+  auth.signInWithEmailAndPassword(email, pwd)
+    .catch(() => showLoginError('❌ 이메일 또는 비밀번호가 올바르지 않습니다.'));
 }
 function doLogout() {
-  sessionStorage.removeItem(SESSION_KEY);
-  location.reload();
+  auth.signOut().then(() => location.reload());
 }
-if (sessionStorage.getItem(SESSION_KEY) === 'true') {
-  document.getElementById('loginWrap').style.display = 'none';
-  document.getElementById('mainWrap').style.display  = 'block';
-}
+const AUDIT_VIEWER_EMAILS = ['miaej@candelamedical.com','hannap@candelamedical.com','yoongil.chae@candelamedical.com'];
+auth.onAuthStateChanged(user => {
+  if (user) {
+    if (!AUDIT_VIEWER_EMAILS.includes((user.email||'').toLowerCase())) {
+      auth.signOut();
+      showLoginError('⛔ 감사 로그 열람 권한이 없는 계정입니다.');
+      return;
+    }
+    document.getElementById('loginWrap').style.display = 'none';
+    document.getElementById('mainWrap').style.display  = 'block';
+    if (!logsLoaded) { logsLoaded = true; loadLogs(); }
+  } else {
+    document.getElementById('loginWrap').style.display = '';
+    document.getElementById('mainWrap').style.display  = 'none';
+  }
+});
 
 // ── 데이터 ───────────────────────────────────────────────────────────────
 let allLogs = [];
@@ -449,8 +461,7 @@ function goPage(p) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// 페이지 로드 시 이미 로그인된 경우 바로 로드
-if (sessionStorage.getItem(SESSION_KEY) === 'true') loadLogs();
+// 로그인 상태 감지는 auth.onAuthStateChanged에서 처리
 </script>
 </body>
 </html>
