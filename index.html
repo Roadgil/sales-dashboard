@@ -1106,11 +1106,12 @@
                                   <ColHeader col="account"   label="Account"/>
                                   <ColHeader col="product"   label="Product"/>
                                   <ColHeader col="dealer"    label="Dealer"/>
+                                  <th className="px-3 py-2 font-bold">SO</th>
                                   <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {filteredRows.length===0 ? <tr><td colSpan="7" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
+                                {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
                                   filteredRows.map((row,i) => {
                                     const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
                                     return (
@@ -1121,6 +1122,7 @@
                                         <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
                                         <td className="px-3 py-2 text-gray-600">{row.product}</td>
                                         <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
+                                        <td className="px-3 py-2 font-mono text-gray-600">{row.so||'-'}</td>
                                         <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
                                       </tr>
                                     );
@@ -1130,7 +1132,7 @@
                               {filteredRows.length>0 && (
                                 <tfoot>
                                   <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                    <td colSpan="6" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
+                                    <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
                                     <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
                                   </tr>
                                 </tfoot>
