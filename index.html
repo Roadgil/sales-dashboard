@@ -335,7 +335,7 @@
         db.collection("sales").doc(String(before.id)).update({ member: transferTarget, team: newTeam })
           .then(() => {
             db.collection("audit_logs").add({
-              action: 'edit', timestamp: new Date().toISOString(),
+              action: 'edit', actor: (auth.currentUser?.email || ''), timestamp: new Date().toISOString(),
               member: transferTarget, team: newTeam, quarter: before.quarter, account: before.account,
               before: before, after: { ...before, member: transferTarget, team: newTeam },
             }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
@@ -488,6 +488,7 @@
             // ── Audit Log 기록 ──
             const logEntry = {
               action:    auditAction,
+              actor:     (auth.currentUser?.email || ''),
               timestamp: new Date().toISOString(),
               member:    payload.member,
               team:      payload.team,
@@ -517,6 +518,7 @@
               if (targetData) {
                 db.collection("audit_logs").add({
                   action:    'delete',
+                  actor:     (auth.currentUser?.email || ''),
                   timestamp: new Date().toISOString(),
                   member:    targetData.member,
                   team:      targetData.team,
