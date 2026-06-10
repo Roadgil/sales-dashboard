@@ -172,6 +172,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
           <tr>
             <th style="width:150px">시각</th>
             <th style="width:80px">액션</th>
+            <th>변경자</th>
             <th>담당자</th>
             <th>분기</th>
             <th>Account</th>
@@ -182,7 +183,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
           </tr>
         </thead>
         <tbody id="logBody">
-          <tr><td colspan="9"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>
+          <tr><td colspan="10"><div class="loading"><div class="spinner"></div>Loading…</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -392,7 +393,7 @@ function renderTable() {
   const tbody = document.getElementById('logBody');
 
   if (!page.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted);font-family:'DM Mono',monospace;">로그가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-family:'DM Mono',monospace;">로그가 없습니다.</td></tr>`;
     return;
   }
 
@@ -405,6 +406,7 @@ function renderTable() {
     return `<tr>
       <td>${fmtTime(log.timestamp)}</td>
       <td><span class="badge ${ACTION_BADGE[log.action]||'badge-edit'}">${ACTION_ICON[log.action]||''} ${ACTION_LABEL[log.action]||log.action}</span></td>
+      <td class="mono" style="font-size:11px;color:var(--a1);font-weight:700">${log.actor ? log.actor.split('@')[0] : '-'}</td>
       <td class="mono" style="font-size:12px">${log.member||'-'}<br><span style="color:var(--muted);font-size:10px">${log.team||''}</span></td>
       <td class="mono">${log.quarter||'-'}</td>
       <td style="font-weight:600;max-width:160px;word-break:break-all">${log.account||data.account||'-'}</td>
