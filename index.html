@@ -45,9 +45,9 @@
   <script type="text/babel">
     // localStorage 안전 래퍼
     const safeLS = {
-      get(k)    { try { return safeLS.get(k); }    catch(e) { return null; } },
-      set(k,v)  { try { safeLS.set(k, v); }        catch(e) {} },
-      remove(k) { try { safeLS.remove(k); }        catch(e) {} },
+      get(k)    { try { return window.localStorage.getItem(k); } catch(e) { return null; } },
+      set(k,v)  { try { window.localStorage.setItem(k, v); }     catch(e) {} },
+      remove(k) { try { window.localStorage.removeItem(k); }     catch(e) {} },
     };
     const { useState, useEffect, useCallback } = React;
 
@@ -416,7 +416,7 @@
               after:     payload,
             };
             if (beforeSnap) logEntry.before = beforeSnap;
-            db.collection("audit_logs").add(logEntry);
+            db.collection("audit_logs").add(logEntry).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
 
             showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
             setEditingId(null);
@@ -442,7 +442,7 @@
                   quarter:   targetData.quarter,
                   account:   targetData.account,
                   before:    targetData,
-                });
+                }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
               }
               showToast(lang==='ko' ? '삭제 완료 ✓' : 'Deleted ✓');
             })
@@ -477,7 +477,7 @@
         }
       };
       const deleteMember = (memberName, e) => { e.stopPropagation(); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); handleTargetChange('target', 0); db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
+      const addQuarter = () => { const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (!quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
       const handleInputChange = (e) => {
@@ -1189,7 +1189,8 @@
                   {/* 수정 모달 */}
                   {showEditModal && (
                     <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
-                      onClick={(e)=>{ if(e.target===e.currentTarget){setShowEditModal(false);setEditingId(null);setForm(initialForm);} }}>
+                      onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
+                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);} }}>
                       <div style={{background:'#fff',borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'680px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
                           <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>✨ {T.editMode}</span>
