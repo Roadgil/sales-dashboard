@@ -282,6 +282,12 @@
       };
       const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); safeLS.set('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
 
+      // ── 분기 표기 정규화: "2026Q4", "2026 q4", "2026-Q4" → "2026 Q4" ──
+      const normalizeQuarter = (s) => {
+        const m = String(s||'').trim().match(/^(\d{4})\s*[-_]?\s*[Qq]\s*([1-4])$/);
+        return m ? `${m[1]} Q${m[2]}` : null;
+      };
+
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
@@ -292,7 +298,13 @@
           if (doc.exists) {
             const data = doc.data();
             if (data.teams && typeof data.teams === 'object') setTeams(data.teams);
-            if (data.quarters && Array.isArray(data.quarters)) setQuarters(data.quarters);
+            if (data.quarters && Array.isArray(data.quarters)) {
+              const cleaned = [...new Set(data.quarters.map(q => normalizeQuarter(q) || q))].sort();
+              setQuarters(cleaned);
+              if (JSON.stringify(cleaned) !== JSON.stringify(data.quarters)) {
+                db.collection("settings").doc("layout").set({ quarters: cleaned }, { merge: true });
+              }
+            }
           } else {
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
@@ -465,7 +477,7 @@
         }
       };
       const deleteMember = (memberName, e) => { e.stopPropagation(); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { const n = prompt(T.promptQuarter); if (n && !quarters.includes(n)) { const nq = [...quarters, n].sort(); setQuarters(nq); handleTargetChange('target', 0); db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); } };
+      const addQuarter = () => { const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); handleTargetChange('target', 0); db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
       const handleInputChange = (e) => {
