@@ -110,7 +110,6 @@
       }
 
       const [lang, setLang] = useState(safeLS.get('lang') || 'ko');
-      const [isLoggedIn, setIsLoggedIn]     = useState(true);
       const [authChecking, setAuthChecking] = useState(false);
       const [authUser, setAuthUser]         = useState(null);
 
@@ -244,11 +243,12 @@
       const [loginPwd, setLoginPwd]           = useState('');
       const [loginError, setLoginError]       = useState('');
       const [isLoggingIn, setIsLoggingIn]     = useState(false);
-      useEffect(() => auth.onAuthStateChanged(u => setCurrentUser(u)), []);
+      const [authReady, setAuthReady] = useState(false);
+      useEffect(() => auth.onAuthStateChanged(u => { setCurrentUser(u); setAuthReady(true); }), []);
       const requireAuth = () => { if (auth.currentUser) return true; setShowLoginModal(true); return false; };
       // ── 관리자 권한 ──
       // 환율(ER) · 분기 목표 관리자
-      const TARGET_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com'];
+      const TARGET_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
       // Ship Confirm 완료 데이터 수정/삭제 관리자
       const SC_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
       const hasRole = (list) => list.includes((auth.currentUser?.email||'').toLowerCase());
@@ -367,6 +367,7 @@
 
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
+        if (!currentUser) return;
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
         const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
@@ -387,7 +388,7 @@
           }
         });
         return () => { unsubSales(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
-      }, [isLoggedIn]);
+      }, [currentUser]);
 
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
       useEffect(() => {
@@ -607,9 +608,10 @@
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
 
       useEffect(() => {
+        if (!currentUser) return;
         const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) { const d = doc.data(); if (d && typeof d === 'object') setRowOrders(d); } });
         return () => unsub();
-      }, [isLoggedIn]);
+      }, [currentUser]);
 
       const saveRowOrders = (next) => { if (!auth.currentUser) { setShowLoginModal(true); return; } setRowOrders(next); db.collection("settings").doc("rowOrders").set(next); };
       const getOrderedRows = (status, rawRows) => {
@@ -837,6 +839,38 @@
       const TABLE_TH = () => (
         <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">KRW / USD</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
       );
+
+      // ── 로그인 게이트: 인증 전에는 대시보드 비노출 ──
+      if (!authReady) {
+        return (
+          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',color:'#64748b',fontFamily:'monospace',fontSize:'13px'}}>
+            Loading...
+          </div>
+        );
+      }
+      if (!currentUser) {
+        return (
+          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
+            <div style={{background:'#fff',borderRadius:'18px',padding:'36px 32px',width:'100%',maxWidth:'380px',boxShadow:'0 12px 50px rgba(0,0,0,0.5)'}}>
+              <div style={{fontSize:'34px',textAlign:'center',marginBottom:'10px'}}>📊</div>
+              <h1 style={{fontWeight:'800',fontSize:'21px',color:'#1e293b',textAlign:'center',marginBottom:'4px'}}>Sales Dashboard</h1>
+              <p style={{fontSize:'12px',color:'#94a3b8',textAlign:'center',marginBottom:'26px',fontFamily:'monospace'}}>Candela Medical Korea</p>
+              <input type="email" autoFocus value={loginEmail} onChange={e=>{setLoginEmail(e.target.value);setLoginError('');}} placeholder="Email"
+                onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
+              <input type="password" value={loginPwd} onChange={e=>{setLoginPwd(e.target.value);setLoginError('');}} placeholder="Password"
+                onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
+              {loginError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{loginError}</p>}
+              <button onClick={handleLogin} disabled={isLoggingIn}
+                style={{width:'100%',padding:'13px',background:isLoggingIn?'#93c5fd':'#2563eb',color:'#fff',border:'none',borderRadius:'10px',fontWeight:'800',fontSize:'15px',cursor:isLoggingIn?'default':'pointer',marginTop:'6px'}}>
+                {isLoggingIn ? '확인 중...' : '로그인'}
+              </button>
+              <p style={{fontSize:'11px',color:'#cbd5e1',textAlign:'center',marginTop:'18px'}}>계정 문의: 채윤길</p>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
