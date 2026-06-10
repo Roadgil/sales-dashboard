@@ -246,14 +246,19 @@
       const [isLoggingIn, setIsLoggingIn]     = useState(false);
       useEffect(() => auth.onAuthStateChanged(u => setCurrentUser(u)), []);
       const requireAuth = () => { if (auth.currentUser) return true; setShowLoginModal(true); return false; };
-      // ── 관리자 권한 (Ship Confirm 수정/삭제 · 환율 · 분기 목표) ──
-      const ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com'];
-      const isAdminUser = () => ADMIN_EMAILS.includes((auth.currentUser?.email||'').toLowerCase());
-      const requireAdmin = () => {
+      // ── 관리자 권한 ──
+      // 환율(ER) · 분기 목표 관리자
+      const TARGET_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com'];
+      // Ship Confirm 완료 데이터 수정/삭제 관리자
+      const SC_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
+      const hasRole = (list) => list.includes((auth.currentUser?.email||'').toLowerCase());
+      const requireRole = (list) => {
         if (!requireAuth()) return false;
-        if (!isAdminUser()) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
+        if (!hasRole(list)) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
         return true;
       };
+      const requireTargetAdmin = () => requireRole(TARGET_ADMIN_EMAILS);
+      const requireScAdmin     = () => requireRole(SC_ADMIN_EMAILS);
       const handleLogin = () => {
         if (isLoggingIn) return;
         if (!loginEmail.trim() || !loginPwd) { setLoginError(lang==='ko' ? '이메일과 비밀번호를 입력하세요.' : 'Enter email and password.'); return; }
@@ -311,7 +316,7 @@
       const [scPwdError, setScPwdError]         = useState(false);
       const [pendingScAction, setPendingScAction] = useState(null); // { type:'edit'|'delete', data }
 
-      const unlockSummary = () => { if (requireAdmin()) setSummaryLocked(false); };
+      const unlockSummary = () => { if (requireTargetAdmin()) setSummaryLocked(false); };
 
       // ── 담당자 변경 (Transfer Owner) ──────────────────────────────────────
       const [showTransferModal, setShowTransferModal] = useState(false);
@@ -319,7 +324,7 @@
       const [transferTarget, setTransferTarget]       = useState('');
       const handleTransferOpen = (row) => {
         // Ship Confirm 완료 데이터의 담당자 변경은 관리자만 (Firestore 규칙과 일치)
-        if (row.status === 'Ship Confirm' ? !requireAdmin() : !requireAuth()) return;
+        if (row.status === 'Ship Confirm' ? !requireScAdmin() : !requireAuth()) return;
         setTransferRow(row); setTransferTarget(row.member); setShowTransferModal(true);
       };
       const handleTransferConfirm = () => {
@@ -340,7 +345,7 @@
           .catch(e => showToast((lang==='ko' ? '변경 실패: ' : 'Transfer failed: ') + e.message, 'error'));
       };
       const requestScAction = (type, data) => {
-        if (!requireAdmin()) return;
+        if (!requireScAdmin()) return;
         if (type === 'edit')   handleEdit(data);
         if (type === 'delete') deleteSalesData(data.id);
       };
@@ -525,7 +530,7 @@
         }
       };
 
-      const handleTargetChange  = (field, value) => { if (!requireAdmin()) return; const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n).catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error')); };
+      const handleTargetChange  = (field, value) => { if (!requireTargetAdmin()) return; const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n).catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error')); };
       const handleErUnlock = () => {
         if (erPwdInput === SECRET_PASSWORD) { setErUnlocked(true); setErPwdInput(''); setErPwdError(false); }
         else { setErPwdError(true); setErPwdInput(''); }
@@ -553,7 +558,7 @@
         }
       };
       const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (isAdminUser() && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
+      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
       const handleInputChange = (e) => {
@@ -835,7 +840,7 @@
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireAdmin()) return; setErInputVal(String(activeER)); setErUnlocked(true); setShowErModal(true); }}
+          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireTargetAdmin()) return; setErInputVal(String(activeER)); setErUnlocked(true); setShowErModal(true); }}
             user={currentUser} onLoginClick={() => setShowLoginModal(true)}
             onLogoutClick={() => { if (window.confirm(lang==='ko' ? '로그아웃 하시겠습니까?' : 'Sign out?')) handleLogout(); }} />
           {/* [FIX #10] 토스트 */}
