@@ -30,6 +30,7 @@
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
     // ── 매출 집계 기준: Ship Confirm만 Target 대비 매출에 포함 ──
     // Status 체계: Ship Confirm(매출집계) > ACT(납품완료) > Pending(납품예정) > Back up(제외)
@@ -63,8 +64,19 @@
       }}>{msg}</div>
     );
 
-    const LangBtn = ({ lang, setLang, er, onErClick }) => (
+    const LangBtn = ({ lang, setLang, er, onErClick, user, onLoginClick, onLogoutClick }) => (
       <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
+        <button onClick={user ? onLogoutClick : onLoginClick}
+          title={user ? (user.email || '') : (lang==='ko' ? '편집하려면 로그인' : 'Sign in to edit')}
+          style={{ padding:'6px 12px', borderRadius:'20px', border:`1.5px solid ${user ? '#16a34a' : '#475569'}`,
+            background: user ? '#052e16' : '#0f172a', color: user ? '#86efac' : '#94a3b8',
+            fontWeight:'700', fontSize:'11px', fontFamily:'monospace', display:'flex', alignItems:'center', gap:'5px',
+            boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer', maxWidth:'160px' }}>
+          <span>{user ? '🔓' : '🔐'}</span>
+          <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+            {user ? (user.email||'').split('@')[0] : (lang==='ko' ? '로그인' : 'Sign in')}
+          </span>
+        </button>
         {er && (
           <button onClick={onErClick} title={lang==='ko' ? '환율 수정' : 'Edit ER'}
             style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
@@ -225,6 +237,34 @@
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
 
+      // ── Firebase Auth ────────────────────────────────────────────────────
+      const [currentUser, setCurrentUser]     = useState(() => auth.currentUser);
+      const [showLoginModal, setShowLoginModal] = useState(false);
+      const [loginEmail, setLoginEmail]       = useState('');
+      const [loginPwd, setLoginPwd]           = useState('');
+      const [loginError, setLoginError]       = useState('');
+      const [isLoggingIn, setIsLoggingIn]     = useState(false);
+      useEffect(() => auth.onAuthStateChanged(u => setCurrentUser(u)), []);
+      const requireAuth = () => { if (auth.currentUser) return true; setShowLoginModal(true); return false; };
+      // ── 관리자 권한 (Ship Confirm 수정/삭제 · 환율 · 분기 목표) ──
+      const ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com'];
+      const isAdminUser = () => ADMIN_EMAILS.includes((auth.currentUser?.email||'').toLowerCase());
+      const requireAdmin = () => {
+        if (!requireAuth()) return false;
+        if (!isAdminUser()) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
+        return true;
+      };
+      const handleLogin = () => {
+        if (isLoggingIn) return;
+        if (!loginEmail.trim() || !loginPwd) { setLoginError(lang==='ko' ? '이메일과 비밀번호를 입력하세요.' : 'Enter email and password.'); return; }
+        setIsLoggingIn(true); setLoginError('');
+        auth.signInWithEmailAndPassword(loginEmail.trim(), loginPwd)
+          .then(() => { setShowLoginModal(false); setLoginEmail(''); setLoginPwd(''); showToast(lang==='ko' ? '로그인 완료 ✓' : 'Signed in ✓'); })
+          .catch(() => setLoginError(lang==='ko' ? '❌ 이메일 또는 비밀번호가 올바르지 않습니다.' : '❌ Invalid email or password.'))
+          .finally(() => setIsLoggingIn(false));
+      };
+      const handleLogout = () => { auth.signOut().then(() => showToast(lang==='ko' ? '로그아웃 되었습니다' : 'Signed out')); };
+
       const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','gmppTarget','gmppEstimated','gmppGap'];
       const [cardOrder, setCardOrder] = useState(() => {
         try {
@@ -271,7 +311,39 @@
       const [scPwdError, setScPwdError]         = useState(false);
       const [pendingScAction, setPendingScAction] = useState(null); // { type:'edit'|'delete', data }
 
-      const requestScAction = (type, data) => { setPendingScAction({ type, data }); setShowScPwdModal(true); setScPwdInput(''); setScPwdError(false); };
+      const unlockSummary = () => { if (requireAdmin()) setSummaryLocked(false); };
+
+      // ── 담당자 변경 (Transfer Owner) ──────────────────────────────────────
+      const [showTransferModal, setShowTransferModal] = useState(false);
+      const [transferRow, setTransferRow]             = useState(null);
+      const [transferTarget, setTransferTarget]       = useState('');
+      const handleTransferOpen = (row) => {
+        // Ship Confirm 완료 데이터의 담당자 변경은 관리자만 (Firestore 규칙과 일치)
+        if (row.status === 'Ship Confirm' ? !requireAdmin() : !requireAuth()) return;
+        setTransferRow(row); setTransferTarget(row.member); setShowTransferModal(true);
+      };
+      const handleTransferConfirm = () => {
+        if (!transferRow || !transferTarget) return;
+        if (transferTarget === transferRow.member) { setShowTransferModal(false); setTransferRow(null); return; }
+        const newTeam = Object.keys(teams).find(t => (Array.isArray(teams[t])?teams[t]:[]).includes(transferTarget)) || transferRow.team;
+        const before = transferRow;
+        db.collection("sales").doc(String(before.id)).update({ member: transferTarget, team: newTeam })
+          .then(() => {
+            db.collection("audit_logs").add({
+              action: 'edit', timestamp: new Date().toISOString(),
+              member: transferTarget, team: newTeam, quarter: before.quarter, account: before.account,
+              before: before, after: { ...before, member: transferTarget, team: newTeam },
+            }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
+            showToast(lang==='ko' ? `담당자 변경 완료: ${before.member} → ${transferTarget} ✓` : `Transferred: ${before.member} → ${transferTarget} ✓`);
+            setShowTransferModal(false); setTransferRow(null);
+          })
+          .catch(e => showToast((lang==='ko' ? '변경 실패: ' : 'Transfer failed: ') + e.message, 'error'));
+      };
+      const requestScAction = (type, data) => {
+        if (!requireAdmin()) return;
+        if (type === 'edit')   handleEdit(data);
+        if (type === 'delete') deleteSalesData(data.id);
+      };
       const handleScUnlock = () => {
         if (scPwdInput === SECRET_PASSWORD) {
           setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false);
@@ -301,11 +373,11 @@
             if (data.quarters && Array.isArray(data.quarters)) {
               const cleaned = [...new Set(data.quarters.map(q => normalizeQuarter(q) || q))].sort();
               setQuarters(cleaned);
-              if (JSON.stringify(cleaned) !== JSON.stringify(data.quarters)) {
+              if (auth.currentUser && JSON.stringify(cleaned) !== JSON.stringify(data.quarters)) {
                 db.collection("settings").doc("layout").set({ quarters: cleaned }, { merge: true });
               }
             }
-          } else {
+          } else if (auth.currentUser) {
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
         });
@@ -315,6 +387,7 @@
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
       useEffect(() => {
         if (salesData.length === 0) return;
+        if (!currentUser) return; // 미선적 이월은 로그인된 사용자가 접속했을 때만 수행
 
         // 현재 날짜 기준으로 해당 분기 계산
         const now = new Date();
@@ -363,11 +436,12 @@
             );
           });
         });
-      }, [salesData.length]);
+      }, [salesData.length, currentUser]);
 
       // ── [FIX #2] 강화된 저장 검증 ────────────────────────────────────────
       const handleSave = () => {
         if (isSaving) return;
+        if (!requireAuth()) return;
         const errors = [];
         if (!form.account.trim())                              errors.push(T.valAccount);
         if (!form.status)                                      errors.push(T.valStatus);
@@ -428,6 +502,7 @@
       };
 
       const deleteSalesData = (id) => {
+        if (!requireAuth()) return;
         if (window.confirm(T.confirmDelete)) {
           const targetData = salesData.find(d => String(d.id) === String(id));
           db.collection("sales").doc(String(id)).delete()
@@ -450,7 +525,7 @@
         }
       };
 
-      const handleTargetChange  = (field, value) => { const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n); };
+      const handleTargetChange  = (field, value) => { if (!requireAdmin()) return; const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n).catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error')); };
       const handleErUnlock = () => {
         if (erPwdInput === SECRET_PASSWORD) { setErUnlocked(true); setErPwdInput(''); setErPwdError(false); }
         else { setErPwdError(true); setErPwdInput(''); }
@@ -460,15 +535,16 @@
         if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
         setShowErModal(false); setErUnlocked(false); setErInputVal('');
       };
-      const handleMemberTargetChange = (member, value) => { const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
-      const handleTeamTargetChange   = (team, quarter, value) => { const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
+      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
+      const handleTeamTargetChange   = (team, quarter, value) => { if (!requireAuth()) return; const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
 
-      const addTeam = () => { const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const addMember = () => { const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
+      const addTeam = () => { if (!requireAuth()) return; const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
+      const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
       const editMemberName = (oldName, e) => {
         e.stopPropagation();
+        if (!requireAuth()) return;
         const newName = prompt(T.promptRename, oldName);
         if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
           const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].map(m => m===oldName ? newName : m); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true });
@@ -476,8 +552,8 @@
           salesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
         }
       };
-      const deleteMember = (memberName, e) => { e.stopPropagation(); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (!quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
+      const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
+      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (isAdminUser() && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
       const handleInputChange = (e) => {
@@ -530,7 +606,7 @@
         return () => unsub();
       }, [isLoggedIn]);
 
-      const saveRowOrders = (next) => { setRowOrders(next); db.collection("settings").doc("rowOrders").set(next); };
+      const saveRowOrders = (next) => { if (!auth.currentUser) { setShowLoginModal(true); return; } setRowOrders(next); db.collection("settings").doc("rowOrders").set(next); };
       const getOrderedRows = (status, rawRows) => {
         const key = `${selectedQuarter}__${selectedMember}__${status}`;
         const orderMap = rowOrders[status]?.[key];
@@ -743,9 +819,11 @@
           <td className="p-2 md:p-3 text-center space-x-1">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
-                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button></>
+                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
+                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
               : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
-                  <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button></>
+                  <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button>
+                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
             }
           </td>
         </tr>
@@ -757,9 +835,72 @@
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { setErInputVal(String(activeER)); setShowErModal(true); }} />
+          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireAdmin()) return; setErInputVal(String(activeER)); setErUnlocked(true); setShowErModal(true); }}
+            user={currentUser} onLoginClick={() => setShowLoginModal(true)}
+            onLogoutClick={() => { if (window.confirm(lang==='ko' ? '로그아웃 하시겠습니까?' : 'Sign out?')) handleLogout(); }} />
           {/* [FIX #10] 토스트 */}
           {toast && <Toast msg={toast.msg} type={toast.type} />}
+
+          {/* Firebase 로그인 모달 */}
+          {showLoginModal && (
+            <div style={{position:'fixed',inset:0,zIndex:9500,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
+              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
+              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowLoginModal(false); setLoginError(''); } }}>
+              <div style={{background:'#fff',borderRadius:'14px',padding:'28px',width:'100%',maxWidth:'360px',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
+                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '🔐 로그인' : '🔐 Sign In'}</h3>
+                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '데이터를 추가/수정/삭제하려면 로그인하세요.' : 'Sign in to add, edit, or delete data.'}</p>
+                <input type="email" autoFocus value={loginEmail} onChange={e=>{setLoginEmail(e.target.value);setLoginError('');}} placeholder="Email"
+                  onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+                  style={{width:'100%',padding:'10px 12px',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
+                <input type="password" value={loginPwd} onChange={e=>{setLoginPwd(e.target.value);setLoginError('');}} placeholder="Password"
+                  onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+                  style={{width:'100%',padding:'10px 12px',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
+                {loginError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{loginError}</p>}
+                <div style={{display:'flex',gap:'8px',marginTop:'6px'}}>
+                  <button onClick={handleLogin} disabled={isLoggingIn}
+                    style={{flex:1,padding:'10px',background:isLoggingIn?'#93c5fd':'#2563eb',color:'#fff',border:'none',borderRadius:'8px',fontWeight:'700',fontSize:'14px',cursor:isLoggingIn?'default':'pointer'}}>
+                    {isLoggingIn ? (lang==='ko'?'확인 중...':'Signing in...') : (lang==='ko'?'로그인':'Sign In')}
+                  </button>
+                  <button onClick={()=>{setShowLoginModal(false);setLoginError('');}}
+                    style={{padding:'10px 16px',background:'#fff',color:'#64748b',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontWeight:'700',fontSize:'14px',cursor:'pointer'}}>
+                    {lang==='ko'?'취소':'Cancel'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 담당자 변경 모달 */}
+          {showTransferModal && transferRow && (
+            <div style={{position:'fixed',inset:0,zIndex:9400,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
+              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
+              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowTransferModal(false); setTransferRow(null); } }}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',width:'100%',maxWidth:'360px'}}>
+                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>🔄</div>
+                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>{lang==='ko' ? '담당자 변경' : 'Transfer Owner'}</h3>
+                <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
+                  <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{transferRow.account}</div>
+                  <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{transferRow.product} · {'₩' + (transferRow.priceKRW||0).toLocaleString()}</div>
+                </div>
+                <div style={{marginBottom:'6px',fontSize:'12px',color:'#64748b'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{fontWeight:'800',color:'#7c3aed'}}>{transferRow.member}</span> <span style={{color:'#cbd5e1'}}>({transferRow.team})</span></div>
+                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'Select new owner'}</div>
+                <select value={transferTarget} onChange={e => setTransferTarget(e.target.value)}
+                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #a78bfa',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
+                  {Object.entries(teams).map(([team, members]) => (
+                    <optgroup key={team} label={team}>
+                      {(Array.isArray(members)?members:[]).map(m => <option key={m} value={m}>{m}{m===transferRow.member ? (lang==='ko'?' (현재)':' (current)') : ''}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <button onClick={() => { setShowTransferModal(false); setTransferRow(null); }}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
+                  <button onClick={handleTransferConfirm} disabled={!transferTarget || transferTarget===transferRow.member}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:(!transferTarget||transferTarget===transferRow.member)?'#c4b5fd':'#7c3aed',color:'white',fontWeight:'800',cursor:(!transferTarget||transferTarget===transferRow.member)?'default':'pointer',fontSize:'14px'}}>{lang==='ko' ? '변경' : 'Transfer'}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ER 환율 편집 모달 */}
           {showErModal && (
@@ -913,7 +1054,7 @@
                     <h3 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
                       {T.quarterSummary}
                       {summaryLocked
-                        ? <button onClick={() => setShowSummaryPwdModal(true)} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
+                        ? <button onClick={() => unlockSummary()} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
                         : <button onClick={() => setSummaryLocked(true)} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #86efac',background:'#f0fdf4',color:'#15803d',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔓</button>}
                     </h3>
                     {/* [FIX #4] 현재 selectedQuarter를 파라미터로 전달 */}
@@ -929,7 +1070,7 @@
                     const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
                     const allCards = {
                       er: (id) => null,
-                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target ✏️</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target ✏️</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       targetUSD: (id) => null,
                       incentiveKRW: (id) => { const c=C(id); const incentivePct = incentiveTargetKRW ? (expectedKRW / incentiveTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:incentivePct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'ACT+SC: ' + incentivePct.toFixed(1) + '%'}</span></div>; },
                       incentiveUSD: (id) => null,
@@ -937,7 +1078,7 @@
                       estimatedUSD: (id) => null,
                       gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px',marginBottom:'2px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:actPct>=100?'#16a34a':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'2px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#3b82f6',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:shipConfirmPct>=100?'#16a34a':'#2563eb'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div>; },
-                      gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)setShowSummaryPwdModal(true);}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치 (ACT+SC)</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:gmppPct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'vs Target: ' + gmppPct.toFixed(1) + '%'}</span></div>; },
                       gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
                       actEstimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
