@@ -231,7 +231,7 @@ function doLogin() {
 function doLogout() {
   auth.signOut().then(() => location.reload());
 }
-const AUDIT_VIEWER_EMAILS = ['miaej@candelamedical.com','hannap@candelamedical.com','yoongil.chae@candelamedical.com'];
+const AUDIT_VIEWER_EMAILS = ['hannap@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
 auth.onAuthStateChanged(user => {
   if (user) {
     if (!AUDIT_VIEWER_EMAILS.includes((user.email||'').toLowerCase())) {
