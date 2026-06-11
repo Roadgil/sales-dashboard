@@ -9,6 +9,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
   <!-- [FIX #5] Firebase 초기화 단일 위치 -->
@@ -24,6 +25,7 @@
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
   </script>
 
   <style>
@@ -56,38 +58,33 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const LangBtn = ({ lang, setLang, er }) => (
-      <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
-        {er && (
-          <div style={{
-            padding:'5px 12px', borderRadius:'20px', border:'1.5px solid #cbd5e1',
-            background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
-            fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
-            boxShadow:'0 2px 8px rgba(0,0,0,0.2)'
-          }}>
-            <span style={{color:'#64748b'}}>ER</span>
-            <span style={{color:'#e2e8f0'}}>₩{er.toLocaleString()}</span>
-          </div>
-        )}
-        <button
-          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
-          style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
-        >
-          {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
-        </button>
-      </div>
+    const LangBtn = ({ lang, setLang }) => (
+      <button
+        onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+        style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:'6px' }}
+      >
+        {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+      </button>
     );
 
     const ReportApp = () => {
-      const SECRET_PASSWORD = "dladydcjf";
       const [lang, setLang]           = useState(localStorage.getItem('lang') || 'ko');
-      const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('adminAuth') === 'true');
-      const [pwdInput, setPwdInput]   = useState('');
+      const [currentUser, setCurrentUser] = useState(null);
+      const [authReady, setAuthReady]     = useState(false);
+      const [emailInput, setEmailInput]   = useState('');
+      const [pwdInput, setPwdInput]       = useState('');
+      const [loginError, setLoginError]   = useState('');
+      const [loggingIn, setLoggingIn]     = useState(false);
+      const isLoggedIn = !!currentUser;
+
+      useEffect(() => auth.onAuthStateChanged(u => { setCurrentUser(u); setAuthReady(true); }), []);
 
       const T = {
         loginTitle:     lang==='ko' ? '📈 보고용 리포트 보안접속'  : '📈 Secure Access — Sales Report',
         loginBtn:       lang==='ko' ? '접속하기'                   : 'Log In',
-        wrongPwd:       lang==='ko' ? '비밀번호 불일치!'            : 'Incorrect password!',
+        loginDesc:      lang==='ko' ? '대시보드 계정으로 로그인하세요.' : 'Sign in with your dashboard account.',
+        wrongPwd:       lang==='ko' ? '⛔ 이메일 또는 비밀번호가 올바르지 않습니다.' : '⛔ Invalid email or password.',
+        logoutBtn:      lang==='ko' ? '로그아웃'                   : 'Log Out',
         closeBtn:       lang==='ko' ? '닫기'                       : 'Close',
         unitSuffix:     lang==='ko' ? '대'                         : 'unit(s)',
         noData:         lang==='ko' ? '-'                          : '-',
@@ -119,11 +116,11 @@
 
       const handleLogin = (e) => {
         e.preventDefault();
-        if (pwdInput === SECRET_PASSWORD) {
-          localStorage.setItem('adminAuth', 'true'); setIsLoggedIn(true);
-        } else {
-          alert(T.wrongPwd); setPwdInput('');
-        }
+        if (!emailInput.trim() || !pwdInput) return;
+        setLoggingIn(true); setLoginError('');
+        auth.signInWithEmailAndPassword(emailInput.trim(), pwdInput)
+          .catch(() => { setLoginError(T.wrongPwd); setPwdInput(''); })
+          .finally(() => setLoggingIn(false));
       };
 
       useEffect(() => {
@@ -137,14 +134,25 @@
         return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
       }, [isLoggedIn]);
 
+      if (!authReady) {
+        return (
+          <div className="flex h-screen items-center justify-center bg-slate-800">
+            <div className="text-white font-bold">Loading...</div>
+          </div>
+        );
+      }
+
       if (!isLoggedIn) {
         return (
           <div className="flex h-screen items-center justify-center bg-slate-800">
-            <LangBtn lang={lang} setLang={setLang} er={quarterTargets[selectedQuarter]?.er || 1389} />
+            <LangBtn lang={lang} setLang={setLang} />
             <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
-              <h2 className="text-xl font-bold mb-4">{T.loginTitle}</h2>
-              <input type="password" value={pwdInput} onChange={e=>setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-4 text-center tracking-widest font-mono" placeholder="Password"/>
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold transition">{T.loginBtn}</button>
+              <h2 className="text-xl font-bold mb-2">{T.loginTitle}</h2>
+              <p className="text-sm text-slate-500 mb-4">{T.loginDesc}</p>
+              <input type="email" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="w-full p-3 border rounded-lg mb-3 text-center font-mono" placeholder="Email" autoComplete="username"/>
+              <input type="password" value={pwdInput} onChange={e=>setPwdInput(e.target.value)} className="w-full p-3 border rounded-lg mb-3 text-center tracking-widest font-mono" placeholder="Password" autoComplete="current-password"/>
+              {loginError && <p className="text-red-600 text-sm font-bold mb-3">{loginError}</p>}
+              <button type="submit" disabled={loggingIn} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-3 rounded-lg font-bold transition">{loggingIn ? '...' : T.loginBtn}</button>
             </form>
           </div>
         );
@@ -221,7 +229,13 @@
 
       return (
         <div className="p-6 md:p-8">
-          <LangBtn lang={lang} setLang={setLang} er={quarterTargets[selectedQuarter]?.er || 1389} />
+          <LangBtn lang={lang} setLang={setLang} />
+          <button
+            onClick={() => auth.signOut()}
+            style={{ position:'fixed', top:'16px', right:'110px', zIndex:9999, padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #94a3b8', background:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.12)' }}
+          >
+            {T.logoutBtn}
+          </button>
           <div className="flex justify-between items-end mb-4">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Monthly Sales Progress Check</h1>
