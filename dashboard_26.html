@@ -6,6 +6,7 @@
 <title id="pageTitle">Detail Report · Candela Korea</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -217,6 +218,7 @@ function applyLang(){
 const firebaseConfig={apiKey:"AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",authDomain:"sales-dashboard-d0d13.firebaseapp.com",projectId:"sales-dashboard-d0d13",storageBucket:"sales-dashboard-d0d13.firebasestorage.app",messagingSenderId:"870275096697",appId:"1:870275096697:web:cd7373b77358681e21b4a8"};
 if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
+const auth=firebase.auth();
 
 function getCurrentQuarter(){const now=new Date(),m=now.getMonth()+1,y=now.getFullYear();return `${y} ${m<=3?'Q1':m<=6?'Q2':m<=9?'Q3':'Q4'}`;}
 const QUARTER=new URLSearchParams(window.location.search).get('quarter')||getCurrentQuarter();
@@ -502,9 +504,38 @@ function switchMTab(id,btn){
 
 let _sales=[],_targets={},_qTargets={},_loaded={s:false,t:false,q:false};
 const tryRender=()=>{if(_loaded.s&&_loaded.t&&_loaded.q){render(_sales,_targets,_qTargets);applyLang();const el=document.getElementById('erValue');if(el)el.textContent='₩'+_er.toLocaleString();}};
-db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();_er=_qTargets?.[QUARTER]?.er||1389;}_loaded.q=true;tryRender();});
-db.collection("sales").onSnapshot(snap=>{_sales=snap.docs.map(d=>d.data());_loaded.s=true;tryRender();});
-db.collection("targets").doc("memberTargets").onSnapshot(doc=>{if(doc.exists)_targets=doc.data();_loaded.t=true;tryRender();});
+
+// 스피너가 있는 영역에 안내 메시지 표시 (로그인 필요 / 오류)
+function showNotice(html){
+  ['targetCard','memberList','productTable','memberTabContent'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;line-height:1.7">${html}</div>`;
+  });
+}
+
+// Firestore 구독 — 에러 콜백 포함(권한 거부 등이 조용히 무시되지 않도록)
+function subscribe(){
+  const onErr=(label)=>(e)=>{
+    console.error(`[Firestore] ${label} 구독 실패:`,e);
+    showNotice(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`);
+  };
+  db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();_er=_qTargets?.[QUARTER]?.er||1389;}_loaded.q=true;tryRender();}, onErr('quarterTargets'));
+  db.collection("sales").onSnapshot(snap=>{_sales=snap.docs.map(d=>d.data());_loaded.s=true;tryRender();}, onErr('sales'));
+  db.collection("targets").doc("memberTargets").onSnapshot(doc=>{if(doc.exists)_targets=doc.data();_loaded.t=true;tryRender();}, onErr('memberTargets'));
+}
+
+// 로그인 세션이 확인된 뒤에만 데이터를 읽는다.
+// (index.html에서 로그인하면 같은 도메인에서 세션이 공유됨)
+let _subscribed=false;
+auth.onAuthStateChanged(user=>{
+  if(user){
+    if(_subscribed) return;
+    _subscribed=true;
+    subscribe();
+  } else {
+    showNotice(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--a1);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`);
+  }
+});
 </script>
 </body>
 </html>
