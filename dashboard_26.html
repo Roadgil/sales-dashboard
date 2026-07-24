@@ -127,9 +127,14 @@ html,body{overflow-x:hidden;max-width:100vw;}
 <div class="view-toggle">
   <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">View:</span>
   <button class="vt-btn active" id="btn-quarter-view" onclick="setViewMode('quarter')">📅 Quarter</button>
+  <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')">🌓 상반기 Total</button>
   <button class="vt-btn" id="btn-year-view" onclick="setViewMode('year')">📆 Full Year</button>
   <span style="color:var(--border);margin:0 4px">|</span>
   <span id="yearQuarterBtns" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
+  <span style="color:var(--border);margin:0 4px">|</span>
+  <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기">◀</button>
+  <select id="quarterSelect" onchange="changeQuarter(this.value)" style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"></select>
+  <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기">▶</button>
 </div>
 <div id="quarterBreakdown" style="display:none"><div class="qbreak-grid" id="qbreakGrid"></div></div>
 
@@ -221,14 +226,44 @@ const db=firebase.firestore();
 const auth=firebase.auth();
 
 function getCurrentQuarter(){const now=new Date(),m=now.getMonth()+1,y=now.getFullYear();return `${y} ${m<=3?'Q1':m<=6?'Q2':m<=9?'Q3':'Q4'}`;}
-const QUARTER=new URLSearchParams(window.location.search).get('quarter')||getCurrentQuarter();
+let QUARTER=new URLSearchParams(window.location.search).get('quarter')||getCurrentQuarter();
 const QM={Q1:['01','03'],Q2:['04','06'],Q3:['07','09'],Q4:['10','12']};
 const QM_M={Q1:[1,2,3],Q2:[4,5,6],Q3:[7,8,9],Q4:[10,11,12]};
 const MKO={1:'1월',2:'2월',3:'3월',4:'4월',5:'5월',6:'6월',7:'7월',8:'8월',9:'9월',10:'10월',11:'11월',12:'12월'};
 const MEN={1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'};
-const [YR,QK]=QUARTER.split(' ');
-const [MS,ME]=QM[QK]||['01','03'];
-const Q_MONTHS=QM_M[QK]||[1,2,3];
+let YR, QK, MS, ME, Q_MONTHS;
+function deriveQuarterParts(){
+  [YR,QK]=QUARTER.split(' ');
+  [MS,ME]=QM[QK]||['01','03'];
+  Q_MONTHS=QM_M[QK]||[1,2,3];
+}
+deriveQuarterParts();
+
+// [분기 이동] 이 리포트가 열려있는 대시보드의 분기 목록(settings/layout)을 그대로 따라감 — 못 받아오면 QUARTER 하나만 표시
+let _availableQuarters=[];
+function populateQuarterSelect(){
+  const sel=document.getElementById('quarterSelect'); if(!sel) return;
+  const list=_availableQuarters.length?_availableQuarters:[QUARTER];
+  sel.innerHTML=list.map(q=>`<option value="${q}"${q===QUARTER?' selected':''}>${q}</option>`).join('');
+}
+function changeQuarter(q){
+  if(!q||q===QUARTER) return;
+  QUARTER=q; deriveQuarterParts(); _activeQ=QUARTER;
+  const url=new URL(window.location); url.searchParams.set('quarter',QUARTER); window.history.replaceState({},'',url);
+  populateQuarterSelect();
+  updateER();
+  setViewMode('quarter');
+}
+function updateER(){
+  _er=(typeof _qTargets!=='undefined'&&_qTargets?.[QUARTER]?.er)||1389;
+  const el=document.getElementById('erValue'); if(el) el.textContent='₩'+_er.toLocaleString();
+}
+function stepQuarter(dir){
+  const list=_availableQuarters.length?_availableQuarters:[QUARTER];
+  const idx=list.indexOf(QUARTER);
+  const nextIdx=Math.min(list.length-1,Math.max(0,(idx===-1?0:idx)+dir));
+  changeQuarter(list[nextIdx]);
+}
 
 let _viewMode='quarter', _activeQ=QUARTER;
 document.getElementById('pageTitle').textContent=`Detail Report · ${QUARTER} · Candela Korea`;
@@ -236,13 +271,16 @@ document.getElementById('quarterBadge').textContent=QUARTER;
 document.getElementById('quarterSubLabel').textContent=QUARTER;
 document.getElementById('quarterDate').textContent=`${YR}.${MS} — ${YR}.${ME}`;
 document.getElementById('genDate').textContent=`Generated: ${new Date().toLocaleDateString('ko-KR')}`;
+populateQuarterSelect();
 
 function setViewMode(mode){
   _viewMode=mode;
   document.getElementById('btn-quarter-view').classList.toggle('active',mode==='quarter');
+  document.getElementById('btn-h1-view').classList.toggle('active',mode==='h1');
   document.getElementById('btn-year-view').classList.toggle('active',mode==='year');
   document.getElementById('quarterBreakdown').style.display=mode==='year'?'block':'none';
   if(mode==='year'){document.getElementById('quarterBadge').textContent=`${YR} Full Year`;document.getElementById('quarterSubLabel').textContent=`${YR} Annual`;document.getElementById('quarterDate').textContent=`${YR}.01 — ${YR}.12`;buildYQBtns();}
+  else if(mode==='h1'){document.getElementById('quarterBadge').textContent=`${YR} H1`;document.getElementById('quarterSubLabel').textContent=t(`${YR} 상반기`,`${YR} H1`);document.getElementById('quarterDate').textContent=`${YR}.01 — ${YR}.06`;document.getElementById('yearQuarterBtns').innerHTML='';}
   else{document.getElementById('quarterBadge').textContent=QUARTER;document.getElementById('quarterSubLabel').textContent=QUARTER;document.getElementById('quarterDate').textContent=`${YR}.${MS} — ${YR}.${ME}`;document.getElementById('yearQuarterBtns').innerHTML='';}
   if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);
 }
@@ -281,6 +319,12 @@ function render(salesData,memberTargets,qTargets){
         <div style="font-size:10px;color:var(--muted)">${rows.length}건${pct?` · ${pct}%`:''}</div>
       </div>`;}).join('');}
     document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 전체 합산 (SC만)`,`Revenue basis: ${YR} Full Year (SC only)`);
+  } else if(_viewMode==='h1'){
+    const h1Qs=[`${YR} Q1`,`${YR} Q2`];
+    scData=salesData.filter(d=>h1Qs.includes(d.quarter)&&SC.includes(d.status));
+    allQ=salesData.filter(d=>h1Qs.includes(d.quarter));
+    months=[1,2,3,4,5,6];
+    document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 상반기(1~2분기) 합산 (SC만)`,`Revenue basis: ${YR} H1 (Q1+Q2, SC only)`);
   } else {
     scData=salesData.filter(d=>d.quarter===QUARTER&&SC.includes(d.status));
     allQ=salesData.filter(d=>d.quarter===QUARTER);
@@ -293,8 +337,9 @@ function render(salesData,memberTargets,qTargets){
   const totalKRW=scData.reduce((s,d)=>s+(d.priceKRW||0),0);
   const pendKRW=pendData.reduce((s,d)=>s+(d.priceKRW||0),0);
   const actKRW=actData.reduce((s,d)=>s+(d.priceKRW||0),0);
-  const qTgtKey=_viewMode==='year'?null:QUARTER;
-  const qTarget=qTgtKey?(qTargets?.[qTgtKey]?.target||0):0;
+  const qTgtKey=(_viewMode==='year'||_viewMode==='h1')?null:QUARTER;
+  let qTarget=qTgtKey?(qTargets?.[qTgtKey]?.target||0):0;
+  if(_viewMode==='h1') qTarget=(qTargets?.[`${YR} Q1`]?.target||0)+(qTargets?.[`${YR} Q2`]?.target||0);
   const attain=qTarget?(totalKRW/qTarget*100):null;
   const getM=dStr=>dStr?parseInt(dStr.split('-')[1],10):0;
   const mLabels=months.map(m=>_lang==='en'?MEN[m]:MKO[m]);
@@ -470,8 +515,8 @@ function render(salesData,memberTargets,qTargets){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div class="card" style="padding:16px">
           <div class="ctitle">${t('제품별','By Product')}</div>
-          <table><thead><tr><th>${t('제품','Prod')}</th><th>${t('금액','Amt')}</th><th></th></tr></thead><tbody>
-          ${mpe.map(([k,v])=>`<tr><td style="font-weight:600">${k}</td><td class="mono">${fmtA(v)}</td>
+          <table><thead><tr><th>${t('제품','Prod')}</th><th>${t('금액','Amt')}</th><th>${t('수량','Q\'ty')}</th><th></th></tr></thead><tbody>
+          ${mpe.map(([k,v])=>`<tr><td style="font-weight:600">${k}</td><td class="mono">${fmtA(v)}</td><td class="dim">${mc[k]||0}${t('개','ea')}</td>
             <td><div class="mbar" style="width:${Math.round(v/mmp*60)}px"></div></td></tr>`).join('')}
           </tbody></table>
         </div>
@@ -519,9 +564,12 @@ function subscribe(){
     console.error(`[Firestore] ${label} 구독 실패:`,e);
     showNotice(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`);
   };
-  db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();_er=_qTargets?.[QUARTER]?.er||1389;}_loaded.q=true;tryRender();}, onErr('quarterTargets'));
+  db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();updateER();}_loaded.q=true;tryRender();}, onErr('quarterTargets'));
   db.collection("sales").onSnapshot(snap=>{_sales=snap.docs.map(d=>d.data());_loaded.s=true;tryRender();}, onErr('sales'));
   db.collection("targets").doc("memberTargets").onSnapshot(doc=>{if(doc.exists)_targets=doc.data();_loaded.t=true;tryRender();}, onErr('memberTargets'));
+  db.collection("settings").doc("layout").onSnapshot(doc=>{
+    if(doc.exists){const d=doc.data();if(Array.isArray(d.quarters)&&d.quarters.length){_availableQuarters=d.quarters;populateQuarterSelect();}}
+  }, onErr('layout'));
 }
 
 // 로그인 세션이 확인된 뒤에만 데이터를 읽는다.
