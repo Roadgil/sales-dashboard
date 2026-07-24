@@ -972,6 +972,25 @@ img,video{max-width:100%;height:auto}
       const clearAllListFilter  = (col) => setAllListFilters(prev => ({ ...prev, [col]: [] }));
       const clearAllListFilters = () => setAllListFilters({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
 
+      // ── 멤버 상세 테이블(Ship Confirm/ACT/Pending/Backup) 열 필터 (Excel 자동 필터 방식) ──
+      const [memberTableFilters, setMemberTableFilters] = useState({});
+      const [memberTableFilterOpen, setMemberTableFilterOpen] = useState(null);
+      const getMemberFilter = (tableKey) => memberTableFilters[tableKey] || { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] };
+      const toggleMemberTableFilter = (tableKey, col, val) => setMemberTableFilters(prev => { const cur = getMemberFilter(tableKey); const arr = cur[col]||[]; return { ...prev, [tableKey]: { ...cur, [col]: arr.includes(val) ? arr.filter(v=>v!==val) : [...arr, val] } }; });
+      const clearMemberTableFilter  = (tableKey, col) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { ...getMemberFilter(tableKey), [col]: [] } }));
+      const clearMemberTableFilters = (tableKey) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] } }));
+      const applyMemberTableFilter  = (tableKey, rawRows) => {
+        const f = getMemberFilter(tableKey);
+        return rawRows.filter(r =>
+          (f.status.length===0       || f.status.includes(r.status)) &&
+          (f.contractType.length===0 || f.contractType.includes(r.contractType||'일반')) &&
+          (f.dealer.length===0       || f.dealer.includes(r.dealerName||'-')) &&
+          (f.account.length===0      || f.account.includes(r.account)) &&
+          (f.product.length===0      || f.product.includes(r.product)) &&
+          (f.accType.length===0      || f.accType.includes(r.accType||'-'))
+        );
+      };
+
       const [rowOrders, setRowOrders]   = useState({ ACT:{}, Pending:{}, Backup:{}, Minal:{} });
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
 
@@ -1204,9 +1223,61 @@ img,video{max-width:100%;height:auto}
         </tr>
       );
 
-      const TABLE_TH = () => (
-        <tr><th className="p-2 md:p-3">Status</th><th className="p-2 md:p-3">{T.contractDate}</th><th className="p-2 md:p-3">{T.deliveryDate}</th><th className="p-2 md:p-3">{T.contract}</th><th className="p-2 md:p-3">Dealer</th><th className="p-2 md:p-3">SO</th><th className="p-2 md:p-3">Account</th><th className="p-2 md:p-3">Product</th><th className="p-2 md:p-3">Acc type</th><th className="p-2 md:p-3 text-right">KRW / USD</th><th className="p-2 md:p-3 text-center">{T.actions}</th></tr>
-      );
+      const TABLE_TH = ({ tableKey, rows }) => {
+        const f = getMemberFilter(tableKey);
+        const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
+        const FilterTh = ({ col, label, get, align }) => {
+          const isOpen = memberTableFilterOpen === `${tableKey}__${col}`;
+          const active = (f[col]||[]).length > 0;
+          const vals   = uniq(rows.map(get));
+          return (
+            <th className={`p-2 md:p-3 relative ${align==='right'?'text-right':''}`} style={{userSelect:'none'}}>
+              <div className={`flex items-center gap-1 ${align==='right'?'justify-end':''}`}>
+                <span>{label}</span>
+                <button onClick={e=>{e.stopPropagation(); setMemberTableFilterOpen(isOpen?null:`${tableKey}__${col}`);}}
+                  style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}}
+                  title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
+              </div>
+              {isOpen && (
+                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',[align==='right'?'right':'left']:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                  <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
+                    <button onClick={()=>clearMemberTableFilter(tableKey,col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
+                  </div>
+                  <div style={{overflowY:'auto',flex:1}}>
+                    {vals.length===0 ? <div style={{padding:'10px',fontSize:'11px',color:'#94a3b8',textAlign:'center'}}>값 없음</div> : vals.map(val=>{
+                      const checked = (f[col]||[]).includes(val);
+                      const count   = rows.filter(r=>get(r)===val).length;
+                      return (
+                        <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
+                          <input type="checkbox" checked={checked} onChange={()=>toggleMemberTableFilter(tableKey,col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
+                          <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
+                          <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </th>
+          );
+        };
+        return (
+          <tr>
+            <FilterTh col="status" label="Status" get={r=>r.status}/>
+            <th className="p-2 md:p-3">{T.contractDate}</th>
+            <th className="p-2 md:p-3">{T.deliveryDate}</th>
+            <FilterTh col="contractType" label={T.contract} get={r=>r.contractType||'일반'}/>
+            <FilterTh col="dealer" label="Dealer" get={r=>r.dealerName||'-'}/>
+            <th className="p-2 md:p-3">SO</th>
+            <FilterTh col="account" label="Account" get={r=>r.account}/>
+            <FilterTh col="product" label="Product" get={r=>r.product}/>
+            <FilterTh col="accType" label="Acc type" get={r=>r.accType||'-'}/>
+            <th className="p-2 md:p-3 text-right">KRW / USD</th>
+            <th className="p-2 md:p-3 text-center">{T.actions}</th>
+          </tr>
+        );
+      };
 
       // ── 로그인 게이트: 인증 전에는 대시보드 비노출 ──
       if (!authReady) {
@@ -1439,7 +1510,7 @@ img,video{max-width:100%;height:auto}
           </div>
 
           {/* 메인 콘텐츠 */}
-          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
             {!selectedMember ? (
               <div>
                 <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
@@ -1819,62 +1890,99 @@ img,video{max-width:100%;height:auto}
                   </form>
 
                   {/* Ship Confirm 완료 테이블 (맨 위) */}
-                  <div className="mt-8">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                      <h4 className="text-lg md:text-xl font-bold flex items-center gap-2" style={{color:'#1d4ed8'}}>
-                        🚢 {T.shipConfirmList}
-                        <span className="text-sm font-normal text-gray-500">({shipConfirmCount}{T.cases})</span>
-                      </h4>
-
-                    </div>
-                    <div className="overflow-x-auto rounded-lg border border-blue-900">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><TABLE_TH/></thead>
-                        <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Ship Confirm'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : rawRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true)); })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {(() => {
+                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Ship Confirm');
+                    const filteredRows = applyMemberTableFilter('ShipConfirm', rawRows);
+                    const hasFilter = Object.values(getMemberFilter('ShipConfirm')).some(v=>v.length>0);
+                    return (
+                      <div className="mt-8">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                          <h4 className="text-lg md:text-xl font-bold flex items-center gap-2" style={{color:'#1d4ed8'}}>
+                            🚢 {T.shipConfirmList}
+                            <span className="text-sm font-normal text-gray-500">{hasFilter ? `(${filteredRows.length} / ${shipConfirmCount}${T.cases})` : `(${shipConfirmCount}${T.cases})`}</span>
+                          </h4>
+                          {hasFilter && <button onClick={()=>clearMemberTableFilters('ShipConfirm')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-blue-900">
+                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                            <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><TABLE_TH tableKey="ShipConfirm" rows={rawRows}/></thead>
+                            <tbody>
+                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : filteredRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* ACT 테이블 */}
-                  <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-800">{T.deliveryStatus}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-blue-200">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-blue-800 text-white font-bold"><TABLE_TH/></thead>
-                        <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',rawRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700')); })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {(() => {
+                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT');
+                    const filteredRows = applyMemberTableFilter('ACT', rawRows);
+                    const hasFilter = Object.values(getMemberFilter('ACT')).some(v=>v.length>0);
+                    return (
+                      <div className="mt-10">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                          <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-800">{T.deliveryStatus} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
+                          {hasFilter && <button onClick={()=>clearMemberTableFilters('ACT')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-blue-200">
+                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                            <thead className="bg-blue-800 text-white font-bold"><TABLE_TH tableKey="ACT" rows={rawRows}/></thead>
+                            <tbody>
+                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',filteredRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700'))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Pending 테이블 */}
-                  <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-blue-700">{T.pendingList}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-blue-200">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-blue-700 text-white font-bold"><TABLE_TH/></thead>
-                        <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',rawRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800')); })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {(() => {
+                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending');
+                    const filteredRows = applyMemberTableFilter('Pending', rawRows);
+                    const hasFilter = Object.values(getMemberFilter('Pending')).some(v=>v.length>0);
+                    return (
+                      <div className="mt-10">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                          <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-700">{T.pendingList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
+                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Pending')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-blue-200">
+                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                            <thead className="bg-blue-700 text-white font-bold"><TABLE_TH tableKey="Pending" rows={rawRows}/></thead>
+                            <tbody>
+                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',filteredRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800'))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Backup 테이블 */}
-                  <div className="mt-10">
-                    <h4 className="text-lg md:text-xl font-bold mb-3 flex items-center text-orange-600">{T.backupList}</h4>
-                    <div className="overflow-x-auto rounded-lg border border-orange-200">
-                      <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                        <thead className="bg-orange-500 text-white font-bold"><TABLE_TH/></thead>
-                        <tbody>
-                          {(() => { const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up'); return rawRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',rawRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800')); })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {(() => {
+                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up');
+                    const filteredRows = applyMemberTableFilter('Backup', rawRows);
+                    const hasFilter = Object.values(getMemberFilter('Backup')).some(v=>v.length>0);
+                    return (
+                      <div className="mt-10">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                          <h4 className="text-lg md:text-xl font-bold flex items-center text-orange-600">{T.backupList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
+                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Backup')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-orange-200">
+                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
+                            <thead className="bg-orange-500 text-white font-bold"><TABLE_TH tableKey="Backup" rows={rawRows}/></thead>
+                            <tbody>
+                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',filteredRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800'))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
 
 
