@@ -465,6 +465,67 @@ img,video{max-width:100%;height:auto}
       </div>
     );
 
+    // ── 멤버 상세 테이블 열 필터 헤더 (컴포넌트를 App 밖에 고정해 리렌더마다 재마운트/스크롤 초기화 되는 것 방지) ──
+    const MemberFilterTh = ({ tableKey, col, label, get, rows, openKey, onToggleOpen, filterArr, onToggleValue, onClear, align }) => {
+      const isOpen = openKey === `${tableKey}__${col}`;
+      const active = (filterArr||[]).length > 0;
+      const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
+      const vals = uniq(rows.map(get));
+      return (
+        <th className={`p-2 md:p-3 relative ${align==='right'?'text-right':''}`} style={{userSelect:'none'}}>
+          <div className={`flex items-center gap-1 ${align==='right'?'justify-end':''}`}>
+            <span>{label}</span>
+            <button onClick={e=>{e.stopPropagation(); onToggleOpen();}}
+              style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}}
+              title={active?`${filterArr.length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
+          </div>
+          {isOpen && (
+            <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',[align==='right'?'right':'left']:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
+                <button onClick={onClear} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
+              </div>
+              <div style={{overflowY:'auto',flex:1}}>
+                {vals.length===0 ? <div style={{padding:'10px',fontSize:'11px',color:'#94a3b8',textAlign:'center'}}>값 없음</div> : vals.map(val=>{
+                  const checked = (filterArr||[]).includes(val);
+                  const count   = rows.filter(r=>get(r)===val).length;
+                  return (
+                    <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
+                      <input type="checkbox" checked={checked} onChange={()=>onToggleValue(val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
+                      <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
+                      <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </th>
+      );
+    };
+
+    const MemberTableHead = ({ tableKey, rows, filters, openKey, onToggleOpen, onToggleValue, onClear, T }) => (
+      <tr>
+        <MemberFilterTh tableKey={tableKey} col="status" label="Status" get={r=>r.status} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('status')} filterArr={filters.status} onToggleValue={val=>onToggleValue('status',val)} onClear={()=>onClear('status')}/>
+        <th className="p-2 md:p-3">{T.contractDate}</th>
+        <th className="p-2 md:p-3">{T.deliveryDate}</th>
+        <MemberFilterTh tableKey={tableKey} col="contractType" label={T.contract} get={r=>r.contractType||'일반'} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('contractType')} filterArr={filters.contractType} onToggleValue={val=>onToggleValue('contractType',val)} onClear={()=>onClear('contractType')}/>
+        <MemberFilterTh tableKey={tableKey} col="dealer" label="Dealer" get={r=>r.dealerName||'-'} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('dealer')} filterArr={filters.dealer} onToggleValue={val=>onToggleValue('dealer',val)} onClear={()=>onClear('dealer')}/>
+        <th className="p-2 md:p-3">SO</th>
+        <MemberFilterTh tableKey={tableKey} col="account" label="Account" get={r=>r.account} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('account')} filterArr={filters.account} onToggleValue={val=>onToggleValue('account',val)} onClear={()=>onClear('account')}/>
+        <MemberFilterTh tableKey={tableKey} col="product" label="Product" get={r=>r.product} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('product')} filterArr={filters.product} onToggleValue={val=>onToggleValue('product',val)} onClear={()=>onClear('product')}/>
+        <MemberFilterTh tableKey={tableKey} col="accType" label="Acc type" get={r=>r.accType||'-'} rows={rows}
+          openKey={openKey} onToggleOpen={()=>onToggleOpen('accType')} filterArr={filters.accType} onToggleValue={val=>onToggleValue('accType',val)} onClear={()=>onClear('accType')}/>
+        <th className="p-2 md:p-3 text-right">KRW / USD</th>
+        <th className="p-2 md:p-3 text-center">{T.actions}</th>
+      </tr>
+    );
+
     const App = () => {
       const SECRET_PASSWORD = "dladydcjf";
       // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
@@ -975,9 +1036,10 @@ img,video{max-width:100%;height:auto}
       // ── 멤버 상세 테이블(Ship Confirm/ACT/Pending/Backup) 열 필터 (Excel 자동 필터 방식) ──
       const [memberTableFilters, setMemberTableFilters] = useState({});
       const [memberTableFilterOpen, setMemberTableFilterOpen] = useState(null);
-      const getMemberFilter = (tableKey) => memberTableFilters[tableKey] || { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] };
-      const toggleMemberTableFilter = (tableKey, col, val) => setMemberTableFilters(prev => { const cur = getMemberFilter(tableKey); const arr = cur[col]||[]; return { ...prev, [tableKey]: { ...cur, [col]: arr.includes(val) ? arr.filter(v=>v!==val) : [...arr, val] } }; });
-      const clearMemberTableFilter  = (tableKey, col) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { ...getMemberFilter(tableKey), [col]: [] } }));
+      const DEFAULT_MEMBER_FILTER = { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] };
+      const getMemberFilter = (tableKey) => memberTableFilters[tableKey] || DEFAULT_MEMBER_FILTER;
+      const toggleMemberTableFilter = (tableKey, col, val) => setMemberTableFilters(prev => { const cur = prev[tableKey] || DEFAULT_MEMBER_FILTER; const arr = cur[col]||[]; return { ...prev, [tableKey]: { ...cur, [col]: arr.includes(val) ? arr.filter(v=>v!==val) : [...arr, val] } }; });
+      const clearMemberTableFilter  = (tableKey, col) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { ...(prev[tableKey] || DEFAULT_MEMBER_FILTER), [col]: [] } }));
       const clearMemberTableFilters = (tableKey) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] } }));
       const applyMemberTableFilter  = (tableKey, rawRows) => {
         const f = getMemberFilter(tableKey);
@@ -1223,61 +1285,14 @@ img,video{max-width:100%;height:auto}
         </tr>
       );
 
-      const TABLE_TH = ({ tableKey, rows }) => {
-        const f = getMemberFilter(tableKey);
-        const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
-        const FilterTh = ({ col, label, get, align }) => {
-          const isOpen = memberTableFilterOpen === `${tableKey}__${col}`;
-          const active = (f[col]||[]).length > 0;
-          const vals   = uniq(rows.map(get));
-          return (
-            <th className={`p-2 md:p-3 relative ${align==='right'?'text-right':''}`} style={{userSelect:'none'}}>
-              <div className={`flex items-center gap-1 ${align==='right'?'justify-end':''}`}>
-                <span>{label}</span>
-                <button onClick={e=>{e.stopPropagation(); setMemberTableFilterOpen(isOpen?null:`${tableKey}__${col}`);}}
-                  style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}}
-                  title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
-              </div>
-              {isOpen && (
-                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',[align==='right'?'right':'left']:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                  <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
-                    <button onClick={()=>clearMemberTableFilter(tableKey,col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
-                  </div>
-                  <div style={{overflowY:'auto',flex:1}}>
-                    {vals.length===0 ? <div style={{padding:'10px',fontSize:'11px',color:'#94a3b8',textAlign:'center'}}>값 없음</div> : vals.map(val=>{
-                      const checked = (f[col]||[]).includes(val);
-                      const count   = rows.filter(r=>get(r)===val).length;
-                      return (
-                        <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
-                          <input type="checkbox" checked={checked} onChange={()=>toggleMemberTableFilter(tableKey,col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
-                          <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
-                          <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </th>
-          );
-        };
-        return (
-          <tr>
-            <FilterTh col="status" label="Status" get={r=>r.status}/>
-            <th className="p-2 md:p-3">{T.contractDate}</th>
-            <th className="p-2 md:p-3">{T.deliveryDate}</th>
-            <FilterTh col="contractType" label={T.contract} get={r=>r.contractType||'일반'}/>
-            <FilterTh col="dealer" label="Dealer" get={r=>r.dealerName||'-'}/>
-            <th className="p-2 md:p-3">SO</th>
-            <FilterTh col="account" label="Account" get={r=>r.account}/>
-            <FilterTh col="product" label="Product" get={r=>r.product}/>
-            <FilterTh col="accType" label="Acc type" get={r=>r.accType||'-'}/>
-            <th className="p-2 md:p-3 text-right">KRW / USD</th>
-            <th className="p-2 md:p-3 text-center">{T.actions}</th>
-          </tr>
-        );
-      };
+      const memberTableHeadProps = (tableKey) => ({
+        tableKey, T,
+        filters: getMemberFilter(tableKey),
+        openKey: memberTableFilterOpen,
+        onToggleOpen: (col) => { const key = `${tableKey}__${col}`; setMemberTableFilterOpen(memberTableFilterOpen===key ? null : key); },
+        onToggleValue: (col, val) => toggleMemberTableFilter(tableKey, col, val),
+        onClear: (col) => clearMemberTableFilter(tableKey, col),
+      });
 
       // ── 로그인 게이트: 인증 전에는 대시보드 비노출 ──
       if (!authReady) {
@@ -1905,7 +1920,7 @@ img,video{max-width:100%;height:auto}
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-blue-900">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><TABLE_TH tableKey="ShipConfirm" rows={rawRows}/></thead>
+                            <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ShipConfirm')}/></thead>
                             <tbody>
                               {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : filteredRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
                             </tbody>
@@ -1928,7 +1943,7 @@ img,video{max-width:100%;height:auto}
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-blue-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-blue-800 text-white font-bold"><TABLE_TH tableKey="ACT" rows={rawRows}/></thead>
+                            <thead className="bg-blue-800 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ACT')}/></thead>
                             <tbody>
                               {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',filteredRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700'))}
                             </tbody>
@@ -1951,7 +1966,7 @@ img,video{max-width:100%;height:auto}
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-blue-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-blue-700 text-white font-bold"><TABLE_TH tableKey="Pending" rows={rawRows}/></thead>
+                            <thead className="bg-blue-700 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Pending')}/></thead>
                             <tbody>
                               {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',filteredRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800'))}
                             </tbody>
@@ -1974,7 +1989,7 @@ img,video{max-width:100%;height:auto}
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-orange-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-orange-500 text-white font-bold"><TABLE_TH tableKey="Backup" rows={rawRows}/></thead>
+                            <thead className="bg-orange-500 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Backup')}/></thead>
                             <tbody>
                               {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',filteredRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800'))}
                             </tbody>
