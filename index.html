@@ -416,7 +416,7 @@ img,video{max-width:100%;height:auto}
       set(k,v)  { try { window.localStorage.setItem(k, v); }     catch(e) {} },
       remove(k) { try { window.localStorage.removeItem(k); }     catch(e) {} },
     };
-    const { useState, useEffect, useCallback } = React;
+    const { useState, useEffect, useCallback, useRef } = React;
 
     // ── [FIX #10] 토스트 컴포넌트 ──────────────────────────────────────────
     const Toast = ({ msg, type }) => (
@@ -471,18 +471,32 @@ img,video{max-width:100%;height:auto}
       const active = (filterArr||[]).length > 0;
       const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
       const vals = uniq(rows.map(get));
+      const btnRef = useRef(null);
+      const [pos, setPos] = useState(null);
+      // 테이블 감싸는 div가 overflow-x-auto라 position:absolute 드롭다운이 세로로 잘렸음 →
+      // document.body로 포탈시켜서 버튼 위치 기준 fixed로 띄우면 안 잘리고 다 보임
+      useEffect(() => {
+        if (!isOpen || !btnRef.current) { setPos(null); return; }
+        const menuW = 210;
+        const r = btnRef.current.getBoundingClientRect();
+        const left = Math.max(8, Math.min(align==='right' ? r.right - menuW : r.left, window.innerWidth - menuW - 8));
+        setPos({ top: r.bottom + 4, left });
+        const closeOnScroll = () => onToggleOpen();
+        window.addEventListener('scroll', closeOnScroll, true);
+        return () => window.removeEventListener('scroll', closeOnScroll, true);
+      }, [isOpen]);
       return (
         <th className={`p-2 md:p-3 relative ${align==='right'?'text-right':''}`} style={{userSelect:'none'}}>
           <div className={`flex items-center gap-1 ${align==='right'?'justify-end':''}`}>
             <span>{label}</span>
-            <button onClick={e=>{e.stopPropagation(); onToggleOpen();}}
+            <button ref={btnRef} onClick={e=>{e.stopPropagation(); onToggleOpen();}}
               style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}}
               title={active?`${filterArr.length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
           </div>
-          {isOpen && (
-            <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',[align==='right'?'right':'left']:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          {isOpen && pos && ReactDOM.createPortal(
+            <div onClick={e=>e.stopPropagation()} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 8px 28px rgba(0,0,0,0.22)',minWidth:'200px',maxWidth:'260px',maxHeight:'340px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
               <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
+                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터 ({vals.length})</span>
                 <button onClick={onClear} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
               </div>
               <div style={{overflowY:'auto',flex:1}}>
@@ -498,7 +512,8 @@ img,video{max-width:100%;height:auto}
                   );
                 })}
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </th>
       );
