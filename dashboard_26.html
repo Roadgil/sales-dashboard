@@ -8,100 +8,139 @@
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
+<!-- Pretendard Variable — self-hosted subsets (see .omd/type-proof.md). Ported from index.html:
+     same two-subset @font-face split (Hangul / Latin+numerals) so this page shares the exact
+     font contract with the main dashboard it is linked from. -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-hangul.woff2') format('woff2-variations');
+  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-latin-num.woff2') format('woff2-variations');
+  unicode-range: U+0020-007E, U+00B7, U+2014, U+20A9, U+FF01-FF60;
+}
+</style>
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   Toss-anchor quiet register — ported from index.html's finished, verified
+   "toss-quiet-numeral-focus" variant (see .omd/scout-toss.md,
+   .omd/reference-board-toss.json). Near-flat elevation, hairline neutral
+   borders, one scarce interactive blue, tabular/monospace figures. The
+   achievement-bar zone hues and sld-badge tint pattern are unchanged from
+   the prior Status-Legible Ledger pass (verified against index.html: the
+   toss porting there only recolored card CHROME + the CTA blue, not the
+   3-zone achievement semantics), so this Detail Report keeps reading as a
+   continuation of the same product. */
 :root {
-  --bg:#f4f5f7; --surf:#fff; --surf2:#f9fafb; --border:#e4e6eb;
-  --a1:#5b4fcf; --a2:#0faaa0; --a3:#e84d6f; --a4:#e09c10; --green:#0fa878;
-  --text:#1a1a2e; --muted:#8a8fa8;
+  --bg:#f3f4f6; --surf:#fff; --surf2:#f9fafb; --border:#e5e8eb;
+  --text:#1e293b; --muted:#64748b; --accent:#3182f6; --accent-hover:#2272eb;
+  --sld-zone-1-fg:#475569;  /* below target — muted slate */
+  --sld-zone-2-fg:#1d4ed8;  /* 100–120% — blue */
+  --sld-zone-3-fg:#047857;  /* 120%+ — emerald */
+  --num-mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; /* Toss numeral-forward tabular figure treatment */
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'Pretendard Variable',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:13px;min-height:100vh;}
 .wrap{max-width:1440px;margin:0 auto;padding:32px 24px;}
-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding-bottom:18px;border-bottom:2px solid var(--border);}
-h1{font-family:'DM Serif Display',serif;font-size:36px;font-weight:400;line-height:1;margin-bottom:4px;}
-h1 span{color:var(--a1);}
-.sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
-.hbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;background:rgba(15,168,120,.1);border:1px solid rgba(15,168,120,.3);border-radius:20px;font-size:11px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:6px;}
-.hbadge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border);}
+h1{font-family:'Pretendard Variable';font-size:28px;font-weight:800;line-height:1.15;margin-bottom:4px;color:#1e293b;}
+h1 span{color:var(--accent);}
+.sub{font-size:11px;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;font-weight:700;}
+.hbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;background:#e2f7f0;border:1px solid rgba(4,120,87,0.3);border-radius:20px;font-size:11px;font-weight:700;color:#047857;margin-bottom:6px;}
+.hbadge::before{content:'';width:6px;height:6px;border-radius:50%;background:#047857;animation:blink 2s infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.hdate{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
-.back-link{display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-decoration:none;padding:4px 10px;border:1px solid var(--border);border-radius:20px;transition:all .2s;margin-bottom:8px;}
-.back-link:hover{color:var(--a1);border-color:var(--a1);}
+.hdate{font-size:11px;color:var(--muted);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-decoration:none;padding:4px 10px;border:1px solid var(--border);border-radius:20px;transition:all .15s;margin-bottom:8px;}
+.back-link:hover{color:var(--accent);border-color:var(--accent);}
 .view-toggle{display:flex;gap:6px;margin-bottom:18px;align-items:center;flex-wrap:wrap;}
-.vt-btn{padding:5px 14px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .2s;white-space:nowrap;}
-.vt-btn:hover{border-color:var(--a1);color:var(--a1);}
-.vt-btn.active{background:var(--a1);border-color:var(--a1);color:#fff;}
+.vt-btn{padding:5px 14px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-weight:700;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.vt-btn:hover{border-color:var(--accent);color:var(--accent);}
+.vt-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.vt-btn.active:hover{background:var(--accent-hover);border-color:var(--accent-hover);}
 .qbreak-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
 @media(max-width:768px){.qbreak-grid{grid-template-columns:1fr 1fr;}}
-.qbreak-card{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .2s;}
-.qbreak-card:hover{border-color:var(--a1);transform:translateY(-1px);}
-.qbreak-card.active-q{border-color:var(--a1);background:rgba(91,79,207,.06);}
-.data-note{background:rgba(91,79,207,.06);border:1px solid rgba(91,79,207,.2);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--a1);font-family:'DM Mono',monospace;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+.qbreak-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:all .15s;}
+.qbreak-card:hover{border-color:var(--accent);transform:translateY(-1px);}
+.qbreak-card.active-q{border-color:var(--accent);background:#eff6ff;}
+.data-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:600;color:#1d4ed8;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
 .data-note::before{content:'ℹ';font-size:13px;}
-.section-title{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);margin:24px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
-.section-title span{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.section-title{font-family:'Pretendard Variable';font-size:17px;font-weight:800;color:var(--text);margin:24px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.section-title span{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;}
 .kpi-row{display:grid;gap:12px;margin-bottom:16px;}
 .kpi-5{grid-template-columns:repeat(5,1fr);}
 .kpi-3{grid-template-columns:repeat(3,1fr);}
 @media(max-width:1000px){.kpi-5{grid-template-columns:1fr 1fr;} .kpi-3{grid-template-columns:1fr 1fr;}}
-.kpi{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1);}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
-.kpi.k1::before{background:var(--a1);}
-.kpi.k2::before{background:var(--a2);}
-.kpi.k3::before{background:var(--a3);}
-.kpi.k4::before{background:var(--a4);}
-.kpi.kg::before{background:var(--green);}
-.klabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Mono',monospace;margin-bottom:8px;}
-.kval{font-family:'DM Serif Display',serif;font-size:24px;line-height:1;margin-bottom:5px;}
-.kval.v1{color:var(--a1);} .kval.v2{color:var(--a2);} .kval.v3{color:var(--a3);} .kval.v4{color:var(--a4);} .kval.vg{color:var(--green);}
+/* Neutral card chrome — one shell for every stat card, no per-card arbitrary color coding
+   (composition.md rejection condition: color is reserved for status/achievement signal only).
+   Toss-anchor quiet register: near-flat (no drop shadow), 14px radius, hairline border — same
+   flat panel treatment as index.html's .qsg-card/.toss-panel. */
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:none;display:flex;flex-direction:column;}
+.klabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-bottom:8px;}
+.kval{font-weight:800;font-size:22px;line-height:1;margin-bottom:5px;color:#1e293b;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
 .ksub{font-size:11px;color:var(--muted);}
 .kpi-pbar{margin-top:10px;}
-.kpi-pbar-bg{height:4px;background:var(--border);border-radius:3px;overflow:hidden;}
-.kpi-pbar-fill{height:100%;border-radius:3px;transition:width 1.2s ease;}
-.kpi-pbar-label{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:3px;}
+.kpi-pbar-bg{height:5px;background:var(--border);border-radius:3px;overflow:hidden;display:flex;}
+.kpi-pbar-fill{height:100%;border-radius:3px;transition:width 1s ease;}
+.kpi-pbar-label{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:var(--muted);font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
 .g{display:grid;gap:14px;margin-bottom:14px;}
 .g11{grid-template-columns:1fr 1fr;}
 .g21{grid-template-columns:2fr 1fr;}
 .g12{grid-template-columns:1fr 2fr;}
 @media(max-width:900px){.g11,.g21,.g12{grid-template-columns:1fr;}}
-.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-.ctitle{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-family:'DM Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-.ctitle::before{content:'';width:3px;height:10px;background:var(--a1);border-radius:2px;flex-shrink:0;}
+.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:none;}
+.ctitle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.ctitle::before{content:'';width:3px;height:10px;background:var(--accent);border-radius:2px;flex-shrink:0;}
 .srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;}
 .srow:last-child{border-bottom:none;}
 .savt{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
 .sinfo{flex:1;}
-.sname{font-size:12px;margin-bottom:4px;font-weight:600;}
+.sname{font-size:12px;margin-bottom:4px;font-weight:600;color:#1e293b;}
 .sbw{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px;}
 .sbf{height:100%;border-radius:3px;transition:width 1s ease;}
-.samt{font-family:'DM Mono',monospace;font-size:11px;text-align:right;white-space:nowrap;min-width:90px;}
+.samt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;min-width:90px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
 .spct{font-size:9px;color:var(--muted);}
-.abadge{font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+/* Signed-delta status badge (ahead/behind target) — same low-opacity-tint + ring pattern as
+   index.html's .sld-badge, ported verbatim so achievement signals read identically on both pages. */
+.sld-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:0.01em;white-space:nowrap;line-height:1.5;font-variant-numeric:tabular-nums;}
+.sld-badge--ahead{background:#e2f7f0;color:#047857;box-shadow:inset 0 0 0 1px rgba(16,185,129,0.35);}
+.sld-badge--behind{background:#fbe9e9;color:#b91c1c;box-shadow:inset 0 0 0 1px rgba(220,38,38,0.32);}
+.sld-badge--neutral{background:#f1f5f9;color:#64748b;box-shadow:inset 0 0 0 1px rgba(100,116,139,0.25);}
 table{width:100%;border-collapse:collapse;font-size:12px;}
-th{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left;padding:0 8px 10px;border-bottom:2px solid var(--border);}
+th{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;text-align:left;padding:0 8px 10px;border-bottom:2px solid var(--border);}
 td{padding:8px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--surf2);}
-.mono{font-family:'DM Mono',monospace;font-size:11px;}
-.dim{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
-.mbar{height:4px;border-radius:2px;background:var(--a1);opacity:.6;}
-.pbar-bg{width:100%;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
-.pbar-fill{height:100%;border-radius:4px;transition:width 1.2s ease;}
+.mono{font-weight:600;font-size:11px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
+.dim{font-size:10px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;}
+.mbar{height:4px;border-radius:2px;background:var(--accent);opacity:.85;}
+.pbar-bg{width:100%;height:8px;background:var(--border);border-radius:4px;overflow:hidden;display:flex;}
+.pbar-fill{height:100%;border-radius:4px;transition:width 1s ease;}
 .tab-nav{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-.tab-btn{padding:6px 16px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
-.tab-btn:hover{border-color:var(--a1);color:var(--a1);}
-.tab-btn.active{background:var(--a1);border-color:var(--a1);color:#fff;}
+.tab-btn{padding:6px 16px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-weight:700;font-size:11px;cursor:pointer;transition:all .15s;}
+.tab-btn:hover{border-color:var(--accent);color:var(--accent);}
+.tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tab-btn.active:hover{background:var(--accent-hover);border-color:var(--accent-hover);}
 .tab-pane{display:none;}
 .tab-pane.active{display:block;}
 .sr-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
-.sr-kpi{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;}
-.loading{display:flex;align-items:center;justify-content:center;padding:40px;flex-direction:column;gap:10px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;}
-.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--a1);border-radius:50%;animation:spin .8s linear infinite;}
+.sr-kpi{background:var(--surf2);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden;}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;flex-direction:column;gap:10px;color:var(--muted);font-weight:600;font-size:12px;}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;}
+footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-weight:600;}
 html,body{overflow-x:hidden;max-width:100vw;}
+::selection{background-color:rgba(37,99,235,0.22);color:#0f172a;}
+:focus-visible{outline:none;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent);}
+:root{scrollbar-color:#94a3b8 transparent;scrollbar-width:thin;}
 @media(max-width:768px){.wrap{padding:16px 12px;}}
 @media print{.back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;} .card{break-inside:avoid;}}
 </style>
@@ -118,14 +157,14 @@ html,body{overflow-x:hidden;max-width:100vw;}
   <div style="text-align:right">
     <div class="hbadge" id="quarterBadge">--</div>
     <div class="hdate" id="quarterDate">--</div>
-    <div style="margin-top:4px;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="genDate"></div>
+    <div style="margin-top:4px;font-size:10px;color:var(--muted);font-weight:600" id="genDate"></div>
   </div>
 </header>
 
 <div class="data-note" id="dataNoteBar">집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외)</div>
 
 <div class="view-toggle">
-  <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">View:</span>
+  <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">View:</span>
   <button class="vt-btn active" id="btn-quarter-view" onclick="setViewMode('quarter')">📅 Quarter</button>
   <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')">🌓 상반기 Total</button>
   <button class="vt-btn" id="btn-h2-view" onclick="setViewMode('h2')">🌗 하반기 Total</button>
@@ -134,7 +173,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
   <span id="yearQuarterBtns" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
   <span style="color:var(--border);margin:0 4px">|</span>
   <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기">◀</button>
-  <select id="quarterSelect" onchange="changeQuarter(this.value)" style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"></select>
+  <select id="quarterSelect" onchange="changeQuarter(this.value)" style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-weight:700;font-size:10px;cursor:pointer;"></select>
   <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기">▶</button>
 </div>
 <div id="quarterBreakdown" style="display:none"><div class="qbreak-grid" id="qbreakGrid"></div></div>
@@ -147,14 +186,14 @@ html,body{overflow-x:hidden;max-width:100vw;}
     <div class="kval v1" id="kpi-total">--</div>
     <div class="ksub" id="kpi-total-sub">--</div>
     <div class="kpi-pbar" id="kpi-pbar-wrap" style="display:none">
-      <div class="kpi-pbar-bg"><div class="kpi-pbar-fill" id="kpi-pbar-fill" style="background:var(--a1)"></div></div>
+      <div class="kpi-pbar-bg"><div class="kpi-pbar-fill" id="kpi-pbar-fill" style="background:var(--accent)"></div></div>
       <div class="kpi-pbar-label"><span id="kpi-pbar-pct">--</span><span id="kpi-pbar-tgt">--</span></div>
     </div>
   </div>
   <div class="kpi k2"><div class="klabel">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
   <div class="kpi k4"><div class="klabel">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
   <div class="kpi k3"><div class="klabel">Top Performer</div><div class="kval v3" id="kpi-top" style="font-size:18px;padding-top:4px">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
-  <div class="kpi kg"><div class="klabel">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div></div>
+  <div class="kpi kg"><div class="klabel">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
 </div>
 
 <!-- ② Achievement vs Target -->
@@ -206,10 +245,10 @@ html,body{overflow-x:hidden;max-width:100vw;}
 </div>
 
 <div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;">
-  <button id="printBtn" onclick="window.print()" style="padding:6px 12px;border-radius:20px;border:1.5px solid #e4e6eb;background:white;cursor:pointer;font-size:11px;font-family:'DM Mono',monospace;box-shadow:0 2px 8px rgba(0,0,0,.1)">🖨 Print</button>
-  <button id="langToggleBtn" onclick="toggleLang()" style="padding:6px 14px;border-radius:20px;border:1.5px solid #e4e6eb;background:white;cursor:pointer;font-weight:bold;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);font-family:'DM Mono',monospace;">🇺🇸 EN</button>
+  <button id="printBtn" onclick="window.print()" style="padding:6px 12px;border-radius:20px;border:1.5px solid #e5e8eb;background:white;cursor:pointer;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.1)">🖨 Print</button>
+  <button id="langToggleBtn" onclick="toggleLang()" style="padding:6px 14px;border-radius:20px;border:1.5px solid #e5e8eb;background:white;cursor:pointer;font-weight:700;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);">🇺🇸 EN</button>
 </div>
-<div id="erDisplay" style="position:fixed;top:16px;right:190px;z-index:9999;padding:5px 12px;border-radius:20px;border:1.5px solid #e4e6eb;background:#0f172a;font-weight:700;font-size:11px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,.2)"><span style="color:#64748b">ER</span><span id="erValue" style="color:#e2e8f0">₩1,389</span></div>
+<div id="erDisplay" style="position:fixed;top:16px;right:190px;z-index:9999;padding:5px 12px;border-radius:20px;border:1.5px solid #e5e8eb;background:#0f172a;font-weight:700;font-size:11px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,.2)"><span style="color:#64748b">ER</span><span id="erValue" style="color:#e2e8f0">₩1,389</span></div>
 
 <script>
 let _lang = localStorage.getItem('lang')||'ko';
@@ -287,7 +326,7 @@ function setViewMode(mode){
   else{document.getElementById('quarterBadge').textContent=QUARTER;document.getElementById('quarterSubLabel').textContent=QUARTER;document.getElementById('quarterDate').textContent=`${YR}.${MS} — ${YR}.${ME}`;document.getElementById('yearQuarterBtns').innerHTML='';}
   if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);
 }
-function buildYQBtns(){const nav=document.getElementById('yearQuarterBtns');nav.innerHTML='<span style="font-family:DM Mono,monospace;font-size:10px;color:var(--muted);margin-right:2px">Jump: </span>'+['Q1','Q2','Q3','Q4'].map(q=>`<button class="vt-btn${`${YR} ${q}`===_activeQ?' active':''}" onclick="jumpToQ('${YR} ${q}')">${q}</button>`).join('');}
+function buildYQBtns(){const nav=document.getElementById('yearQuarterBtns');nav.innerHTML='<span style="font-size:10px;font-weight:700;color:var(--muted);margin-right:2px">Jump: </span>'+['Q1','Q2','Q3','Q4'].map(q=>`<button class="vt-btn${`${YR} ${q}`===_activeQ?' active':''}" onclick="jumpToQ('${YR} ${q}')">${q}</button>`).join('');}
 function jumpToQ(q){_activeQ=q;buildYQBtns();document.querySelectorAll('.qbreak-card').forEach(c=>c.classList.toggle('active-q',c.dataset.q===q));}
 
 let _er=1389;
@@ -301,9 +340,19 @@ const unitSuffix=()=>_lang==='en'?'M':'억';
 const COLORS=['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecfc9','#f07a96','#f0c040','#52c9a0'];
 const MC=['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
 const TT={backgroundColor:'#fff',borderColor:'#e4e6eb',borderWidth:1,padding:10,titleColor:'#1a1a2e',bodyColor:'#1a1a2e'};
-Chart.defaults.color='#8a8fa8';Chart.defaults.font.family="'Noto Sans KR', sans-serif";Chart.defaults.font.size=11;
+Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable', ui-sans-serif, system-ui, sans-serif";Chart.defaults.font.size=11;
 const CI={};
 function mkChart(id,cfg){if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
+
+// ── 3-zone ascending achievement family (ported from index.html): zone1 slate <100%,
+// zone2 blue 100-120%, zone3 emerald 120%+ — the only status color vocabulary this page uses. ──
+const ZONE1='#475569', ZONE2='#1d4ed8', ZONE3='#047857';
+function zoneColor(pct){ if(pct===null||pct===undefined) return '#94a3b8'; return pct>=120?ZONE3:pct>=100?ZONE2:ZONE1; }
+function sldBadge(pct,label){
+  if(pct===null||pct===undefined) return `<span class="sld-badge sld-badge--neutral">${label||'-'}</span>`;
+  const ahead=pct>=100;
+  return `<span class="sld-badge ${ahead?'sld-badge--ahead':'sld-badge--behind'}">${label!==undefined?label:pct.toFixed(1)+'%'}</span>`;
+}
 
 function render(salesData,memberTargets,qTargets){
   const SC=['Ship Confirm'];
@@ -315,11 +364,11 @@ function render(salesData,memberTargets,qTargets){
     const grid=document.getElementById('qbreakGrid');
     if(grid){grid.innerHTML=['Q1','Q2','Q3','Q4'].map(q=>{
       const fq=`${YR} ${q}`,rows=salesData.filter(d=>d.quarter===fq&&SC.includes(d.status));
-      const tot=rows.reduce((s,d)=>s+(d.priceKRW||0),0),qT=qTargets?.[fq]?.target||0,pct=qT?(tot/qT*100).toFixed(0):null;
+      const tot=rows.reduce((s,d)=>s+(d.priceKRW||0),0),qT=qTargets?.[fq]?.target||0,pctN=qT?(tot/qT*100):null,pct=pctN!==null?pctN.toFixed(0):null;
       return `<div class="qbreak-card${fq===_activeQ?' active-q':''}" data-q="${fq}" onclick="jumpToQ('${fq}')">
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${q}</div>
-        <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--a1);line-height:1;margin-bottom:3px">${tot>0?fmtA(tot):'-'}</div>
-        <div style="font-size:10px;color:var(--muted)">${rows.length}건${pct?` · ${pct}%`:''}</div>
+        <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${q}</div>
+        <div style="font-weight:800;font-size:22px;color:#1e293b;line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${tot>0?fmtA(tot):'-'}</div>
+        <div style="font-size:10px;color:var(--muted)">${rows.length}건${pct?` · `:''}${pctN!==null?sldBadge(pctN,pct+'%'):''}</div>
       </div>`;}).join('');}
     document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 전체 합산 (SC만)`,`Revenue basis: ${YR} Full Year (SC only)`);
   } else if(_viewMode==='h1'){
@@ -370,13 +419,15 @@ function render(salesData,memberTargets,qTargets){
   document.getElementById('kpi-top').textContent=topM?topM[0]:'-';
   document.getElementById('kpi-top-sub').textContent=topM?`${fmtA(topM[1])} · ${totalKRW?(topM[1]/totalKRW*100).toFixed(1):0}%`:'-';
   document.getElementById('kpi-attain').textContent=attain?`${attain.toFixed(1)}%`:'-';
+  document.getElementById('kpi-attain').style.color=attain!==null?zoneColor(attain):'#1e293b';
   document.getElementById('kpi-attain-sub').textContent=qTarget?`Target: ${fmtA(qTarget)}`:t('Target 미설정','No target');
+  document.getElementById('kpi-attain-badge').innerHTML=(qTarget&&attain!==null)?sldBadge(attain,t(attain>=100?'목표 달성':'목표 미달',attain>=100?'Ahead':'Behind')):'';
   const pbWrap=document.getElementById('kpi-pbar-wrap');
   if(qTarget&&attain!==null){
     pbWrap.style.display='block';
     const f=document.getElementById('kpi-pbar-fill');
     f.style.width=Math.min(attain,100)+'%';
-    f.style.background=attain>=100?'var(--green)':attain>=80?'var(--a1)':attain>=50?'var(--a4)':'var(--a3)';
+    f.style.background=zoneColor(attain);
     document.getElementById('kpi-pbar-pct').textContent=`${attain.toFixed(1)}%`;
     document.getElementById('kpi-pbar-tgt').textContent=fmtA(qTarget);
   } else pbWrap.style.display='none';
@@ -388,6 +439,8 @@ function render(salesData,memberTargets,qTargets){
     const maxS=Math.max(t150,totalKRW*1.05,qTarget*1.6);
     const scW=(totalKRW/maxS*100).toFixed(1),actW=(actKRW/maxS*100).toFixed(1),pendW=(pendKRW/maxS*100).toFixed(1);
     const l100=(qTarget/maxS*100).toFixed(1),l120=(t120/maxS*100).toFixed(1),l150=(t150/maxS*100).toFixed(1);
+    const zone1W=l100, zone2W=(l120-l100).toFixed(1), zone3W=(100-l120).toFixed(1);
+    const totalColor=zoneColor(attain);
     tCard.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -395,20 +448,26 @@ function render(salesData,memberTargets,qTargets){
           <span style="font-size:11px;font-weight:700;color:#065f46;background:#d1fae5;padding:3px 10px;border-radius:12px">ACT: ${fmtA(actKRW)}</span>
           <span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;padding:3px 10px;border-radius:12px">Pending: ${fmtA(pendKRW)}</span>
         </div>
-        <span style="font-size:18px;font-weight:800;color:${attain>=100?'var(--green)':'var(--a1)'};font-family:'DM Serif Display',serif">${attain?attain.toFixed(1)+'%':'-'} ${t('달성','Attained')}</span>
+        <span style="font-size:18px;font-weight:800;color:${totalColor}">${attain?attain.toFixed(1)+'%':'-'} ${t('달성','Attained')}</span>
       </div>
       <div style="position:relative;margin-bottom:28px">
-        <div style="position:absolute;top:-16px;left:${l100}%;transform:translateX(-50%);font-size:9px;font-family:'DM Mono',monospace;color:var(--muted)">100%</div>
-        <div style="position:absolute;top:-16px;left:${l120}%;transform:translateX(-50%);font-size:9px;font-family:'DM Mono',monospace;color:var(--green)">120%</div>
-        <div style="position:absolute;top:-16px;left:${l150}%;transform:translateX(-50%);font-size:9px;font-family:'DM Mono',monospace;color:var(--a3)">150%</div>
-        <div style="width:100%;height:28px;background:#f1f5f9;border-radius:14px;overflow:hidden;display:flex;border:1px solid var(--border);position:relative">
-          <div style="width:${scW}%;height:100%;background:#3b82f6;transition:width 1.2s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px">${parseFloat(scW)>6?`<span style="color:#fff;font-size:10px;font-weight:700">${attain?attain.toFixed(0)+'%':''}</span>`:''}</div>
-          <div style="width:${actW}%;height:100%;background:#10b981;transition:width 1.2s ease"></div>
-          <div style="width:${pendW}%;height:100%;background:#fbbf24;transition:width 1.2s ease;opacity:.7"></div>
+        <div style="position:absolute;top:-16px;left:${l100}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE1}">100%</div>
+        <div style="position:absolute;top:-16px;left:${l120}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE2}">120%</div>
+        <div style="position:absolute;top:-16px;left:${l150}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE3}">150%</div>
+        <div style="width:100%;height:28px;border-radius:14px;overflow:hidden;display:flex;border:1px solid var(--border);position:relative">
+          <!-- ascending zone track (context, sits behind the SC/ACT/Pending fills) -->
+          <div style="position:absolute;inset:0;display:flex" aria-hidden="true">
+            <div style="width:${Math.max(zone1W,0)}%;background:#f1f5f9"></div>
+            <div style="width:${Math.max(zone2W,0)}%;background:#eff6ff"></div>
+            <div style="width:${Math.max(zone3W,0)}%;background:#ecfdf5"></div>
+          </div>
+          <div style="width:${scW}%;height:100%;background:#3b82f6;transition:width 1.2s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;position:relative">${parseFloat(scW)>6?`<span style="color:#fff;font-size:10px;font-weight:700">${attain?attain.toFixed(0)+'%':''}</span>`:''}</div>
+          <div style="width:${actW}%;height:100%;background:#10b981;transition:width 1.2s ease;position:relative"></div>
+          <div style="width:${pendW}%;height:100%;background:#fbbf24;transition:width 1.2s ease;opacity:.7;position:relative"></div>
         </div>
         <div style="position:absolute;top:0;left:${l100}%;border-left:2px dashed #94a3b8;height:28px"></div>
-        <div style="position:absolute;top:0;left:${l120}%;border-left:2px dashed #86efac;height:28px"></div>
-        <div style="position:absolute;top:0;left:${l150}%;border-left:2px dashed #fca5a5;height:28px"></div>
+        <div style="position:absolute;top:0;left:${l120}%;border-left:2px dashed #93c5fd;height:28px"></div>
+        <div style="position:absolute;top:0;left:${l150}%;border-left:2px dashed #6ee7b7;height:28px"></div>
       </div>
       <div style="display:flex;gap:16px;font-size:11px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#3b82f6;display:inline-block"></span>SC</span>
@@ -417,7 +476,7 @@ function render(salesData,memberTargets,qTargets){
         <span style="color:var(--muted)">Target: ${fmtAF(qTarget)}</span>
       </div>`;
   } else {
-    tCard.innerHTML=`<div style="padding:20px;color:var(--muted);text-align:center;font-family:'DM Mono',monospace">${t('Target이 설정되지 않았습니다.','No target set.')}</div>`;
+    tCard.innerHTML=`<div style="padding:20px;color:var(--muted);text-align:center;font-weight:600">${t('Target이 설정되지 않았습니다.','No target set.')}</div>`;
   }
 
   // ③ 월별 매출 추이
@@ -439,16 +498,15 @@ function render(salesData,memberTargets,qTargets){
   document.getElementById('memberList').innerHTML=sortedM.map(([name,val],i)=>{
     const col=MC[i%MC.length],tgt=memberTargets[name]||0,pct=tgt?(val/tgt*100):null;
     const bw=(val/maxMV*100).toFixed(0);
-    const [bg,tc]=pct>=100?['#dcfce7','#166534']:pct>=80?['#dbeafe','#1d4ed8']:pct>=50?['#fef3c7','#92400e']:['#fee2e2','#991b1b'];
     return `<div class="srow">
       <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
       <div class="sinfo">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
           <span class="sname">${name}</span>
-          ${pct!==null?`<span class="abadge" style="background:${bg};color:${tc}">${pct.toFixed(1)}%</span>`:'<span class="abadge" style="background:#f1f5f9;color:#94a3b8">-</span>'}
+          ${sldBadge(pct)}
         </div>
-        <div class="sbw"><div class="sbf" style="width:${bw}%;background:${col}"></div></div>
-        ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
+        <div class="sbw"><div class="sbf" style="width:${bw}%;background:${pct!==null?zoneColor(pct):col}"></div></div>
+        ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:600;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
       </div>
       <div class="samt"><div style="color:${col};font-weight:700">${fmtA(val)}</div><div class="spct">${totalKRW?(val/totalKRW*100).toFixed(1):0}%</div></div>
     </div>`;
@@ -503,22 +561,22 @@ function render(salesData,memberTargets,qTargets){
       <div class="sr-kpis">
         <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
           <div class="klabel">Total (SC)</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:22px;color:${col};line-height:1;margin-bottom:4px">${fmtA(mT)}</div>
+          <div style="font-weight:800;font-size:22px;color:#1e293b;line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${fmtA(mT)}</div>
           <div style="font-size:11px;color:var(--muted)">${mD.length}${t('건','cs')}</div></div>
         <div class="sr-kpi"><div class="klabel">${t('달성률','Attainment')}</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:22px;color:${aP>=100?'var(--green)':col};line-height:1;margin-bottom:4px">${aP?aP.toFixed(1)+'%':'-'}</div>
+          <div style="font-weight:800;font-size:22px;color:${aP!==null?zoneColor(aP):'#1e293b'};line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${aP?aP.toFixed(1)+'%':'-'}</div>
           <div style="font-size:11px;color:var(--muted)">${tgt?'Target: '+fmtA(tgt):t('목표 미설정','No target')}</div></div>
         <div class="sr-kpi"><div class="klabel">${t('팀 비중','Share')}</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--a4);line-height:1;margin-bottom:4px">${totalKRW?(mT/totalKRW*100).toFixed(1)+'%':'-'}</div>
+          <div style="font-weight:800;font-size:22px;color:#475569;line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${totalKRW?(mT/totalKRW*100).toFixed(1)+'%':'-'}</div>
           <div style="font-size:11px;color:var(--muted)">${t('전체 SC 대비','of total SC')}</div></div>
       </div>
       ${tgt?`<div style="margin-bottom:14px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
-          <span style="color:var(--muted);font-family:'DM Mono',monospace">TARGET ACHIEVEMENT</span>
-          <span style="font-weight:700;color:${aP>=100?'var(--green)':col}">${aP?aP.toFixed(1)+'%':'-'}</span>
+          <span style="color:var(--muted);font-weight:700;letter-spacing:0.05em">TARGET ACHIEVEMENT</span>
+          ${sldBadge(aP)}
         </div>
-        <div class="pbar-bg"><div class="pbar-fill" style="width:${aP?Math.min(aP,100):0}%;background:${aP>=100?'var(--green)':col}"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
+        <div class="pbar-bg"><div class="pbar-fill" style="width:${aP?Math.min(aP,100):0}%;background:${aP!==null?zoneColor(aP):'#94a3b8'}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-weight:600">
           <span>${t('현재','Current')}: ${fmtAF(mT)}</span><span>${t('목표','Target')}: ${fmtAF(tgt)}</span>
         </div>
       </div>`:''}
@@ -564,7 +622,7 @@ const tryRender=()=>{if(_loaded.s&&_loaded.t&&_loaded.q){render(_sales,_targets,
 function showNotice(html){
   ['targetCard','memberList','productTable','memberTabContent'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el) el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;line-height:1.7">${html}</div>`;
+    if(el) el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-weight:600;font-size:12px;line-height:1.7">${html}</div>`;
   });
 }
 
@@ -591,7 +649,7 @@ auth.onAuthStateChanged(user=>{
     _subscribed=true;
     subscribe();
   } else {
-    showNotice(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--a1);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`);
+    showNotice(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--accent);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`);
   }
 });
 </script>

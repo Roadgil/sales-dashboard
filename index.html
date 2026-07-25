@@ -7,13 +7,36 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>영업 납품처 FCST Dashboard</title>
-  
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f172a'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%2360a5fa' font-family='system-ui,sans-serif' font-weight='800'%3ES%3C/text%3E%3C/svg%3E">
+
+  <!-- Pretendard Variable — self-hosted subsets (see .omd/type-proof.md). Two subsets so the
+       browser only fetches the glyphs a given code point needs; unicode-range matches the
+       exact subsetting fingerprint recorded in the type proof. font-display: swap tested. -->
+  <style>
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-hangul.woff2') format('woff2-variations');
+  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-latin-num.woff2') format('woff2-variations');
+  unicode-range: U+0020-007E, U+00B7, U+2014, U+20A9, U+FF01-FF60;
+}
+  </style>
+
   <style>
 /* Tailwind utilities compiled locally — replaces cdn.tailwindcss.com (no CDN, version-stable) */
 /* Tailwind v3 Preflight (base reset) — matches what cdn.tailwindcss.com applied */
 *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}
 ::before,::after{--tw-content:''}
-html{line-height:1.5;-webkit-text-size-adjust:100%;tab-size:4;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-feature-settings:normal;font-variation-settings:normal}
+html{line-height:1.5;-webkit-text-size-adjust:100%;tab-size:4;font-family:'Pretendard Variable',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-feature-settings:normal;font-variation-settings:normal}
 body{margin:0;line-height:inherit}
 hr{height:0;color:inherit;border-top-width:1px}
 h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit;margin:0}
@@ -129,7 +152,8 @@ img,video{max-width:100%;height:auto}
 .font-medium{font-weight:500}
 .font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
 .font-normal{font-weight:400}
-.font-sans{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+.font-sans{font-family:'Pretendard Variable',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+.font-mono{font-variant-numeric:tabular-nums}
 .font-semibold{font-weight:600}
 .gap-1{gap:0.25rem}
 .gap-1\.5{gap:0.375rem}
@@ -444,7 +468,7 @@ img,video{max-width:100%;height:auto}
           </span>
         </button>
         {er && (
-          <button onClick={onErClick} title={lang==='ko' ? '환율 수정' : 'Edit ER'}
+          <button onClick={onErClick} title={lang==='ko' ? '환율 수정' : 'Edit ER'} data-action="er-edit"
             style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
               background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
               fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
@@ -456,6 +480,7 @@ img,video{max-width:100%;height:auto}
         )}
         <button
           onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); safeLS.set('lang',next); }}
+          data-action="lang-toggle"
           style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
             background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
             boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
@@ -660,6 +685,9 @@ img,video{max-width:100%;height:auto}
         // [FIX #8] CSV 내보내기
         csvAll:            lang==='ko' ? '전체 분기 내보내기' : 'Export All Quarters',
         csvCurrent:        lang==='ko' ? '현재 분기만 내보내기' : 'Export Current Quarter',
+        // GAP / GMPP GAP direction badge (copy-deck.md)
+        gapStatusAhead:    lang==='ko' ? '목표 초과'  : 'Ahead of Target',
+        gapStatusBehind:   lang==='ko' ? '목표 미달'  : 'Behind Target',
       };
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
@@ -726,14 +754,24 @@ img,video{max-width:100%;height:auto}
       });
 
       const CARD_PALETTES = {
-        slate:  { bg: '#f8fafc', border: '#cbd5e1', title: '#475569', value: '#1e293b', inputBorder: '#94a3b8', label: 'Slate' },
+        // Toss-anchor quiet register (index-toss-variant.html): the default/neutral swatch is
+        // flat white + a grey200 hairline border (measured Toss neutral tokens), not the slate-50
+        // tinted panel used in index.html — near-flat elevation, color reserved for meaning only.
+        // The other 5 user-selectable swatches below are untouched so the palette-picker feature
+        // (T9: free per-card recolor, persisted across reload) still behaves exactly as before.
+        slate:  { bg: '#ffffff', border: '#e5e8eb', title: '#4e5968', value: '#191f28', inputBorder: '#d1d6db', label: 'Slate' },
         blue:   { bg: '#eff6ff', border: '#93c5fd', title: '#1d4ed8', value: '#1e3a5f', inputBorder: '#60a5fa', label: 'Blue' },
         green:  { bg: '#f0fdf4', border: '#86efac', title: '#15803d', value: '#14532d', inputBorder: '#4ade80', label: 'Green' },
         yellow: { bg: '#fefce8', border: '#fde047', title: '#a16207', value: '#713f12', inputBorder: '#facc15', label: 'Yellow' },
         purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
         rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
       };
-      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'blue', targetUSD:'blue', incentiveKRW:'green', incentiveUSD:'green', estimatedKRW:'yellow', estimatedUSD:'yellow', actEstimatedKRW:'rose', shipConfirmKRW:'blue', gapKRW:'slate', attainRate:'slate', gmppTarget:'purple', gmppEstimated:'slate', gmppGap:'slate' };
+      // Status-Legible Ledger restyle: every card defaults to the neutral 'slate' palette so the
+      // grid's chrome carries no arbitrary per-card meaning (frame.md's named defect). The 6-palette
+      // picker itself (CARD_PALETTES) is unchanged — a user who already personalized colors keeps
+      // them via the {...DEFAULT_CARD_COLORS, ...persisted} merge below; this only changes what a
+      // never-customized card starts as.
+      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'slate', targetUSD:'slate', incentiveKRW:'slate', incentiveUSD:'slate', estimatedKRW:'slate', estimatedUSD:'slate', actEstimatedKRW:'slate', shipConfirmKRW:'slate', gapKRW:'slate', attainRate:'slate', gmppTarget:'slate', gmppEstimated:'slate', gmppGap:'slate' };
       const [cardColors, setCardColors]       = useState(() => { try { const s = safeLS.get('summaryCardColors'); if (!s) return DEFAULT_CARD_COLORS; const p = JSON.parse(s); return (typeof p === 'object' && !Array.isArray(p)) ? {...DEFAULT_CARD_COLORS, ...p} : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
@@ -1194,26 +1232,51 @@ img,video{max-width:100%;height:auto}
         const totalPer = scPer + actPer;
         const scW  = (scAmt / maxScale) * 100;
         const actW = (actAmt / maxScale) * 100;
+        // ── 3-zone ascending achievement family (zone1 slate <100%, zone2 blue 100-120%, zone3 emerald 120%+) ──
+        const zone1W = (tgtKRW/maxScale)*100;
+        const zone2W = (target120/maxScale)*100 - zone1W;
+        const zone3W = 100 - zone1W - zone2W;
+        const markerPos = Math.min((scAmt+actAmt)/maxScale*100, 100);
+        const totalZone = totalPer>=120?3:totalPer>=100?2:1;
+        const totalColor = totalZone===3?'#047857':totalZone===2?'#1d4ed8':'#475569';
         return (
-          <div className="w-full mt-6 md:mt-8">
+          <div className="w-full mt-6 md:mt-8" data-region="achievement-bar">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
               <div className="mb-2 md:mb-0 flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
+                <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
+                <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
               </div>
-              <span className={`text-lg font-extrabold ${totalPer >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
-              <div className="hidden md:block absolute w-full -bottom-6 left-0 h-5">
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-gray-500"    style={{ left:`${(tgtKRW/maxScale)*100}%` }}>100%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-green-600"  style={{ left:`${(target120/maxScale)*100}%` }}>120%</div>
-                <div className="absolute -translate-x-1/2 text-xs font-bold text-orange-500" style={{ left:`${(target150/maxScale)*100}%` }}>150%</div>
+              <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
+              <div className="block absolute w-full -bottom-6 left-0 h-5">
+                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(tgtKRW/maxScale)*100}%`, color:'#475569' }}>100%</div>
+                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target120/maxScale)*100}%`, color:'#1d4ed8' }}>120%</div>
+                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target150/maxScale)*100}%`, color:'#047857' }}>150%</div>
               </div>
             </div>
-            <div className="relative w-full h-6 md:h-8 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300" style={{display:'flex'}}>
-              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-blue-500" style={{ width:`${scW}%` }}>{scPer > 4 && `${scPer.toFixed(1)}%`}</div>
-              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-emerald-500" style={{ width:`${actW}%` }}>{actPer > 4 && `${actPer.toFixed(1)}%`}</div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500"    style={{ left:`${(tgtKRW/maxScale)*100}%` }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-300"  style={{ left:`${(target120/maxScale)*100}%` }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-orange-400" style={{ left:`${(target150/maxScale)*100}%` }}></div>
+            <div className="relative w-full h-6 md:h-8 rounded-full overflow-hidden border border-gray-200" style={{display:'flex'}}>
+              {/* ascending zone track (context, sits behind the actual SC/ACT fills) */}
+              <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
+                <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
+                <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
+                <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
+              </div>
+              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-blue-500 relative" style={{ width:`${scW}%`, overflow:'hidden' }}>
+                {/* Desktop keeps the original achievement-based threshold (track is wide enough that it always fit).
+                    Mobile switches to the visual fill-width (scW), which is what actually determines whether the
+                    label physically has room in its own segment at a narrow track — the two percentages diverge
+                    because the track is scaled to 150% while the achievement % is relative to the 100% target. */}
+                <span className="toss-tnum hidden md:inline">{scPer > 4 && `${scPer.toFixed(1)}%`}</span>
+                <span className="toss-tnum md:hidden">{scW > 8 && `${scPer.toFixed(1)}%`}</span>
+              </div>
+              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-emerald-500 relative" style={{ width:`${actW}%`, overflow:'hidden' }}>
+                <span className="toss-tnum hidden md:inline">{actPer > 4 && `${actPer.toFixed(1)}%`}</span>
+                <span className="toss-tnum md:hidden">{actW > 8 && `${actPer.toFixed(1)}%`}</span>
+              </div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(tgtKRW/maxScale)*100}%`, borderColor:'#94a3b8' }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target120/maxScale)*100}%`, borderColor:'#93c5fd' }}></div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target150/maxScale)*100}%`, borderColor:'#6ee7b7' }}></div>
+              {/* current-value position marker pin (TREMOR-CATEGORYBAR anatomy) */}
+              <div className="absolute top-0 bottom-0" style={{ left:`${markerPos}%`, width:'2px', background:'#1e293b', boxShadow:'0 0 0 1px rgba(255,255,255,0.6)' }} title={lang==='ko'?`현재 위치: ${totalPer.toFixed(1)}%`:`Current: ${totalPer.toFixed(1)}%`}></div>
             </div>
             <div className="flex gap-4 mt-2 text-xs">
               <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#3b82f6'}}></span>{lang==='ko'?'SC (Ship Confirm)':'SC'}</span>
@@ -1276,7 +1339,8 @@ img,video{max-width:100%;height:auto}
           onDragOver={e => handleRowDragOver(e, status, row.id)}
           onDrop={e => handleRowDrop(e, status, row.id, salesData.filter(d => d.quarter===selectedQuarter && d.member===selectedMember && d.status===(status==='Backup'?'Back up':status==='ShipConfirm'?'Ship Confirm':status)))}
           onDragEnd={handleRowDragEnd}
-          className={`border-b ${colorCls} hover:brightness-95 transition cursor-grab active:cursor-grabbing ${rowDragState.type===status && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}>
+          className={`border-b ${colorCls} hover:brightness-95 transition cursor-grab active:cursor-grabbing ${rowDragState.type===status && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}
+          data-region="account-table-row-actions">
           <td className="p-2 md:p-3 font-bold select-none"><span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>{row.status}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate||'-'}</td>
@@ -1287,7 +1351,7 @@ img,video{max-width:100%;height:auto}
           <td className="p-2 md:p-3">{row.product}</td>
           <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
           <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>{'₩ ' + (row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>{'$ ' + (row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
-          <td className="p-2 md:p-3 text-center space-x-1">
+          <td className={`p-2 md:p-3 text-center space-x-1 sld-row-actions ${requirePwd ? 'sld-row-actions--gated' : ''}`}>
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
                   <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
@@ -1487,7 +1551,9 @@ img,video{max-width:100%;height:auto}
             </div>
           )}
 
-          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20">
+          {/* paddingTop cleared below the fixed top-right identity/ER/lang pill row (LangBtn, top:16px)
+              so the mobile brand title and hamburger never sit underneath it. */}
+          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20" style={{paddingTop:'56px'}}>
             <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
           </div>
@@ -1546,60 +1612,128 @@ img,video{max-width:100%;height:auto}
                 <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
 
                 {/* 전체 목표 달성 현황 */}
-                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
-                  <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 mb-2">
-                    <div className="bg-gray-50 px-4 py-3 rounded shadow-sm border-l-4 border-gray-500 flex-1"><span className="text-xs text-gray-500 font-bold block">100% Target</span><span className="font-bold text-gray-800 text-base md:text-lg">₩ {targetKRW.toLocaleString()}</span></div>
-                    <div className="bg-green-50 px-4 py-3 rounded shadow-sm border-l-4 border-green-500 flex-1"><span className="text-xs text-green-600 font-bold block">120% Target</span><span className="font-bold text-green-700 text-base md:text-lg">₩ {incentiveTargetKRW.toLocaleString()}</span></div>
-                    <div className="bg-orange-50 px-4 py-3 rounded shadow-sm border-l-4 border-orange-500 flex-1"><span className="text-xs text-orange-600 font-bold block">150% Target</span><span className="font-bold text-orange-700 text-base md:text-lg">₩ {(targetKRW*1.5).toLocaleString()}</span></div>
+                  <div className="toss-threshold-row">
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
                   </div>
                   {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
                 </div>
 
                 {/* 분기 요약 지표 */}
-                <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6 md:mb-8 border border-gray-200">
+                <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
                   <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
                       {T.quarterSummary}
                       {summaryLocked
-                        ? <button onClick={() => unlockSummary()} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
-                        : <button onClick={() => setSummaryLocked(true)} style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #86efac',background:'#f0fdf4',color:'#15803d',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔓</button>}
+                        ? <button onClick={() => unlockSummary()} data-action="quarter-summary-lock" style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
+                        : <button onClick={() => setSummaryLocked(true)} data-action="quarter-summary-lock" style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #86efac',background:'#f0fdf4',color:'#15803d',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔓</button>}
                     </h3>
                     {/* [FIX #4] 현재 selectedQuarter를 파라미터로 전달 */}
-                    <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
+                    <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" data-action="detail-report" className="toss-btn-primary flex items-center gap-1.5 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg transition whitespace-nowrap">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                       Detail Report
                     </a>
                   </div>
                   {(() => {
+                    // Legacy classes kept only for the unreachable-via-UI `attainRate` slot below
+                    // (never in DEFAULT_CARD_ORDER; only reachable via a hand-edited localStorage
+                    // cardOrder). The 9 real cards all render through <CardShell> instead, below.
                     const titleCls = "block font-bold text-[13px] tracking-tight mb-2";
-                    const valueCls = "font-mono font-extrabold text-[17px] text-right px-1 block";
                     const cardBase = "p-4 rounded-xl border flex flex-col justify-between shadow-sm min-h-[130px]";
                     const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
+                    // ── Toss-anchor quiet register: one fixed-height template for every card (title →
+                    // reserved badge slot → one focal value → sub-value), so all 9 Quarter Summary
+                    // cards measure identically regardless of which ones carry a badge or an editable
+                    // input. Non-badge cards render the same sld-badge markup with visibility:hidden
+                    // (not display:none) so the reserved row occupies exactly the same box. ──
+                    const CardShell = ({ dataCard, c, title, badge, value, sub }) => (
+                      <div className="qsg-card" data-card={dataCard} style={{background:c.bg,borderColor:c.border}}>
+                        <span className="qsg-title" style={{color:c.title}}>{title}</span>
+                        <div className={`qsg-badge-slot${badge ? '' : ' qsg-badge-slot--empty'}`}>
+                          <span className={`sld-badge ${badge && badge.ahead===false ? 'sld-badge--behind' : 'sld-badge--ahead'}`} data-badge={badge ? badge.dataBadge : undefined}>
+                            {badge ? (<>{badge.arrow && <span aria-hidden="true">{badge.ahead ? '▲' : '▼'}</span>}{badge.text}</>) : '—'}
+                          </span>
+                        </div>
+                        <div className="qsg-value-row">{value}</div>
+                        <span className="qsg-sub" style={{color:c.title}}>{sub}</span>
+                      </div>
+                    );
                     const allCards = {
                       er: (id) => null,
-                      targetKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Target ✏️</span><input type="number" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      targetKRW: (id) => { const c=C(id); return (
+                        <CardShell dataCard="targetKRW" c={c} title={<>Target <span aria-hidden="true">✏️</span></>} badge={null}
+                          sub={'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                          value={<input type="number" data-field="target-krw" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="qsg-value" style={{color:c.value,borderBottomColor:c.inputBorder,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/>}
+                        />
+                      ); },
                       targetUSD: (id) => null,
-                      incentiveKRW: (id) => { const c=C(id); const incentivePct = incentiveTargetKRW ? (expectedKRW / incentiveTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>Incentive Target <span className="font-normal opacity-60 text-[11px]">÷120%</span></span><span className={valueCls} style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:incentivePct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'ACT+SC: ' + incentivePct.toFixed(1) + '%'}</span></div>; },
+                      incentiveKRW: (id) => { const c=C(id); const incentivePct = incentiveTargetKRW ? (expectedKRW / incentiveTargetKRW * 100) : 0; const ahead = incentivePct>=100; return (
+                        <CardShell dataCard="incentiveKRW" c={c} title="Incentive Target ÷120%"
+                          badge={{ahead, arrow:false, text:'ACT+SC: ' + incentivePct.toFixed(1) + '%', dataBadge:'pct-status'}}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span>}
+                          sub={'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
                       incentiveUSD: (id) => null,
-                      estimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '예상치 (ACT+SC)' : 'Estimated (ACT+SC)'}</span><span className={valueCls} style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      estimatedKRW: (id) => { const c=C(id); return (
+                        <CardShell dataCard="estimatedKRW" c={c} title={lang==='ko' ? '예상치 (ACT+SC)' : 'Estimated (ACT+SC)'} badge={null}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span>}
+                          sub={'$ ' + expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
                       estimatedUSD: (id) => null,
-                      gapKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px',marginBottom:'2px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:actPct>=100?'#16a34a':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'2px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#3b82f6',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:shipConfirmPct>=100?'#16a34a':'#2563eb'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div>; },
-                      gmppTarget: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP Target ✏️</span><input type="number" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="w-full bg-transparent px-1 py-0.5 font-mono font-extrabold text-[17px] text-right outline-none transition" style={{borderBottom:`1.5px solid ${c.inputBorder}`,color:c.value,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP 예상치 (ACT+SC)</span><span className={valueCls} style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',fontWeight:'800',color:gmppPct>=100?'#16a34a':'#d97706',marginTop:'2px'}}>{'vs Target: ' + gmppPct.toFixed(1) + '%'}</span></div>; },
-                      gmppGap: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>GMPP GAP</span><span className={valueCls} style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      actEstimatedKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'}</span><span className={valueCls} style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
-                      shipConfirmKRW: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}}><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? 'SC 예상치' : 'SC Estimated'}</span><span className={valueCls} style={{color:c.value}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span><span style={{display:'block',textAlign:'right',fontFamily:'monospace',fontSize:'12px',color:c.title,opacity:0.7,marginTop:'2px'}}>{'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>; },
+                      gapKRW: (id) => { const c=C(id); const ahead = gapKRW <= 0; return (
+                        <CardShell dataCard="gap" c={c} title="GAP"
+                          badge={{ahead, arrow:true, text: ahead ? T.gapStatusAhead : T.gapStatusBehind, dataBadge:'gap-status'}}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span>}
+                          sub={'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
+                      attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}} data-card="attainRate"><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px',marginBottom:'2px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:actPct>=100?'#047857':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'2px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#1d4ed8',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:shipConfirmPct>=100?'#047857':'#1d4ed8'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div>; },
+                      gmppTarget: (id) => { const c=C(id); return (
+                        <CardShell dataCard="gmppTarget" c={c} title={<>GMPP Target <span aria-hidden="true">✏️</span></>} badge={null}
+                          sub={'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                          value={<input type="number" data-field="gmpp-target-krw" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="qsg-value" style={{color:c.value,borderBottomColor:c.inputBorder,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/>}
+                        />
+                      ); },
+                      gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; const ahead = gmppPct>=100; return (
+                        <CardShell dataCard="gmppEstimated" c={c} title="GMPP 예상치 (ACT+SC)"
+                          badge={{ahead, arrow:false, text:'vs Target: ' + gmppPct.toFixed(1) + '%', dataBadge:'pct-status'}}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span>}
+                          sub={'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
+                      gmppGap: (id) => { const c=C(id); const ahead = gmppGapKRW <= 0; return (
+                        <CardShell dataCard="gmppGap" c={c} title="GMPP GAP"
+                          badge={{ahead, arrow:true, text: ahead ? T.gapStatusAhead : T.gapStatusBehind, dataBadge:'gap-status'}}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span>}
+                          sub={'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
+                      actEstimatedKRW: (id) => { const c=C(id); return (
+                        <CardShell dataCard="actEstimatedKRW" c={c} title={lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'} badge={null}
+                          value={<span className="qsg-value" style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span>}
+                          sub={'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
+                      shipConfirmKRW: (id) => { const c=C(id); return (
+                        <CardShell dataCard="shipConfirmKRW" c={c} title={lang==='ko' ? 'SC 예상치' : 'SC Estimated'} badge={null}
+                          value={<span className="qsg-value" style={{color:c.value}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span>}
+                          sub={'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
+                        />
+                      ); },
                     };
                     return (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                      <div className="qsg-grid mb-4" data-region="quarter-summary">
                         {cardOrder.map((id, idx) => allCards[id] ? (
-                          <div key={id} draggable onDragStart={e=>handleDragStart(e,idx)} onDragOver={e=>handleDragOver(e,idx)} onDrop={e=>handleDrop(e,idx)} onDragEnd={handleDragEnd}
-                            className={`relative cursor-grab active:cursor-grabbing ${dragOverIdx===idx?'ring-2 ring-blue-400 rounded-xl':''}`}>
+                          <div key={id} draggable data-card={id} onDragStart={e=>handleDragStart(e,idx)} onDragOver={e=>handleDragOver(e,idx)} onDrop={e=>handleDrop(e,idx)} onDragEnd={handleDragEnd}
+                            className={`qsg-card-wrapper relative cursor-grab active:cursor-grabbing ${dragOverIdx===idx?'ring-2 ring-blue-400':''}`}>
                             {allCards[id](id)}
                             <div style={{position:'absolute',top:'6px',right:'6px',display:'flex',gap:'4px'}}>
-                              <button onClick={() => setColorPickerOpen(colorPickerOpen===id?null:id)} style={{fontSize:'10px',padding:'2px 5px',borderRadius:'4px',border:'1px solid #e2e8f0',background:'#f8fafc',cursor:'pointer',color:'#64748b',lineHeight:1.4}}>🎨</button>
+                              <button onClick={() => setColorPickerOpen(colorPickerOpen===id?null:id)} data-action="palette-picker" style={{fontSize:'10px',padding:'2px 5px',borderRadius:'4px',border:'1px solid #e2e8f0',background:'#f8fafc',cursor:'pointer',color:'#64748b',lineHeight:1.4}}>🎨</button>
                             </div>
                             {colorPickerOpen===id && (
                               <div style={{position:'absolute',top:'30px',right:'6px',zIndex:100,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',padding:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',display:'flex',gap:'6px',flexWrap:'wrap',maxWidth:'140px'}} onClick={e=>e.stopPropagation()}>
@@ -1616,7 +1750,7 @@ img,video{max-width:100%;height:auto}
                 </div>
 
                 {/* 통계 탭 */}
-                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12">
+                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12" data-region="stat-chart-tabs">
                   <div className="grid grid-cols-3 md:flex bg-gray-50 border-b">
                     <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab==='product'?'bg-white text-blue-600 border-blue-600 md:border-b-2':'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabByEquip}</button>
                     <button onClick={() => setActiveStatTab('dealer')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab==='dealer'?'bg-white text-purple-600 border-purple-600 md:border-b-2':'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabDealer}</button>
@@ -1630,7 +1764,7 @@ img,video{max-width:100%;height:auto}
                 </div>
 
                 {/* 팀 탭 */}
-                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar">
+                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar" data-region="team-tabs">
                   {Object.keys(teams).sort().map(team => (
                     <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam===team?'bg-blue-600 text-white shadow-md':'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
                   ))}
@@ -1644,10 +1778,17 @@ img,video{max-width:100%;height:auto}
                       const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
                       const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
                       const teamPer    = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
-                      const perColor   = teamPer>=100?'#16a34a':teamPer>=80?'#2563eb':teamPer>=50?'#d97706':'#dc2626';
-                      const barColor   = teamPer>=100?'bg-green-500':teamPer>=80?'bg-blue-500':teamPer>=50?'bg-amber-500':'bg-red-500';
+                      // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
+                      const teamZone   = teamPer>=120?3:teamPer>=100?2:1;
+                      const perColor   = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
+                      const fillColor  = teamZone===3?'#10b981':teamZone===2?'#3b82f6':'#94a3b8';
+                      const scaleMax   = teamTarget>0 ? Math.max(teamTarget*1.5, teamActKRW*1.05) : 0;
+                      const fillPct    = scaleMax>0 ? Math.min((teamActKRW/scaleMax)*100,100) : 0;
+                      const zone1W     = scaleMax>0 ? (teamTarget/scaleMax)*100 : 0;
+                      const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
+                      const zone3W     = 100 - zone1W - zone2W;
                       return (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" data-region="team-progress-bar">
                           <div className="flex justify-between items-center mb-3">
                             <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
                             <span className="font-extrabold text-lg" style={{color:perColor}}>{teamTarget>0?`${teamPer.toFixed(1)}%`:'-'}</span>
@@ -1661,8 +1802,23 @@ img,video{max-width:100%;height:auto}
                             <span>{lang==='ko'?'누적 달성 (Ship Confirm 기준)':'Cumulative (Ship Confirm)'}</span>
                             <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
                           </div>
-                          {teamTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner"><div className={`${barColor} h-full rounded-full transition-all duration-700`} style={{width:`${Math.min(teamPer,100)}%`}}/></div>}
-                          {teamTarget>0 && <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span className="text-gray-500">100% = ₩ {teamTarget.toLocaleString()}</span></div>}
+                          {teamTarget>0 && (
+                            <>
+                              <div className="relative" style={{height:'13px'}}>
+                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W}%`,color:'#475569'}}>100%</div>
+                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W+zone2W}%`,color:'#1d4ed8'}}>120%</div>
+                              </div>
+                              <div className="relative w-full rounded-full overflow-hidden shadow-inner border border-gray-200" style={{height:'10px'}}>
+                                <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
+                                  <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
+                                  <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
+                                  <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
+                                </div>
+                                <div className="h-full rounded-full transition-all duration-700 relative" style={{width:`${fillPct}%`,background:fillColor}}/>
+                              </div>
+                              <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span style={{color:'#94a3b8'}}>{lang==='ko'?'목표':'Target'} ₩ {teamTarget.toLocaleString()}</span></div>
+                            </>
+                          )}
                         </div>
                       );
                     })()}
@@ -1678,8 +1834,10 @@ img,video{max-width:100%;height:auto}
                           const mActKRW = memberStats[member]?.sumKRW || 0;
                           const mTarget = memberTargets[member] || 0;
                           const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
-                          const mBarColor  = mPer>=100?'bg-green-500':mPer>=80?'bg-blue-500':mPer>=50?'bg-amber-500':'bg-red-400';
-                          const mPerColor  = mPer>=100?'text-green-600':mPer>=80?'text-blue-600':mPer>=50?'text-amber-600':'text-red-500';
+                          // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
+                          const mZone      = mPer>=120?3:mPer>=100?2:1;
+                          const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
+                          const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
                           const mCount  = memberStats[member]?.count || 0;
                           return (
                             <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
@@ -1692,9 +1850,9 @@ img,video{max-width:100%;height:auto}
                               </div>
                               <div className="flex justify-between items-end mb-1.5">
                                 <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
-                                <span className={`text-xs font-extrabold ${mPerColor}`}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
+                                <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                               </div>
-                              {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className={`${mBarColor} h-full rounded-full transition-all duration-700`} style={{width:`${Math.min(mPer,100)}%`}}/></div>}
+                              {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
                               {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
                             </div>
                           );
@@ -1821,14 +1979,14 @@ img,video{max-width:100%;height:auto}
                     <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
                       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
                         <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative}</h4>
-                        <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
-                          <div className="flex flex-col bg-white px-2 py-2 rounded shadow-sm border-l-4 border-gray-500 border-2 flex-1 lg:flex-none">
-                            <span className="text-[10px] text-gray-500 block font-bold mb-1">{T.target100label}</span>
-                            <div className="flex items-center"><span className="font-bold text-sm mr-1 text-gray-700">₩</span><input type="number" min="0" value={memberTargets[selectedMember]===0?'':memberTargets[selectedMember]} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-sm md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right" placeholder={T.targetPlaceholder2}/></div>
+                        <div className="mtg-row gap-2 lg:gap-3 w-full lg:w-auto">
+                          <div className="flex flex-col bg-white px-1.5 py-2 rounded shadow-sm border-l-4 border-2 flex-1 lg:flex-none" style={{borderLeftColor:'#94a3b8'}}>
+                            <span className="text-[10px] block font-bold mb-1" style={{color:'#475569'}}>{T.target100label}</span>
+                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>₩</span><input type="number" min="0" value={memberTargets[selectedMember]===0?'':memberTargets[selectedMember]} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
                           </div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-green-500 flex-1 lg:flex-none"><span className="text-[10px] text-green-600 block font-bold">120% Target</span><span className="font-bold text-xs md:text-sm text-green-700 text-right">₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-purple-500 flex-1 lg:flex-none"><span className="text-[10px] text-purple-600 block font-bold">140% Target</span><span className="font-bold text-xs md:text-sm text-purple-700 text-right">₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 border-orange-500 flex-1 lg:flex-none"><span className="text-[10px] text-orange-500 block font-bold">150% Target</span><span className="font-bold text-xs md:text-sm text-orange-600 text-right">₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
                         </div>
                       </div>
                       {renderProgressBar(memberSCKRW, memberActKRW, memberTargets[selectedMember])}
@@ -1883,7 +2041,7 @@ img,video{max-width:100%;height:auto}
                   )}
 
                   {/* [FIX #2] 입력 폼 — min="0" 추가, 저장 중 비활성화 */}
-                  <form className="bg-slate-50 p-4 md:p-6 rounded-lg border-2 border-gray-200 transition">
+                  <form className="bg-slate-50 p-4 md:p-6 rounded-lg border border-gray-200 transition" data-region="account-entry-form">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
@@ -2054,6 +2212,159 @@ img,video{max-width:100%;height:auto}
 
     @media (max-width: 768px) {
       table { font-size: 11px; }
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       Status-Legible Ledger — full-page restyle tokens + shared components
+       (.omd/composition.md). Kept separate from the compiled-Tailwind block
+       above: new colors are not in that fixed utility list, so they live here
+       as plain CSS rather than assumed (never-verified) Tailwind classes.
+       ══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --sld-zone-1-fg: #475569;  /* below target — muted slate */
+      --sld-zone-2-fg: #1d4ed8;  /* 100–120% — blue */
+      --sld-zone-3-fg: #047857;  /* 120%+ — emerald */
+      --sld-accent: #2563eb;
+      --sld-focus-ring: #2563eb;
+    }
+
+    /* Signed-delta status badge (GAP / GMPP GAP cards) — low-opacity tint + ring, never a solid fill */
+    .sld-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      line-height: 1.5;
+    }
+    /* Solid pre-composited tints (not rgba) so contrast is unambiguous against any card background */
+    .sld-badge--ahead  { background: #e2f7f0; color: #047857; box-shadow: inset 0 0 0 1px rgba(16,185,129,0.35); }
+    .sld-badge--behind { background: #fbe9e9; color: #b91c1c; box-shadow: inset 0 0 0 1px rgba(220,38,38,0.32); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       Toss-anchor quiet register (index-toss-variant.html only — see
+       .omd/scout-toss.md + .omd/reference-board-toss.json, candidate
+       "toss-quiet-numeral-focus"). Near-flat elevation, hairline neutral
+       borders, one scarce interactive blue, one dominant focal value per
+       card, tabular-nums on every figure. Kept as its own block so this
+       variant's diff against index.html stays legible.
+       ══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --toss-blue: #3182f6;
+      --toss-blue-hover: #2272eb;
+      --toss-grey900: #191f28;
+      --toss-grey700: #4e5968;
+      --toss-grey500: #8b95a1;
+      --toss-grey200: #e5e8eb;
+      --toss-grey100: #f2f4f6;
+    }
+
+    /* Flat panel chrome shared by the header "전체 목표 달성 현황" card and the
+       Quarter Summary card — hairline border, no drop shadow, 16px radius. */
+    .toss-panel { background: #ffffff; border: 1px solid var(--toss-grey200); border-radius: 16px; box-shadow: none; }
+
+    /* Scarce-blue primary action (replaces the indigo CTA) */
+    .toss-btn-primary { background: var(--toss-blue); }
+    .toss-btn-primary:hover { background: var(--toss-blue-hover); }
+
+    /* Header threshold row (100/120/150% Target) — flat cards, a small status
+       dot carries the hue instead of a solid tinted background + thick left
+       border, so color stays reserved for meaning rather than decoration. */
+    .toss-threshold-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    @media (min-width: 768px) {
+      .toss-threshold-row { flex-direction: row; gap: 12px; }
+    }
+    .toss-threshold-card { flex: 1; display: flex; align-items: center; gap: 8px; background: #ffffff; border: 1px solid var(--toss-grey200); border-radius: 12px; padding: 12px 16px; min-width: 0; }
+    .toss-threshold-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .toss-threshold-label { font-size: 12px; font-weight: 700; color: var(--toss-grey700); white-space: nowrap; }
+    .toss-threshold-value { margin-left: auto; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; color: var(--toss-grey900); white-space: nowrap; }
+    @media (min-width: 768px) {
+      .toss-threshold-value { font-size: 16px; }
+    }
+
+    /* Any figure inside the header achievement bar — chips, the Total
+       readout, zone-boundary labels, in-track segment labels. */
+    .toss-tnum { font-variant-numeric: tabular-nums; }
+
+    /* Quarter Summary grid — real CSS grid, fixed-height cells so all 9 cards
+       measure identically regardless of which ones carry a badge or an
+       editable input (the defect this variant exists to remove). */
+    .qsg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    @media (min-width: 768px) {
+      .qsg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    }
+    .qsg-card-wrapper { border-radius: 14px; }
+    .qsg-card {
+      height: 172px;
+      box-sizing: border-box;
+      padding: 18px 16px;
+      border: 1px solid var(--toss-grey200);
+      border-radius: 14px;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (min-width: 768px) {
+      .qsg-card { padding: 18px 20px; }
+    }
+    .qsg-title { display: block; font-size: 12px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; margin-bottom: 10px; flex-shrink: 0; }
+    .qsg-badge-slot { display: flex; justify-content: flex-end; height: 20px; margin-bottom: 6px; flex-shrink: 0; }
+    .qsg-badge-slot--empty { visibility: hidden; }
+    .qsg-value-row { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; }
+    .qsg-value {
+      display: block; width: 100%; text-align: right;
+      font-size: 14px; font-weight: 800; line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      white-space: nowrap;
+    }
+    @media (min-width: 768px) {
+      .qsg-value { font-size: 21px; }
+    }
+    input.qsg-value { background: transparent; border: none; border-bottom: 1.5px solid #d1d6db; outline: none; padding: 2px; transition: border-color .15s ease; }
+    input.qsg-value:focus { border-bottom-color: var(--toss-blue); }
+    .qsg-sub { display: block; flex-shrink: 0; text-align: right; margin-top: 6px; font-size: 12px; font-weight: 600; opacity: 0.72; line-height: 1.3; font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+
+    /* Editable numeric target input (member-detail 100% Target card) — kill native spin buttons so
+       every pixel of the narrow mobile box goes to the value itself, not browser chrome. */
+    .no-spinner::-webkit-outer-spin-button,
+    .no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .no-spinner { -moz-appearance: textfield; }
+
+    /* Member-detail 100/120/140% Target row — below `lg` this is a real 3-column grid (equal
+       thirds regardless of each card's own content width) instead of content-driven flexbox, so the
+       editable 100% Target card can never be squeezed narrower than its read-only siblings; the
+       150% Target card spans all 3 columns via its own inline gridColumn. At `lg`+ this reverts to
+       the original flex-wrap row so desktop layout is unchanged. */
+    .mtg-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (min-width: 1024px) {
+      .mtg-row { display: flex; flex-wrap: wrap; }
+    }
+
+    /* Hover-revealed row actions (non-gated Pending/ACT/Back up rows); gated Ship Confirm rows
+       (.sld-row-actions--gated) stay permanently visible — the lock glyph must never hide. */
+    .sld-row-actions { opacity: 0; transition: opacity .15s ease; }
+    tr:hover .sld-row-actions,
+    tr:focus-within .sld-row-actions { opacity: 1; }
+    .sld-row-actions--gated { opacity: 1 !important; }
+    @media (max-width: 768px) {
+      /* no hover on touch input — row actions stay reachable at every width */
+      .sld-row-actions { opacity: 1; }
+    }
+
+    /* ── finish pass: selection, focus ring, scrollbar (craft/finish-pass.md) ── */
+    ::selection { background-color: rgba(37,99,235,0.22); color: #0f172a; }
+    :focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--sld-focus-ring);
+    }
+    :root {
+      scrollbar-color: #94a3b8 transparent;
+      scrollbar-width: thin;
     }
   </style>
 </body>

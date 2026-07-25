@@ -1,0 +1,4 @@
+.omd/
+node_modules/
+*.bak-*
+_tmp_*

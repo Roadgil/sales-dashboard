@@ -8,104 +8,161 @@
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+/* Pretendard Variable — self-hosted subsets, shared with index.html (see .omd/type-proof.md).
+   Two subsets so the browser only fetches the glyphs a given code point needs; both subsets
+   were extended to also cover this page's own Korean/symbol copy (audit log labels, action
+   icons, pagination arrows) without removing any glyph index.html already relies on. */
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-hangul.woff2') format('woff2-variations');
+  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/PretendardVariable-subset-latin-num.woff2') format('woff2-variations');
+  unicode-range: U+0020-007E, U+00B7, U+2014, U+20A9, U+FF01-FF60;
+}
+
 :root {
-  --bg:#f4f5f7; --surf:#fff; --border:#e4e6eb;
-  --a1:#5b4fcf; --green:#0fa878; --red:#e84d6f; --yellow:#e09c10; --blue:#2563eb;
-  --text:#1a1a2e; --muted:#8a8fa8;
+  /* Toss-anchor quiet register — same tokens as index.html's .toss-panel/.qsg-* block
+     (.omd/scout-toss.md, candidate "toss-quiet-numeral-focus"). Near-flat cards, hairline
+     neutral borders, one scarce interactive blue. */
+  --bg:#f3f4f6;          /* gray-100, matches index.html's <body className="bg-gray-100"> */
+  --surf:#fff;
+  --border:#e5e8eb;      /* toss grey200 hairline */
+  --text:#191f28;        /* toss grey900 */
+  --muted:#4e5968;       /* toss grey700 */
+  --muted-2:#8b95a1;     /* toss grey500 */
+  --grey100:#f2f4f6;     /* toss grey100 */
+  --accent:#3182f6;      /* toss blue500 — the one scarce interactive accent */
+  --accent-dark:#2272eb; /* toss blue600 hover/pressed */
+  --focus-ring:#3182f6;
+
+  /* Signed-delta pair — reused identically from index.html's .sld-badge (ahead/behind) for the
+     create/delete action badges and the diff before/after values: same hue-to-meaning mapping,
+     not an arbitrary new palette. Kept exactly as-is per the Toss pass's own instruction to keep
+     this convention, only restrained (never a solid fill), within the quieter register. */
+  --pos:#047857;      --pos-bg:#e2f7f0;   --pos-ring:rgba(16,185,129,.35);
+  --neg:#b91c1c;       --neg-bg:#fbe9e9;   --neg-ring:rgba(220,38,38,.32);
+  --neu:#b45309;       --neu-bg:#fdf3d9;   --neu-ring:rgba(217,119,6,.32); /* same pre-composited-tint formula, for the neutral "edit" action */
+
+  /* Record-status tokens — identical hex to index.html's own STATUS_COLOR map (Ship Confirm/
+     ACT/Pending/Back up), so a status reads the same color on both pages. */
+  --st-sc-bg:#1e3a8a;    --st-sc-fg:#fff;      /* Ship Confirm */
+  --st-act-bg:#dcfce7;   --st-act-fg:#15803d;  /* ACT */
+  --st-pending-bg:#dbeafe; --st-pending-fg:#1d4ed8; /* Pending */
+  --st-backup-bg:#ffedd5; --st-backup-fg:#c2410c;   /* Back up */
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'Pretendard Variable',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-size:13px;min-height:100vh;}
 
 /* ── 로그인 ── */
 .login-wrap{display:flex;height:100vh;align-items:center;justify-content:center;background:#0f172a;}
-.login-box{background:#fff;border-radius:16px;padding:40px 36px;width:340px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.3);}
+.login-box{background:#fff;border-radius:16px;padding:40px 36px;width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.28);}
 .login-icon{font-size:36px;margin-bottom:12px;}
-.login-title{font-family:'DM Serif Display',serif;font-size:24px;margin-bottom:6px;}
-.login-sub{font-size:12px;color:var(--muted);margin-bottom:24px;font-family:'DM Mono',monospace;}
-.login-input{width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-size:16px;font-family:'DM Mono',monospace;letter-spacing:4px;text-align:center;outline:none;margin-bottom:8px;transition:border .2s;}
-.login-input:focus{border-color:var(--a1);}
-.login-input.error{border-color:var(--red);}
-.login-err{font-size:12px;color:var(--red);font-weight:700;margin-bottom:10px;min-height:18px;}
-.login-btn{width:100%;padding:12px;background:var(--a1);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .2s;}
-.login-btn:hover{background:#4a3fb8;}
+.login-title{font-size:24px;font-weight:800;margin-bottom:6px;}
+.login-sub{font-size:12px;color:var(--muted);margin-bottom:24px;font-weight:500;}
+.login-input{width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:12px;font-size:16px;letter-spacing:1px;text-align:center;outline:none;margin-bottom:8px;transition:border .2s;}
+.login-input:focus{border-color:var(--accent);}
+.login-input.error{border-color:var(--neg);}
+.login-err{font-size:12px;color:var(--neg);font-weight:700;margin-bottom:10px;min-height:18px;}
+.login-btn{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:background .2s;}
+.login-btn:hover{background:var(--accent-dark);}
 
 /* ── 레이아웃 ── */
 .wrap{max-width:1400px;margin:0 auto;padding:32px 24px;}
-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid var(--border);}
-h1{font-family:'DM Serif Display',serif;font-size:32px;font-weight:400;line-height:1;margin-bottom:4px;}
-h1 span{color:var(--a1);}
-.sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
-.back-link{display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-decoration:none;padding:4px 12px;border:1px solid var(--border);border-radius:20px;transition:all .2s;margin-bottom:10px;}
-.back-link:hover{color:var(--a1);border-color:var(--a1);}
+header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+h1{font-size:30px;font-weight:800;line-height:1;margin-bottom:4px;color:var(--text);}
+h1 span{color:var(--accent);}
+.sub{font-size:12px;font-weight:500;color:var(--muted);}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-decoration:none;padding:4px 12px;border:1px solid var(--border);border-radius:999px;transition:all .2s;margin-bottom:10px;}
+.back-link:hover{color:var(--accent);border-color:var(--accent);}
 
 /* ── 필터 바 ── */
 .filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center;}
-.filter-bar select, .filter-bar input{padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:#fff;outline:none;transition:border .2s;cursor:pointer;}
-.filter-bar select:focus, .filter-bar input:focus{border-color:var(--a1);}
+.filter-bar select, .filter-bar input{padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;outline:none;transition:border .2s;cursor:pointer;}
+.filter-bar select:focus, .filter-bar input:focus{border-color:var(--accent);}
 .filter-bar input{min-width:200px;}
-.btn-reset{padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--muted);transition:all .2s;}
-.btn-reset:hover{border-color:var(--red);color:var(--red);}
-.count-badge{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-left:auto;}
+/* Same amber "clear filters" chip index.html uses (bg-amber-100/text-amber-700/border-amber-300) — untouched by the Toss pass there, kept identical here */
+.btn-reset{padding:6px 14px;border:1px solid #fcd34d;border-radius:999px;background:#fef3c7;font-size:11px;font-weight:700;cursor:pointer;color:#b45309;transition:all .2s;}
+.btn-reset:hover{background:#fde68a;}
+.count-badge{font-size:11px;font-weight:600;color:var(--muted-2);background:var(--grey100);padding:4px 12px;border-radius:999px;margin-left:auto;}
 
-/* ── 통계 카드 ── */
+/* ── 통계 카드 ── Toss quiet register: flat white, hairline border, no shadow, fixed height
+   so all 4 cards measure identically regardless of label length. Color is carried by a small
+   status dot (index.html's own toss-threshold-card pattern), never by the whole card or the
+   big figure — the number itself stays neutral so color stays reserved for meaning. */
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
 @media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr;}}
-.stat-card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
-.stat-card.s-create::before{background:var(--green);}
-.stat-card.s-edit::before{background:var(--yellow);}
-.stat-card.s-delete::before{background:var(--red);}
-.stat-card.s-total::before{background:var(--a1);}
-.stat-label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
-.stat-val{font-family:'DM Serif Display',serif;font-size:28px;line-height:1;}
-.stat-val.c-create{color:var(--green);}
-.stat-val.c-edit{color:var(--yellow);}
-.stat-val.c-delete{color:var(--red);}
-.stat-val.c-total{color:var(--a1);}
+.stat-card{height:88px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:none;}
+.stat-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;}
+.stat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.stat-card.s-total .stat-dot{background:var(--accent);}
+.stat-card.s-create .stat-dot{background:var(--pos);}
+.stat-card.s-edit .stat-dot{background:var(--neu);}
+.stat-card.s-delete .stat-dot{background:var(--neg);}
+.stat-val{font-size:24px;font-weight:800;line-height:1;color:var(--text);font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
 
-/* ── 로그 테이블 ── */
-.table-wrap{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-.table-scroll{overflow-x:auto;}
+/* ── 로그 테이블 ── flat card chrome: hairline border, no shadow, 14px radius */
+.table-wrap{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:none;}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-scroll::-webkit-scrollbar{height:7px;}
+.table-scroll::-webkit-scrollbar-track{background:#f1f5f9;border-radius:4px;}
+.table-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px;}
+.table-scroll::-webkit-scrollbar-thumb:hover{background:#64748b;}
 table{width:100%;border-collapse:collapse;font-size:12px;}
-thead tr{background:#1e3a8a;}
-th{font-family:'DM Mono',monospace;font-size:9px;color:#fff;text-transform:uppercase;letter-spacing:1px;padding:11px 12px;text-align:left;white-space:nowrap;}
+thead tr{background:#334155;} /* slate-700 — same neutral ledger-header treatment as index.html's data tables */
+th{font-weight:700;font-size:11px;color:#fff;padding:10px 12px;text-align:left;white-space:nowrap;}
 td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f9fafb;}
-.mono{font-family:'DM Mono',monospace;font-size:11px;}
+tr:hover td{background:var(--grey100);}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:11px;}
 
-/* ── Action 배지 ── */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;white-space:nowrap;}
-.badge-create{background:rgba(15,168,120,.12);color:var(--green);}
-.badge-edit{background:rgba(224,156,16,.12);color:var(--yellow);}
-.badge-delete{background:rgba(232,77,111,.12);color:var(--red);}
+/* ── Action 배지 — same pill/pre-composited-tint/inset-ring anatomy as index.html's .sld-badge ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.01em;white-space:nowrap;line-height:1.5;}
+.badge-create{background:var(--pos-bg);color:var(--pos);box-shadow:inset 0 0 0 1px var(--pos-ring);}
+.badge-edit{background:var(--neu-bg);color:var(--neu);box-shadow:inset 0 0 0 1px var(--neu-ring);}
+.badge-delete{background:var(--neg-bg);color:var(--neg);box-shadow:inset 0 0 0 1px var(--neg-ring);}
 
 /* ── diff 뷰 ── */
-.diff-btn{padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:10px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--muted);transition:all .2s;}
-.diff-btn:hover{border-color:var(--a1);color:var(--a1);}
-.diff-panel{display:none;margin-top:8px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;font-family:'DM Mono',monospace;}
+.diff-btn{padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;}
+.diff-btn:hover{border-color:var(--accent);color:var(--accent);}
+.diff-panel{display:none;margin-top:8px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;}
 .diff-panel.open{display:block;}
-.diff-row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #eef0f4;}
+.diff-row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #eef0f4;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
 .diff-row:last-child{border-bottom:none;}
-.diff-field{color:var(--muted);min-width:90px;flex-shrink:0;}
-.diff-before{color:var(--red);text-decoration:line-through;flex:1;}
-.diff-after{color:var(--green);flex:1;}
+.diff-field{color:var(--muted);min-width:90px;flex-shrink:0;font-family:'Pretendard Variable',sans-serif;font-weight:600;}
+.diff-before{color:var(--neg);text-decoration:line-through;flex:1;}
+.diff-after{color:var(--pos);flex:1;}
 .diff-same{color:var(--text);flex:1;}
 
 /* ── 페이지네이션 ── */
 .pagination{display:flex;justify-content:center;gap:6px;margin-top:20px;flex-wrap:wrap;}
-.pg-btn{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;transition:all .2s;}
-.pg-btn:hover{border-color:var(--a1);color:var(--a1);}
-.pg-btn.active{background:var(--a1);border-color:var(--a1);color:#fff;}
+.pg-btn{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;}
+.pg-btn:hover{border-color:var(--accent);color:var(--accent);}
+.pg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .pg-btn:disabled{opacity:.4;cursor:not-allowed;}
 
 /* ── 로딩 ── */
-.loading{display:flex;align-items:center;justify-content:center;padding:60px;flex-direction:column;gap:12px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;}
-.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--a1);border-radius:50%;animation:spin .8s linear infinite;}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;flex-direction:column;gap:12px;color:var(--muted);font-size:12px;font-weight:500;}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;}
+footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-weight:500;}
+
+/* ── finish pass: selection, focus ring, scrollbar (craft/finish-pass.md, matches index.html) ── */
+::selection { background-color: rgba(49,130,246,0.22); color: #0f172a; }
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--focus-ring);
+}
+:root { scrollbar-color: var(--muted-2) transparent; scrollbar-width: thin; }
 </style>
 </head>
 <body>
@@ -114,7 +171,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
 <div class="login-wrap" id="loginWrap">
   <div class="login-box">
     <div class="login-icon">🔐</div>
-    <div class="login-title">Audit <span style="color:var(--a1)">Log</span></div>
+    <div class="login-title">Audit <span style="color:var(--accent)">Log</span></div>
     <div class="login-sub">Candela Korea · 변경 이력 뷰어</div>
     <input type="email" class="login-input" id="emailInput" placeholder="Email" onkeydown="if(event.key==='Enter')doLogin()" style="margin-bottom:8px"/>
     <input type="password" class="login-input" id="pwdInput" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"/>
@@ -132,17 +189,17 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);displ
       <div class="sub">Candela Korea · 데이터 변경 이력</div>
     </div>
     <div style="text-align:right">
-      <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)" id="lastUpdated">--</div>
-      <button onclick="doLogout()" style="margin-top:8px;padding:5px 14px;border:1.5px solid var(--border);border-radius:20px;background:#fff;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--muted);">로그아웃</button>
+      <div style="font-size:11px;font-weight:500;color:var(--muted)" id="lastUpdated">--</div>
+      <button onclick="doLogout()" style="margin-top:8px;padding:5px 14px;border:1.5px solid var(--border);border-radius:999px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);">로그아웃</button>
     </div>
   </header>
 
-  <!-- 통계 카드 -->
+  <!-- 통계 카드 — Toss quiet register: flat card, status dot carries meaning, value stays neutral -->
   <div class="stats-row">
-    <div class="stat-card s-total"><div class="stat-label">Total Logs</div><div class="stat-val c-total" id="st-total">-</div></div>
-    <div class="stat-card s-create"><div class="stat-label">신규 저장</div><div class="stat-val c-create" id="st-create">-</div></div>
-    <div class="stat-card s-edit"><div class="stat-label">수정</div><div class="stat-val c-edit" id="st-edit">-</div></div>
-    <div class="stat-card s-delete"><div class="stat-label">삭제</div><div class="stat-val c-delete" id="st-delete">-</div></div>
+    <div class="stat-card s-total"><div class="stat-label"><span class="stat-dot"></span>Total Logs</div><div class="stat-val" id="st-total">-</div></div>
+    <div class="stat-card s-create"><div class="stat-label"><span class="stat-dot"></span>신규 저장</div><div class="stat-val" id="st-create">-</div></div>
+    <div class="stat-card s-edit"><div class="stat-label"><span class="stat-dot"></span>수정</div><div class="stat-val" id="st-edit">-</div></div>
+    <div class="stat-card s-delete"><div class="stat-label"><span class="stat-dot"></span>삭제</div><div class="stat-val" id="st-delete">-</div></div>
   </div>
 
   <!-- 필터 바 -->
@@ -393,7 +450,7 @@ function renderTable() {
   const tbody = document.getElementById('logBody');
 
   if (!page.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-family:'DM Mono',monospace;">로그가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted);font-weight:500;">로그가 없습니다.</td></tr>`;
     return;
   }
 
@@ -406,20 +463,20 @@ function renderTable() {
     return `<tr>
       <td>${fmtTime(log.timestamp)}</td>
       <td><span class="badge ${ACTION_BADGE[log.action]||'badge-edit'}">${ACTION_ICON[log.action]||''} ${ACTION_LABEL[log.action]||log.action}</span></td>
-      <td class="mono" style="font-size:11px;color:var(--a1);font-weight:700">${log.actor ? log.actor.split('@')[0] : '-'}</td>
+      <td class="mono" style="font-size:11px;color:var(--text);font-weight:700">${log.actor ? log.actor.split('@')[0] : '-'}</td>
       <td class="mono" style="font-size:12px">${log.member||'-'}<br><span style="color:var(--muted);font-size:10px">${log.team||''}</span></td>
       <td class="mono">${log.quarter||'-'}</td>
       <td style="font-weight:600;max-width:160px;word-break:break-all">${log.account||data.account||'-'}</td>
       <td class="mono">${data.product||'-'}</td>
       <td>
-        <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${
-          data.status==='Ship Confirm'?'#1e3a8a':
-          data.status==='ACT'?'#dcfce7':
-          data.status==='Pending'?'#dbeafe':'#fff7ed'
+        <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:${
+          data.status==='Ship Confirm'?'var(--st-sc-bg)':
+          data.status==='ACT'?'var(--st-act-bg)':
+          data.status==='Pending'?'var(--st-pending-bg)':'var(--st-backup-bg)'
         };color:${
-          data.status==='Ship Confirm'?'#fff':
-          data.status==='ACT'?'#166534':
-          data.status==='Pending'?'#1d4ed8':'#9a3412'
+          data.status==='Ship Confirm'?'var(--st-sc-fg)':
+          data.status==='ACT'?'var(--st-act-fg)':
+          data.status==='Pending'?'var(--st-pending-fg)':'var(--st-backup-fg)'
         };font-weight:700">${data.status||'-'}</span>
       </td>
       <td style="text-align:right" class="mono">${fmtKRW(data.priceKRW)}</td>
@@ -428,8 +485,8 @@ function renderTable() {
           ? `<button class="diff-btn" onclick="toggleDiff('${log._id}')">diff</button>
              <div class="diff-panel" id="diff-${log._id}">${diffContent}</div>`
           : log.action === 'delete'
-            ? `<span style="font-size:10px;color:var(--red);font-family:'DM Mono',monospace">삭제됨</span>`
-            : `<span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace">-</span>`
+            ? `<span style="font-size:10px;color:var(--neg);font-weight:600">삭제됨</span>`
+            : `<span style="font-size:10px;color:var(--muted);font-weight:500">-</span>`
         }
       </td>
     </tr>`;
