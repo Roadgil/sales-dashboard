@@ -692,11 +692,20 @@ img,video{max-width:100%;height:auto}
 
       const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
       const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const quartersRef = useRef(quarters);
+      useEffect(() => { quartersRef.current = quarters; }, [quarters]);
       const [teams, setTeams] = useState({ 'Team 1': ['Kim SH', 'Oh SG'], 'Team 2': ['Baek SC', 'Lee GR'], 'Team 3': ['YC lim'] });
       const [selectedTeam, setSelectedTeam]     = useState('Team 1');
       const [selectedMember, setSelectedMember] = useState(null);
       const [activeStatTab, setActiveStatTab]   = useState('product');
-      const [memberTargets, setMemberTargets]   = useState({ 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 });
+      // [FIX #분기별 개인목표] memberTargets는 분기별로 독립된 값을 가진다: { [quarter]: { [member]: target } }
+      // 과거에는 { member: target } 형태(모든 분기 공용)였기 때문에 한 분기에서 목표를 바꾸면
+      // 다른 모든 분기의 목표까지 같이 바뀌는 문제가 있었다. 아래 초기값은 기존 두 분기에
+      // 동일한 값을 넣어 기존 화면과 동일하게 보이도록 한 것뿐, 이후로는 분기마다 따로 저장된다.
+      const [memberTargets, setMemberTargets]   = useState({
+        '2026 Q1': { 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 },
+        '2026 Q2': { 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 },
+      });
       const [teamTargets, setTeamTargets]       = useState({});
       const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
       const [salesData, setSalesData]           = useState([]);
@@ -850,7 +859,21 @@ img,video{max-width:100%;height:auto}
         if (!currentUser) return;
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
-        const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
+        const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => {
+          if (!doc.exists) return;
+          const raw = doc.data();
+          // [FIX #분기별 개인목표] 과거 저장 형식({member:number})이면 분기별 형식으로 1회 변환한다.
+          // (값이 숫자면 레거시, 객체면 이미 분기별 형식)
+          const isLegacyFlat = Object.values(raw).some(v => typeof v === 'number');
+          if (isLegacyFlat) {
+            const migrated = {};
+            (quartersRef.current.length ? quartersRef.current : [selectedQuarter]).forEach(q => { migrated[q] = { ...raw }; });
+            setMemberTargets(migrated);
+            db.collection("targets").doc("memberTargets").set(migrated).catch(() => {});
+          } else {
+            setMemberTargets(raw);
+          }
+        });
         const unsubTeamTargets  = db.collection("targets").doc("teamTargets").onSnapshot(doc => { if (doc.exists) setTeamTargets(doc.data()); });
         const unsubLayout       = db.collection("settings").doc("layout").onSnapshot(doc => {
           if (doc.exists) {
@@ -1023,7 +1046,9 @@ img,video{max-width:100%;height:auto}
         if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
         setShowErModal(false); setErUnlocked(false); setErInputVal('');
       };
-      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
+      // [FIX #분기별 개인목표] 이제 memberTargets는 { [분기]: { [멤버]: 목표값 } } 구조라서
+      // selectedQuarter 아래에만 값을 써서, 다른 분기의 목표는 그대로 유지된다.
+      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [selectedQuarter]: { ...(memberTargets[selectedQuarter]||{}), [member]: val } }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
       const handleTeamTargetChange   = (team, quarter, value) => { if (!requireAuth()) return; const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
@@ -1036,14 +1061,19 @@ img,video{max-width:100%;height:auto}
         const newName = prompt(T.promptRename, oldName);
         if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
           const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].map(m => m===oldName ? newName : m); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true });
-          const ntg = { ...memberTargets }; if (ntg[oldName] !== undefined) { ntg[newName] = ntg[oldName]; delete ntg[oldName]; db.collection("targets").doc("memberTargets").set(ntg); }
+          const ntg = { ...memberTargets }; let ntgChanged = false;
+          Object.keys(ntg).forEach(q => { if (ntg[q] && ntg[q][oldName] !== undefined) { ntg[q] = { ...ntg[q], [newName]: ntg[q][oldName] }; delete ntg[q][oldName]; ntgChanged = true; } });
+          if (ntgChanged) { setMemberTargets(ntg); db.collection("targets").doc("memberTargets").set(ntg); }
           salesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
         }
       };
       const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
+      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } if (!memberTargets[q]) { const nmt = { ...memberTargets, [q]: { ...(memberTargets[selectedQuarter]||{}) } }; setMemberTargets(nmt); db.collection("targets").doc("memberTargets").set(nmt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
+      // [FIX #분기별 개인목표] 현재 선택된 분기의 멤버별 목표만 뽑아낸 값. 화면에서 목표를 "읽을 때"는
+      // 항상 이 값을 쓰고, memberTargets 원본은 handleMemberTargetChange(분기별 저장)에서만 직접 다룬다.
+      const currentMemberTargets = memberTargets[selectedQuarter] || {};
       const handleInputChange = (e) => {
         const { name, value } = e.target;
         if (name === 'priceKRW') {
@@ -1759,7 +1789,7 @@ img,video{max-width:100%;height:auto}
                   <div className="p-4 md:p-8">
                     {activeStatTab==='product' && renderBarChart(productStats, 'bg-blue-500')}
                     {activeStatTab==='dealer'  && renderBarChart(dealerStats,  'bg-purple-500')}
-                    {activeStatTab==='member'  && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
+                    {activeStatTab==='member'  && renderMemberChart(memberStats, currentMemberTargets, 'bg-emerald-500')}
                   </div>
                 </div>
 
@@ -1832,7 +1862,7 @@ img,video{max-width:100%;height:auto}
                       ) : (
                         teams[selectedTeam].map(member => {
                           const mActKRW = memberStats[member]?.sumKRW || 0;
-                          const mTarget = memberTargets[member] || 0;
+                          const mTarget = currentMemberTargets[member] || 0;
                           const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
                           // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
                           const mZone      = mPer>=120?3:mPer>=100?2:1;
@@ -1975,23 +2005,28 @@ img,video{max-width:100%;height:auto}
                 <div className="bg-white p-4 md:p-8 rounded-xl shadow-md border border-gray-100 mb-8">
                   <h3 className="text-2xl md:text-3xl font-extrabold text-gray-800 mb-6">{selectedMember} <span className="text-lg md:text-xl text-gray-500 font-medium block md:inline mt-1 md:mt-0">Account FCST</span></h3>
 
-                  {memberTargets[selectedMember] !== undefined && (
+                  {(() => {
+                    // [FIX #분기별 개인목표] 이 분기(selectedQuarter)에 값이 아직 없어도(undefined)
+                    // 입력창은 항상 보여준다 — 그래야 새 분기에 처음 목표를 기재할 수 있다.
+                    const selMemberTarget = currentMemberTargets[selectedMember] || 0;
+                    return (
                     <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
                       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
-                        <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative}</h4>
+                        <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative} <span className="text-xs md:text-sm text-gray-400 font-semibold ml-1">({selectedQuarter})</span></h4>
                         <div className="mtg-row gap-2 lg:gap-3 w-full lg:w-auto">
                           <div className="flex flex-col bg-white px-1.5 py-2 rounded shadow-sm border-l-4 border-2 flex-1 lg:flex-none" style={{borderLeftColor:'#94a3b8'}}>
                             <span className="text-[10px] block font-bold mb-1" style={{color:'#475569'}}>{T.target100label}</span>
-                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>₩</span><input type="number" min="0" value={memberTargets[selectedMember]===0?'':memberTargets[selectedMember]} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
+                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>₩</span><input type="number" min="0" value={selMemberTarget===0?'':selMemberTarget} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
                           </div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>₩ {(selMemberTarget*1.2).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>₩ {(selMemberTarget*1.4).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>₩ {(selMemberTarget*1.5).toLocaleString()}</span></div>
                         </div>
                       </div>
-                      {renderProgressBar(memberSCKRW, memberActKRW, memberTargets[selectedMember])}
+                      {renderProgressBar(memberSCKRW, memberActKRW, selMemberTarget)}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* 수정 모달 */}
                   {showEditModal && (
