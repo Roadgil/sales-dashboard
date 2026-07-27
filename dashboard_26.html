@@ -623,7 +623,7 @@ function render(salesData,memberTargets,qTargets){
         </div>
         <div class="card" style="padding:16px">
           <div class="ctitle">${t('월별 추이','Monthly')}</div>
-          <div style="position:relative;height:150px"><canvas id="c-m-${sid}"></canvas></div>
+          <div style="position:relative;height:150px"><canvas id="c-m-idx-${mi}"></canvas></div>
         </div>
       </div>
     </div>`;
@@ -640,10 +640,16 @@ function render(salesData,memberTargets,qTargets){
     // not throw and silently abort chart creation for every member after them in the loop.
     try{
       const col=MC[mi%MC.length];
-      const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+      // Index-based id, not name-derived: two members whose names both sanitize to the same
+      // string (accented characters, punctuation stripped to nothing, near-duplicate names)
+      // would silently collide on a name-derived id — getElementById only ever returns the
+      // first match, so the second member's chart would attach to the first member's canvas
+      // and the second member's own (visually correct, positioned) canvas stayed forever blank
+      // with no error anywhere. mi is unique by construction, so this can't collide.
+      const cid=`c-m-idx-${mi}`;
       const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
-      mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
-      if(CI[`c-m-${sid}`])CI[`c-m-${sid}`].update('none'); // belt-and-suspenders: force an immediate, non-animated paint right now rather than trusting the constructor's own first-render timing
+      mkChart(cid,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
+      if(CI[cid])CI[cid].update('none'); // belt-and-suspenders: force an immediate, non-animated paint right now rather than trusting the constructor's own first-render timing
     }catch(e){console.error(`[chart] failed to build monthly-trend chart for member "${m}":`,e);}
   });
 }
