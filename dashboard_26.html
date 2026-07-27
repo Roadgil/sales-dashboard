@@ -142,7 +142,14 @@ html,body{overflow-x:hidden;max-width:100vw;}
 :focus-visible{outline:none;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent);}
 :root{scrollbar-color:#94a3b8 transparent;scrollbar-width:thin;}
 @media(max-width:768px){.wrap{padding:16px 12px;}}
-@media print{.back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;} .card{break-inside:avoid;}}
+@media print{
+  .back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;}
+  .card{break-inside:avoid;}
+  #memberTabNav{display:none!important;}
+  #memberTabContent .tab-pane{display:block!important;page-break-after:always;}
+  #memberTabContent .tab-pane:last-child{page-break-after:auto;}
+  .rep-name-heading{display:block!important;}
+}
 </style>
 </head>
 <body>
@@ -150,7 +157,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
 
 <header>
   <div>
-    <a class="back-link" href="index.html">← Dashboard로 돌아가기</a>
+    <a class="back-link" href="index.html" data-ko="← Dashboard로 돌아가기" data-en="← Back to Dashboard">← Dashboard로 돌아가기</a>
     <h1>Sales <span>Dashboard</span></h1>
     <div class="sub">Candela Korea · <span id="quarterSubLabel">--</span> Detail Report</div>
   </div>
@@ -166,20 +173,20 @@ html,body{overflow-x:hidden;max-width:100vw;}
 <div class="view-toggle">
   <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">View:</span>
   <button class="vt-btn active" id="btn-quarter-view" onclick="setViewMode('quarter')">📅 Quarter</button>
-  <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')">🌓 상반기 Total</button>
-  <button class="vt-btn" id="btn-h2-view" onclick="setViewMode('h2')">🌗 하반기 Total</button>
+  <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')" data-ko="🌓 상반기 Total" data-en="🌓 H1 Total">🌓 상반기 Total</button>
+  <button class="vt-btn" id="btn-h2-view" onclick="setViewMode('h2')" data-ko="🌗 하반기 Total" data-en="🌗 H2 Total">🌗 하반기 Total</button>
   <button class="vt-btn" id="btn-year-view" onclick="setViewMode('year')">📆 Full Year</button>
   <span style="color:var(--border);margin:0 4px">|</span>
   <span id="yearQuarterBtns" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
   <span style="color:var(--border);margin:0 4px">|</span>
-  <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기">◀</button>
+  <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기" data-ko-title="이전 분기" data-en-title="Previous Quarter">◀</button>
   <select id="quarterSelect" onchange="changeQuarter(this.value)" style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-weight:700;font-size:10px;cursor:pointer;"></select>
-  <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기">▶</button>
+  <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기" data-ko-title="다음 분기" data-en-title="Next Quarter">▶</button>
 </div>
 <div id="quarterBreakdown" style="display:none"><div class="qbreak-grid" id="qbreakGrid"></div></div>
 
 <!-- ① 핵심 KPI -->
-<div class="section-title">핵심 지표 <span>Key Metrics · SC 기준</span></div>
+<div class="section-title" data-ko-html="핵심 지표 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Key Metrics &lt;span&gt;· By SC&lt;/span&gt;">핵심 지표 <span>· SC 기준</span></div>
 <div class="kpi-row kpi-5">
   <div class="kpi k1">
     <div class="klabel">Total Revenue</div>
@@ -190,56 +197,56 @@ html,body{overflow-x:hidden;max-width:100vw;}
       <div class="kpi-pbar-label"><span id="kpi-pbar-pct">--</span><span id="kpi-pbar-tgt">--</span></div>
     </div>
   </div>
-  <div class="kpi k2"><div class="klabel">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
-  <div class="kpi k4"><div class="klabel">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
+  <div class="kpi k2"><div class="klabel" data-ko="건수 (SC)" data-en="Count (SC)">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
+  <div class="kpi k4"><div class="klabel" data-ko="1인당 생산성" data-en="Revenue per Rep">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
   <div class="kpi k3"><div class="klabel">Top Performer</div><div class="kval v3" id="kpi-top" style="font-size:18px;padding-top:4px">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
-  <div class="kpi kg"><div class="klabel">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
+  <div class="kpi kg"><div class="klabel" data-ko="달성률 vs Target" data-en="Attainment vs Target">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
 </div>
 
 <!-- ② Achievement vs Target -->
-<div class="section-title">Target 달성 현황 <span>Achievement vs Target</span></div>
+<div class="section-title" data-ko-html="Target 달성 현황 &lt;span&gt;목표 대비 달성&lt;/span&gt;" data-en-html="Target Achievement &lt;span&gt;Progress vs Target&lt;/span&gt;">Target 달성 현황 <span>목표 대비 달성</span></div>
 <div class="card" style="margin-bottom:14px" id="targetCard">
   <div class="loading"><div class="spinner"></div></div>
 </div>
 
 <!-- ③ 월별 추이 + 제품 구성비 -->
-<div class="section-title">매출 추이 <span>Monthly Trend · SC 기준</span></div>
+<div class="section-title" data-ko-html="매출 추이 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Monthly Trend &lt;span&gt;· By SC&lt;/span&gt;">매출 추이 <span>· SC 기준</span></div>
 <div class="g g21">
-  <div class="card"><div class="ctitle" id="ct-monthly">월별 매출 추이</div><div style="position:relative;height:230px"><canvas id="monthlyChart"></canvas></div></div>
-  <div class="card"><div class="ctitle">제품 구성비</div><div style="position:relative;height:230px"><canvas id="prodChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" id="ct-monthly" data-ko="월별 매출 추이" data-en="Monthly Revenue Trend">월별 매출 추이</div><div style="position:relative;height:230px"><canvas id="monthlyChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" data-ko="제품 구성비" data-en="Product Mix">제품 구성비</div><div style="position:relative;height:230px"><canvas id="prodChart"></canvas></div></div>
 </div>
 
 <!-- ④ 담당자별 달성 -->
-<div class="section-title">담당자별 달성 현황 <span>Rep Achievement · SC 기준</span></div>
+<div class="section-title" data-ko-html="담당자별 달성 현황 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Rep Achievement &lt;span&gt;· By SC&lt;/span&gt;">담당자별 달성 현황 <span>· SC 기준</span></div>
 <div class="g g12">
-  <div class="card"><div class="ctitle">달성률 비교</div><div id="memberList"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle">담당자별 매출</div><div style="position:relative;height:260px"><canvas id="memberChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" data-ko="달성률 비교" data-en="Attainment Comparison">달성률 비교</div><div id="memberList"><div class="loading"><div class="spinner"></div></div></div></div>
+  <div class="card"><div class="ctitle" data-ko="담당자별 매출" data-en="Revenue by Rep">담당자별 매출</div><div style="position:relative;height:260px"><canvas id="memberChart"></canvas></div></div>
 </div>
 
 <!-- ⑤ 제품별 상세 -->
-<div class="section-title">제품별 매출 상세 <span>By Product · SC 기준</span></div>
+<div class="section-title" data-ko-html="제품별 매출 상세 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="By Product &lt;span&gt;· By SC&lt;/span&gt;">제품별 매출 상세 <span>· SC 기준</span></div>
 <div class="g g11">
-  <div class="card"><div class="ctitle">제품별 매출 · 건수</div><div id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle">월별 제품 구성 추이</div><div style="position:relative;height:260px"><canvas id="prodMonthChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" data-ko="제품별 매출 · 건수" data-en="Revenue & Count by Product">제품별 매출 · 건수</div><div id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
+  <div class="card"><div class="ctitle" data-ko="월별 제품 구성 추이" data-en="Monthly Product Mix Trend">월별 제품 구성 추이</div><div style="position:relative;height:260px"><canvas id="prodMonthChart"></canvas></div></div>
 </div>
 
 <!-- ⑥ 파이프라인 -->
-<div class="section-title">납품 파이프라인 <span>Pipeline · 현재 분기</span></div>
+<div class="section-title" data-ko-html="납품 파이프라인 &lt;span&gt;· 현재 분기&lt;/span&gt;" data-en-html="Pipeline &lt;span&gt;· Current Quarter&lt;/span&gt;">납품 파이프라인 <span>· 현재 분기</span></div>
 <div class="kpi-row kpi-3">
-  <div class="kpi k1"><div class="klabel">Pending 예상 매출</div><div class="kval v1" id="pipe-amt">--</div><div class="ksub" id="pipe-cnt">--</div></div>
-  <div class="kpi k4"><div class="klabel">ACT (납품완료)</div><div class="kval v4" id="act-amt">--</div><div class="ksub" id="act-cnt">--</div></div>
-  <div class="kpi kg"><div class="klabel">SC + ACT + Pending</div><div class="kval vg" id="total-pipe">--</div><div class="ksub">전체 예상치</div></div>
+  <div class="kpi k1"><div class="klabel" data-ko="Pending 예상 매출" data-en="Pending Revenue (Est.)">Pending 예상 매출</div><div class="kval v1" id="pipe-amt">--</div><div class="ksub" id="pipe-cnt">--</div></div>
+  <div class="kpi k4"><div class="klabel" data-ko="ACT (납품완료)" data-en="ACT (Delivered)">ACT (납품완료)</div><div class="kval v4" id="act-amt">--</div><div class="ksub" id="act-cnt">--</div></div>
+  <div class="kpi kg"><div class="klabel">SC + ACT + Pending</div><div class="kval vg" id="total-pipe">--</div><div class="ksub" data-ko="전체 예상치" data-en="Total Estimate">전체 예상치</div></div>
 </div>
 
 <!-- ⑦ 담당자별 상세 -->
-<div class="section-title">담당자별 상세 <span>Rep Detail</span></div>
+<div class="section-title" data-ko-html="담당자별 상세 &lt;span&gt;· 개인별 내역&lt;/span&gt;" data-en-html="Rep Detail &lt;span&gt;· Individual Breakdown&lt;/span&gt;">담당자별 상세 <span>· 개인별 내역</span></div>
 <div class="card" style="margin-bottom:14px">
   <div class="tab-nav" id="memberTabNav"></div>
   <div id="memberTabContent"><div class="loading"><div class="spinner"></div></div></div>
 </div>
 
 <footer>
-  <span>Source: Firebase Firestore · 실시간 연동 · SC 기준</span>
+  <span data-ko="Source: Firebase Firestore · 실시간 연동 · SC 기준" data-en="Source: Firebase Firestore · Real-time Sync · By SC">Source: Firebase Firestore · 실시간 연동 · SC 기준</span>
   <span>Candela Korea Sales Ops</span>
 </footer>
 </div>
@@ -254,11 +261,18 @@ html,body{overflow-x:hidden;max-width:100vw;}
 let _lang = localStorage.getItem('lang')||'ko';
 function t(ko,en){return _lang==='en'?en:ko;}
 function toggleLang(){_lang=_lang==='ko'?'en':'ko';localStorage.setItem('lang',_lang);applyLang();if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);}
+function applyStaticI18n(){
+  document.querySelectorAll('[data-ko]').forEach(el=>{el.textContent=_lang==='en'?(el.getAttribute('data-en')||el.getAttribute('data-ko')):el.getAttribute('data-ko');});
+  document.querySelectorAll('[data-ko-html]').forEach(el=>{el.innerHTML=_lang==='en'?(el.getAttribute('data-en-html')||el.getAttribute('data-ko-html')):el.getAttribute('data-ko-html');});
+  document.querySelectorAll('[data-ko-title]').forEach(el=>{el.title=_lang==='en'?(el.getAttribute('data-en-title')||el.getAttribute('data-ko-title')):el.getAttribute('data-ko-title');});
+}
 function applyLang(){
   document.getElementById('langToggleBtn').textContent=_lang==='ko'?'🇺🇸 EN':'🇰🇷 KO';
   const nb=document.getElementById('dataNoteBar');
   if(nb) nb.textContent=t('집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외)','Revenue basis: Ship Confirm only (ACT·Pending·Back up excluded)');
+  applyStaticI18n();
 }
+applyLang();
 
 const firebaseConfig={apiKey:"AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",authDomain:"sales-dashboard-d0d13.firebaseapp.com",projectId:"sales-dashboard-d0d13",storageBucket:"sales-dashboard-d0d13.firebasestorage.app",messagingSenderId:"870275096697",appId:"1:870275096697:web:cd7373b77358681e21b4a8"};
 if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
@@ -558,6 +572,7 @@ function render(salesData,memberTargets,qTargets){
     const mpe=Object.entries(mp).sort((a,b)=>b[1]-a[1]),mmp=mpe[0]?.[1]||1;
     const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
     return `<div class="tab-pane${mi===0?' active':''}" id="tab-m-${sid}">
+      <div class="rep-name-heading" style="display:none;font-weight:800;font-size:15px;color:#1e293b;margin-bottom:10px">${m}</div>
       <div class="sr-kpis">
         <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
           <div class="klabel">Total (SC)</div>
@@ -629,8 +644,8 @@ function showNotice(html){
 // Firestore 구독 — 에러 콜백 포함(권한 거부 등이 조용히 무시되지 않도록)
 function subscribe(){
   const onErr=(label)=>(e)=>{
-    console.error(`[Firestore] ${label} 구독 실패:`,e);
-    showNotice(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`);
+    console.error(`[Firestore] ${label} subscribe failed:`,e);
+    showNotice(t(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`,`⚠️ Failed to load data (${label})<br>${e.code||e.message||''}<br><br>Please check Firestore permissions or your network connection.`));
   };
   db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();updateER();}_loaded.q=true;tryRender();}, onErr('quarterTargets'));
   db.collection("sales").onSnapshot(snap=>{_sales=snap.docs.map(d=>d.data());_loaded.s=true;tryRender();}, onErr('sales'));
@@ -649,7 +664,7 @@ auth.onAuthStateChanged(user=>{
     _subscribed=true;
     subscribe();
   } else {
-    showNotice(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--accent);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`);
+    showNotice(t(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--accent);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`,`🔒 Login required.<br><br>Please log in from the <a href="index.html" style="color:var(--accent);text-decoration:underline">main dashboard</a> first,<br>then reopen this page.`));
   }
 });
 </script>
