@@ -99,14 +99,14 @@ h1 span{color:var(--accent);}
 .card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:none;}
 .ctitle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .ctitle::before{content:'';width:3px;height:10px;background:var(--accent);border-radius:2px;flex-shrink:0;}
-.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;}
+.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap;}
 .srow:last-child{border-bottom:none;}
 .savt{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
-.sinfo{flex:1;}
+.sinfo{flex:1 1 160px;min-width:0;}
 .sname{font-size:12px;margin-bottom:4px;font-weight:600;color:#1e293b;}
 .sbw{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px;}
 .sbf{height:100%;border-radius:3px;transition:width 1s ease;}
-.samt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;min-width:90px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
+.samt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;min-width:90px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);margin-left:auto;}
 .spct{font-size:9px;color:var(--muted);}
 /* Signed-delta status badge (ahead/behind target) — same low-opacity-tint + ring pattern as
    index.html's .sld-badge, ported verbatim so achievement signals read identically on both pages. */
@@ -144,11 +144,14 @@ html,body{overflow-x:hidden;max-width:100vw;}
 @media(max-width:768px){.wrap{padding:16px 12px;}}
 @media print{
   .back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;}
-  .card{break-inside:avoid;}
+  .card{break-inside:avoid;page-break-inside:avoid;}
+  .section-title{break-after:avoid;page-break-after:avoid;}
   #memberTabNav{display:none!important;}
   #memberTabContent .tab-pane{display:block!important;page-break-after:always;}
   #memberTabContent .tab-pane:last-child{page-break-after:auto;}
   .rep-name-heading{display:block!important;}
+  .g11,.g21,.g12{grid-template-columns:1fr!important;}
+  .kpi-5,.kpi-3{grid-template-columns:1fr 1fr!important;}
 }
 </style>
 </head>
@@ -355,8 +358,18 @@ const COLORS=['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecf
 const MC=['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
 const TT={backgroundColor:'#fff',borderColor:'#e4e6eb',borderWidth:1,padding:10,titleColor:'#1a1a2e',bodyColor:'#1a1a2e'};
 Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable', ui-sans-serif, system-ui, sans-serif";Chart.defaults.font.size=11;
+Chart.defaults.animation=false; // this is a static report, not an interactive dashboard — instant,
+// fully-drawn charts every time avoid a whole class of "chart mid-animation when captured" bugs
+// (blank/partial print output, since a hidden-then-shown chart's progressive draw-in would
+// otherwise be mid-flight the instant the browser rasterizes the print page).
 const CI={};
 function mkChart(id,cfg){if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
+// Charts created inside a hidden (display:none) tab-pane are sized 0x0 by Chart.js and don't
+// self-correct when print CSS makes every pane visible, and print's grid-to-1-column reflow
+// (see @media print above) changes every chart's container size too — resize() alone proved
+// unreliable across browsers for a canvas that was 0x0 at creation, so fully recreate every
+// chart from current data right before the print pass, once print layout/CSS has settled.
+window.addEventListener('beforeprint',()=>{if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);});
 
 // ── 3-zone ascending achievement family (ported from index.html): zone1 slate <100%,
 // zone2 blue 100-120%, zone3 emerald 120%+ — the only status color vocabulary this page uses. ──
@@ -611,13 +624,17 @@ function render(salesData,memberTargets,qTargets){
     </div>`;
   }).join('');
 
-  requestAnimationFrame(()=>{
-    allMs.forEach((m,mi)=>{
-      const col=MC[mi%MC.length];
-      const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
-      const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
-      mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
-    });
+  // Was requestAnimationFrame-deferred; every other chart on this page (monthlyChart, prodChart,
+  // memberChart, prodMonthChart) is created synchronously right here in the same tick and all
+  // print fine. Deferring only these per-rep charts by a frame meant a print pass that samples
+  // the page shortly after calling render() (see the beforeprint handler above) could capture
+  // the page before this frame ran, leaving every per-rep monthly-trend chart blank. cont.innerHTML
+  // is already committed synchronously above, so the canvases exist now — no need to wait a frame.
+  allMs.forEach((m,mi)=>{
+    const col=MC[mi%MC.length];
+    const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+    const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
+    mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
   });
 }
 
