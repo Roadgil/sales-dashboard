@@ -659,7 +659,15 @@ function switchMTab(id,btn){
   document.querySelectorAll('#memberTabNav .tab-btn').forEach(b=>b.classList.remove('active'));
   const sid=id.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
   const pane=document.getElementById('tab-m-'+sid);
-  if(pane)pane.classList.add('active');
+  if(pane){
+    pane.classList.add('active');
+    // Every rep's monthly-trend chart was created while its own tab-pane was still
+    // display:none (only the first/default tab starts visible), so Chart.js drew it at
+    // 0x0 and never repaints on its own just because a CSS class later makes it visible.
+    // Resize it now that the pane is actually on-screen with real dimensions.
+    const canvas=pane.querySelector('canvas');
+    if(canvas){const ch=Chart.getChart(canvas);if(ch)ch.resize();}
+  }
   btn.classList.add('active');
 }
 
