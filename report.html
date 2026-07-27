@@ -3,15 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>영업 납품처 FCST Dashboard</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f172a'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%2360a5fa' font-family='system-ui,sans-serif' font-weight='800'%3ES%3C/text%3E%3C/svg%3E">
+  <title>대표님 보고용 리포트 (Sales Progress)</title>
 
-  <!-- Pretendard Variable — self-hosted subsets (see .omd/type-proof.md). Two subsets so the
-       browser only fetches the glyphs a given code point needs; unicode-range matches the
-       exact subsetting fingerprint recorded in the type proof. font-display: swap tested. -->
+  <!-- Pretendard Variable — self-hosted subsets, same system as index.html (see .omd/type-proof.md).
+       Two subsets so the browser only fetches the glyphs a given code point needs; hangul/latin-num
+       subsets were extended to also cover this report's own copy (닫기, Feb/Jan/Jun/Jul, #, ~) — see
+       .omd/decisions.md. -->
   <style>
 @font-face {
   font-family: 'Pretendard Variable';
@@ -32,7 +29,7 @@
   </style>
 
   <style>
-/* Tailwind utilities compiled locally — replaces cdn.tailwindcss.com (no CDN, version-stable) */
+/* Tailwind utilities compiled locally (replaces the Play CDN; no external fetch, version-stable) */
 /* Tailwind v3 Preflight (base reset) — matches what cdn.tailwindcss.com applied */
 *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}
 ::before,::after{--tw-content:''}
@@ -153,7 +150,6 @@ img,video{max-width:100%;height:auto}
 .font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
 .font-normal{font-weight:400}
 .font-sans{font-family:'Pretendard Variable',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
-.font-mono{font-variant-numeric:tabular-nums}
 .font-semibold{font-weight:600}
 .gap-1{gap:0.25rem}
 .gap-1\.5{gap:0.375rem}
@@ -402,12 +398,11 @@ img,video{max-width:100%;height:auto}
   <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
-
   <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore-compat.js"></script>
 
-  <!-- ── [FIX #5] Firebase 설정 공통화: 단일 위치에서만 초기화 ── -->
+  <!-- [FIX #5] Firebase 초기화 단일 위치 -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",
@@ -421,1873 +416,64 @@ img,video{max-width:100%;height:auto}
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-
-    // ── 매출 집계 기준: Ship Confirm만 Target 대비 매출에 포함 ──
-    // Status 체계: Ship Confirm(매출집계) > ACT(납품완료) > Pending(납품예정) > Back up(제외)
-    const REVENUE_STATUSES = ['Ship Confirm', 'ACT'];  // 예상치: ACT + SC만 (Pending 제외)
-    function isRevenue(d) { return REVENUE_STATUSES.includes(d.status); }
-    function isACT(d)     { return d.status === 'ACT'; }
-    function isShipConfirm(d) { return d.status === 'Ship Confirm'; }
-  </script>
-</head>
-<body className="bg-gray-100">
-  <div id="root"></div>
-
-  <script type="text/babel">
-    // localStorage 안전 래퍼
-    const safeLS = {
-      get(k)    { try { return window.localStorage.getItem(k); } catch(e) { return null; } },
-      set(k,v)  { try { window.localStorage.setItem(k, v); }     catch(e) {} },
-      remove(k) { try { window.localStorage.removeItem(k); }     catch(e) {} },
-    };
-    const { useState, useEffect, useCallback, useRef } = React;
-
-    // ── [FIX #10] 토스트 컴포넌트 ──────────────────────────────────────────
-    const Toast = ({ msg, type }) => (
-      <div style={{
-        position:'fixed', bottom:'28px', left:'50%', transform:'translateX(-50%)',
-        zIndex:99999, background: type==='error' ? '#dc2626' : type==='warn' ? '#d97706' : '#15803d',
-        color:'#fff', padding:'11px 24px', borderRadius:'10px',
-        fontSize:'13px', fontWeight:'700', boxShadow:'0 4px 18px rgba(0,0,0,0.22)',
-        whiteSpace:'nowrap', pointerEvents:'none',
-        animation:'toastIn 0.22s ease'
-      }}>{msg}</div>
-    );
-
-    const LangBtn = ({ lang, setLang, er, onErClick, user, onLoginClick, onLogoutClick }) => (
-      <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
-        <button onClick={user ? onLogoutClick : onLoginClick}
-          title={user ? (user.email || '') : (lang==='ko' ? '편집하려면 로그인' : 'Sign in to edit')}
-          style={{ padding:'6px 12px', borderRadius:'20px', border:`1.5px solid ${user ? '#16a34a' : '#475569'}`,
-            background: user ? '#052e16' : '#0f172a', color: user ? '#86efac' : '#94a3b8',
-            fontWeight:'700', fontSize:'11px', fontFamily:'monospace', display:'flex', alignItems:'center', gap:'5px',
-            boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer', maxWidth:'160px' }}>
-          <span>{user ? '🔓' : '🔐'}</span>
-          <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-            {user ? (user.email||'').split('@')[0] : (lang==='ko' ? '로그인' : 'Sign in')}
-          </span>
-        </button>
-        {er && (
-          <button onClick={onErClick} title={lang==='ko' ? '환율 수정' : 'Edit ER'} data-action="er-edit"
-            style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569',
-              background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px',
-              fontFamily:'monospace', display:'flex', alignItems:'center', gap:'4px',
-              boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer' }}>
-            <span style={{color:'#64748b'}}>ER</span>
-            <span style={{color:'#e2e8f0'}}>{'₩' + er.toLocaleString()}</span>
-            <span style={{color:'#475569',fontSize:'9px',marginLeft:'2px'}}>✏️</span>
-          </button>
-        )}
-        <button
-          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); safeLS.set('lang',next); }}
-          data-action="lang-toggle"
-          style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b',
-            background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px',
-            boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
-        >
-          {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
-        </button>
-      </div>
-    );
-
-    // ── 멤버 상세 테이블 열 필터 헤더 (컴포넌트를 App 밖에 고정해 리렌더마다 재마운트/스크롤 초기화 되는 것 방지) ──
-    const MemberFilterTh = ({ tableKey, col, label, get, rows, openKey, onToggleOpen, filterArr, onToggleValue, onClear, align }) => {
-      const isOpen = openKey === `${tableKey}__${col}`;
-      const active = (filterArr||[]).length > 0;
-      const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
-      const vals = uniq(rows.map(get));
-      const btnRef = useRef(null);
-      const [pos, setPos] = useState(null);
-      // 테이블 감싸는 div가 overflow-x-auto라 position:absolute 드롭다운이 세로로 잘렸음 →
-      // document.body로 포탈시켜서 버튼 위치 기준 fixed로 띄우면 안 잘리고 다 보임
-      useEffect(() => {
-        if (!isOpen || !btnRef.current) { setPos(null); return; }
-        const menuW = 210;
-        const r = btnRef.current.getBoundingClientRect();
-        const left = Math.max(8, Math.min(align==='right' ? r.right - menuW : r.left, window.innerWidth - menuW - 8));
-        setPos({ top: r.bottom + 4, left });
-        const closeOnScroll = () => onToggleOpen();
-        window.addEventListener('scroll', closeOnScroll, true);
-        return () => window.removeEventListener('scroll', closeOnScroll, true);
-      }, [isOpen]);
-      return (
-        <th className={`p-2 md:p-3 relative ${align==='right'?'text-right':''}`} style={{userSelect:'none'}}>
-          <div className={`flex items-center gap-1 ${align==='right'?'justify-end':''}`}>
-            <span>{label}</span>
-            <button ref={btnRef} onClick={e=>{e.stopPropagation(); onToggleOpen();}}
-              style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}}
-              title={active?`${filterArr.length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
-          </div>
-          {isOpen && pos && ReactDOM.createPortal(
-            <div onClick={e=>e.stopPropagation()} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 8px 28px rgba(0,0,0,0.22)',minWidth:'200px',maxWidth:'260px',maxHeight:'340px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-              <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터 ({vals.length})</span>
-                <button onClick={onClear} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
-              </div>
-              <div style={{overflowY:'auto',flex:1}}>
-                {vals.length===0 ? <div style={{padding:'10px',fontSize:'11px',color:'#94a3b8',textAlign:'center'}}>값 없음</div> : vals.map(val=>{
-                  const checked = (filterArr||[]).includes(val);
-                  const count   = rows.filter(r=>get(r)===val).length;
-                  return (
-                    <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
-                      <input type="checkbox" checked={checked} onChange={()=>onToggleValue(val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
-                      <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
-                      <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>,
-            document.body
-          )}
-        </th>
-      );
-    };
-
-    const MemberTableHead = ({ tableKey, rows, filters, openKey, onToggleOpen, onToggleValue, onClear, T }) => (
-      <tr>
-        <MemberFilterTh tableKey={tableKey} col="status" label="Status" get={r=>r.status} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('status')} filterArr={filters.status} onToggleValue={val=>onToggleValue('status',val)} onClear={()=>onClear('status')}/>
-        <th className="p-2 md:p-3">{T.contractDate}</th>
-        <th className="p-2 md:p-3">{T.deliveryDate}</th>
-        <MemberFilterTh tableKey={tableKey} col="contractType" label={T.contract} get={r=>r.contractType||'일반'} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('contractType')} filterArr={filters.contractType} onToggleValue={val=>onToggleValue('contractType',val)} onClear={()=>onClear('contractType')}/>
-        <MemberFilterTh tableKey={tableKey} col="dealer" label="Dealer" get={r=>r.dealerName||'-'} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('dealer')} filterArr={filters.dealer} onToggleValue={val=>onToggleValue('dealer',val)} onClear={()=>onClear('dealer')}/>
-        <th className="p-2 md:p-3">SO</th>
-        <MemberFilterTh tableKey={tableKey} col="account" label="Account" get={r=>r.account} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('account')} filterArr={filters.account} onToggleValue={val=>onToggleValue('account',val)} onClear={()=>onClear('account')}/>
-        <MemberFilterTh tableKey={tableKey} col="product" label="Product" get={r=>r.product} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('product')} filterArr={filters.product} onToggleValue={val=>onToggleValue('product',val)} onClear={()=>onClear('product')}/>
-        <MemberFilterTh tableKey={tableKey} col="accType" label="Acc type" get={r=>r.accType||'-'} rows={rows}
-          openKey={openKey} onToggleOpen={()=>onToggleOpen('accType')} filterArr={filters.accType} onToggleValue={val=>onToggleValue('accType',val)} onClear={()=>onClear('accType')}/>
-        <th className="p-2 md:p-3 text-right">KRW / USD</th>
-        <th className="p-2 md:p-3 text-center">{T.actions}</th>
-      </tr>
-    );
-
-    const App = () => {
-      const SECRET_PASSWORD = "dladydcjf";
-      // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
-      const CACHE_VERSION = 'v4';
-      if (safeLS.get('cacheVersion') !== CACHE_VERSION) {
-        safeLS.remove('summaryCardOrder');
-        safeLS.remove('summaryCardColors');
-        safeLS.set('cacheVersion', CACHE_VERSION);
-      }
-
-      const [lang, setLang] = useState(safeLS.get('lang') || 'ko');
-      const [authChecking, setAuthChecking] = useState(false);
-      const [authUser, setAuthUser]         = useState(null);
-
-      const [emailInput, setEmailInput] = useState('');
-      const [linkSent, setLinkSent]     = useState(false);
-      const [sendingLink, setSendingLink] = useState(false);
-      const [emailError, setEmailError]  = useState('');
-
-      // ── [FIX #10] 토스트 상태 ──
-      const [toast, setToast] = useState(null);
-      const showToast = useCallback((msg, type='success') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 3000);
-      }, []);
-
-      const ALLOWED_DOMAIN = 'candelamedical.com';
-
-      // 인증 없음 - 모든 사용자 접근 허용
-
-
-
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-      const T = {
-        loginTitle:        lang==='ko' ? '영업 납품처 Dashboard'      : 'Sales Delivery Dashboard',
-        noExportData:      lang==='ko' ? '추출할 데이터가 없습니다.'   : 'No data to export.',
-        confirmDelete:     lang==='ko' ? '이 납품 데이터를 정말 삭제하시겠습니까?' : 'Are you sure you want to delete this entry?',
-        yearSuffix:        lang==='ko' ? '년'      : '',
-        addQuarterBtn:     lang==='ko' ? '+ 분기 추가' : '+ Add Quarter',
-        execReport:        lang==='ko' ? '📊 대표님 보고용 리포트' : '📊 Executive Report',
-        exportCSV:         lang==='ko' ? '엑셀 (CSV) 추출' : 'Export (CSV)',
-        logout:            lang==='ko' ? '로그아웃'  : 'Logout',
-        promptTeam:        lang==='ko' ? '추가할 탭 이름을 입력하세요 (예: Team 4)' : 'Enter new tab name (e.g. Team 4)',
-        promptMember:      lang==='ko' ? '에 추가할 멤버 이름을 입력하세요' : ' — Enter new member name',
-        promptQuarter:     lang==='ko' ? '추가할 년도와 분기를 입력하세요 (예: 2026 Q3)' : 'Enter year and quarter (e.g. 2026 Q3)',
-        promptRename:      lang==='ko' ? '새로운 이름을 입력하세요' : 'Enter new name',
-        confirmDelMember:  lang==='ko' ? '멤버를 삭제하시겠습니까?\n해당 멤버의 데이터는 삭제되지 않습니다.' : 'Delete this member?\nTheir data will NOT be deleted.',
-        overallTarget:     lang==='ko' ? '🚀 전체 영업 목표 달성 현황' : '🚀 Overall Sales Target Achievement',
-        quarterSummary:    lang==='ko' ? '📋 분기 요약 지표 (Summary)' : '📋 Quarter Summary',
-        er:                lang==='ko' ? '적용 환율 (ER) ✏️'           : 'Exchange Rate (ER) ✏️',
-        targetKRWLabel:    lang==='ko' ? 'Target (KRW) ✏️'            : 'Target (KRW) ✏️',
-        targetPlaceholder: lang==='ko' ? '목표 금액 기입'               : 'Enter target amount',
-        estimated:         lang==='ko' ? '예상치 KRW (ACT+Pending+SC)' : 'Estimated KRW (ACT+Pending+SC)',
-        gmppEstimated:     lang==='ko' ? 'GMPP 예상치 (KRW)'           : 'GMPP Estimated (KRW)',
-        attainRate:        lang==='ko' ? '% (예상치 달성률)'            : '% (Attainment Rate)',
-        salesTypeShare:    lang==='ko' ? '🔄 Sales Type 비중 (Direct vs Indirect)' : '🔄 Sales Type Share (Direct vs Indirect)',
-        tabByEquip:        lang==='ko' ? '📊 장비별 (SC 기준)'          : '📊 By Equipment (SC)',
-        tabDealer:         lang==='ko' ? '🤝 딜러별 (SC 기준)'          : '🤝 Dealers (SC)',
-        tabMember:         lang==='ko' ? '🧑‍💼 멤버 달성률 (SC 기준)'     : '🧑‍💼 Member Achievement (SC)',
-        addTab:            lang==='ko' ? '+ 탭 추가'                   : '+ Add Tab',
-        addMember:         lang==='ko' ? '+ 항목 추가'                  : '+ Add Member',
-        memberList:        lang==='ko' ? '목록'                        : 'List',
-        noMembers:         lang==='ko' ? "등록된 항목이 없습니다. 우측 상단의 '+ 항목 추가' 버튼을 눌러주세요." : "No entries yet. Click '+ Add Member' above.",
-        memberSubtitle:    lang==='ko' ? '담당 납품처 및 데이터 관리 →' : 'Delivery & Data Management →',
-        rename:            lang==='ko' ? '✏️ 이름 수정'                : '✏️ Rename',
-        delete:            lang==='ko' ? '🗑️ 삭제'                    : '🗑️ Delete',
-        backBtn:           lang==='ko' ? '뒤로가기 (팀 목록)'           : 'Back (Team List)',
-        cumulative:        lang==='ko' ? '🎯 누적 달성 현황 (Ship Confirm 기준)' : '🎯 Cumulative Achievement (Ship Confirm)',
-        target100label:    lang==='ko' ? '100% Target (KRW) ✏️ 직접기입' : '100% Target (KRW) ✏️ Manual',
-        targetPlaceholder2:lang==='ko'? '목표금액'                     : 'Target Amount',
-        editMode:          lang==='ko' ? '✨ 데이터 수정 모드 진행 중...' : '✨ Edit mode in progress...',
-        statusLabel:       lang==='ko' ? '상태 (Status)'              : 'Status',
-        contractLabel:     lang==='ko' ? '계약 구분 (Contract Type)'   : 'Contract Type',
-        contractDateLabel: lang==='ko' ? '계약일'                      : 'Contract Date',
-        deliveryLabel:     lang==='ko' ? '납품예정일'                   : 'Delivery Date',
-        selectRequired:    lang==='ko' ? '선택 (필수)'                 : 'Select (Required)',
-        accountLabel:      lang==='ko' ? 'Account (병원/납품처명)'      : 'Account (Hospital / Clinic)',
-        krwPlaceholder:    lang==='ko' ? '원화 입력 시 달러 자동계산'    : 'Enter KRW, USD auto-calculated',
-        saveEdit:          lang==='ko' ? '수정 완료'                   : 'Save Edit',
-        saveNew:           lang==='ko' ? '데이터 신규 저장'             : 'Save New',
-        cancelEdit:        lang==='ko' ? '수정 취소'                   : 'Cancel Edit',
-        deliveryStatus:    lang==='ko' ? '✅ 납품 완료 현황 (ACT)'      : '✅ Delivery Completed (ACT)',
-        deliveryDate:      lang==='ko' ? '납품일'                      : 'Del. Date',
-        contractDate:      lang==='ko' ? '계약일'                      : 'Cont. Date',
-        contract:          lang==='ko' ? '계약'                        : 'Contract',
-        actions:           lang==='ko' ? '관리'                        : 'Actions',
-        noDelivery:        lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
-        editBtn:           lang==='ko' ? '수정'                        : 'Edit',
-        deleteBtn:         lang==='ko' ? '삭제'                        : 'Del',
-        pendingList:       lang==='ko' ? '📋 납품 예정 리스트 (Pending)' : '📋 Pending Delivery List',
-        noPending:         lang==='ko' ? '등록된 납품예정 데이터가 없습니다.' : 'No pending delivery data registered.',
-        backupList:        lang==='ko' ? '🗂️ Back up 리스트 (매출 미집계)' : '🗂️ Back up List (Excluded from Revenue)',
-        noBackup:          lang==='ko' ? '등록된 Back up 데이터가 없습니다.' : 'No back up data registered.',
-        minalList:         lang==='ko' ? '🔴 미납 리스트 (매출 미집계)' : '🔴 Unpaid List (Excluded from Revenue)',
-        shipConfirmList:   lang==='ko' ? '🚢 Ship Confirm 현황 (매출 집계 기준)' : '🚢 Ship Confirm (Revenue Target Basis)',
-        shipConfirmAmt:    lang==='ko' ? '누적 달성치 (Ship Confirm → Target 대비)' : 'Cumulative vs Target (Ship Confirm)',
-        shipConfirmUSDLabel: lang==='ko' ? '현재 누적 예상치 (USD)' : 'Cumulative Estimate (USD)',
-        noShipConfirm:     lang==='ko' ? 'Ship Confirm 완료된 데이터가 없습니다.' : 'No Ship Confirmed data.',
-        shipConfirmPwdTitle: lang==='ko' ? 'Ship Confirm 완료 수정/삭제' : 'Edit/Delete Ship Confirmed',
-        shipConfirmPwdDesc:  lang==='ko' ? 'Ship Confirm 완료 데이터를 수정/삭제하려면 비밀번호를 입력하세요.' : 'Enter password to edit/delete Ship Confirmed data.',
-        noMinal:           lang==='ko' ? '등록된 미납 데이터가 없습니다.' : 'No unpaid data registered.',
-        currentEst:        lang==='ko' ? '현재 누적 예상치'             : 'Current Cumulative Estimate',
-        achievement:       lang==='ko' ? '달성률'                      : 'Achievement',
-        cases:             lang==='ko' ? '건'                          : 'cs',
-        gmppTargetPH:      lang==='ko' ? 'GMPP 목표 기입'              : 'Enter GMPP target',
-        erPlaceholder:     lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
-        // [FIX #2] 검증 메시지
-        valAccount:        lang==='ko' ? 'Account(납품처)를 입력해주세요.' : 'Please enter the Account name.',
-        valStatus:         lang==='ko' ? 'Status를 선택해주세요.' : 'Please select a Status.',
-        valSalesType:      lang==='ko' ? 'Sales Type을 선택해주세요.' : 'Please select a Sales Type.',
-        valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
-        valDelivery:       lang==='ko' ? '납품예정일을 입력해주세요.' : 'Please enter a Delivery Date.',
-        valPriceNaN:       lang==='ko' ? '가격(KRW)은 숫자만 입력 가능합니다.' : 'Price (KRW) must be a number.',
-        valPriceNeg:       lang==='ko' ? '가격(KRW)은 0 이상이어야 합니다.' : 'Price (KRW) must be 0 or greater.',
-        valPriceBig:       lang==='ko' ? '가격(KRW)이 너무 큽니다. 단위를 확인해주세요.' : 'Price (KRW) seems too large. Please verify.',
-        // [FIX #8] CSV 내보내기
-        csvAll:            lang==='ko' ? '전체 분기 내보내기' : 'Export All Quarters',
-        csvCurrent:        lang==='ko' ? '현재 분기만 내보내기' : 'Export Current Quarter',
-        // GAP / GMPP GAP direction badge (copy-deck.md)
-        gapStatusAhead:    lang==='ko' ? '목표 초과'  : 'Ahead of Target',
-        gapStatusBehind:   lang==='ko' ? '목표 미달'  : 'Behind Target',
-      };
-
-      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
-      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
-      const [teams, setTeams] = useState({ 'Team 1': ['Kim SH', 'Oh SG'], 'Team 2': ['Baek SC', 'Lee GR'], 'Team 3': ['YC lim'] });
-      const [selectedTeam, setSelectedTeam]     = useState('Team 1');
-      const [selectedMember, setSelectedMember] = useState(null);
-      const [activeStatTab, setActiveStatTab]   = useState('product');
-      // [FIX #분기별 개인목표] memberTargets는 분기별로 독립된 값을 가진다: { [quarter]: { [member]: target } }
-      // 과거에는 { member: target } 형태(모든 분기 공용)였기 때문에 한 분기에서 목표를 바꾸면
-      // 다른 모든 분기의 목표까지 같이 바뀌는 문제가 있었다. 아래 초기값은 기존 두 분기에
-      // 동일한 값을 넣어 기존 화면과 동일하게 보이도록 한 것뿐, 이후로는 분기마다 따로 저장된다.
-      const [memberTargets, setMemberTargets]   = useState({
-        '2026 Q1': { 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 },
-        '2026 Q2': { 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 },
-      });
-      const [teamTargets, setTeamTargets]       = useState({});
-      const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
-      const [salesData, setSalesData]           = useState([]);
-
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '' };
-      const [form, setForm]         = useState(initialForm);
-      const [editingId, setEditingId] = useState(null);
-      const [isSaving, setIsSaving]   = useState(false);
-
-      // ── Firebase Auth ────────────────────────────────────────────────────
-      const [currentUser, setCurrentUser]     = useState(() => auth.currentUser);
-      const [showLoginModal, setShowLoginModal] = useState(false);
-      const [loginEmail, setLoginEmail]       = useState('');
-      const [loginPwd, setLoginPwd]           = useState('');
-      const [loginError, setLoginError]       = useState('');
-      const [isLoggingIn, setIsLoggingIn]     = useState(false);
-      const [authReady, setAuthReady] = useState(false);
-      useEffect(() => auth.onAuthStateChanged(u => { setCurrentUser(u); setAuthReady(true); }), []);
-      const requireAuth = () => { if (auth.currentUser) return true; setShowLoginModal(true); return false; };
-      // ── 관리자 권한 ──
-      // 환율(ER) · 분기 목표 관리자
-      const TARGET_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
-      // Ship Confirm 완료 데이터 수정/삭제 관리자
-      const SC_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
-      const hasRole = (list) => list.includes((auth.currentUser?.email||'').toLowerCase());
-      const requireRole = (list) => {
-        if (!requireAuth()) return false;
-        if (!hasRole(list)) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
-        return true;
-      };
-      const requireTargetAdmin = () => requireRole(TARGET_ADMIN_EMAILS);
-      const requireScAdmin     = () => requireRole(SC_ADMIN_EMAILS);
-      const handleLogin = () => {
-        if (isLoggingIn) return;
-        if (!loginEmail.trim() || !loginPwd) { setLoginError(lang==='ko' ? '이메일과 비밀번호를 입력하세요.' : 'Enter email and password.'); return; }
-        setIsLoggingIn(true); setLoginError('');
-        auth.signInWithEmailAndPassword(loginEmail.trim(), loginPwd)
-          .then(() => { setShowLoginModal(false); setLoginEmail(''); setLoginPwd(''); showToast(lang==='ko' ? '로그인 완료 ✓' : 'Signed in ✓'); })
-          .catch(() => setLoginError(lang==='ko' ? '❌ 이메일 또는 비밀번호가 올바르지 않습니다.' : '❌ Invalid email or password.'))
-          .finally(() => setIsLoggingIn(false));
-      };
-      const handleLogout = () => { auth.signOut().then(() => showToast(lang==='ko' ? '로그아웃 되었습니다' : 'Signed out')); };
-
-      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','actEstimatedKRW','shipConfirmKRW','gapKRW','gmppTarget','gmppEstimated','gmppGap'];
-      const [cardOrder, setCardOrder] = useState(() => {
-        try {
-          const s = safeLS.get('summaryCardOrder');
-          if (!s) return DEFAULT_CARD_ORDER;
-          const saved = JSON.parse(s);
-          if (!Array.isArray(saved)) { safeLS.remove('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
-          const hasAllCards = DEFAULT_CARD_ORDER.every(id => saved.includes(id));
-          if (!hasAllCards) { safeLS.remove('summaryCardOrder'); return DEFAULT_CARD_ORDER; }
-          return saved;
-        } catch { return DEFAULT_CARD_ORDER; }
-      });
-
-      const CARD_PALETTES = {
-        // Toss-anchor quiet register (index-toss-variant.html): the default/neutral swatch is
-        // flat white + a grey200 hairline border (measured Toss neutral tokens), not the slate-50
-        // tinted panel used in index.html — near-flat elevation, color reserved for meaning only.
-        // The other 5 user-selectable swatches below are untouched so the palette-picker feature
-        // (T9: free per-card recolor, persisted across reload) still behaves exactly as before.
-        slate:  { bg: '#ffffff', border: '#e5e8eb', title: '#4e5968', value: '#191f28', inputBorder: '#d1d6db', label: 'Slate' },
-        blue:   { bg: '#eff6ff', border: '#93c5fd', title: '#1d4ed8', value: '#1e3a5f', inputBorder: '#60a5fa', label: 'Blue' },
-        green:  { bg: '#f0fdf4', border: '#86efac', title: '#15803d', value: '#14532d', inputBorder: '#4ade80', label: 'Green' },
-        yellow: { bg: '#fefce8', border: '#fde047', title: '#a16207', value: '#713f12', inputBorder: '#facc15', label: 'Yellow' },
-        purple: { bg: '#faf5ff', border: '#c4b5fd', title: '#6d28d9', value: '#3b0764', inputBorder: '#a78bfa', label: 'Purple' },
-        rose:   { bg: '#fff1f2', border: '#fda4af', title: '#be123c', value: '#881337', inputBorder: '#fb7185', label: 'Rose' },
-      };
-      // Status-Legible Ledger restyle: every card defaults to the neutral 'slate' palette so the
-      // grid's chrome carries no arbitrary per-card meaning (frame.md's named defect). The 6-palette
-      // picker itself (CARD_PALETTES) is unchanged — a user who already personalized colors keeps
-      // them via the {...DEFAULT_CARD_COLORS, ...persisted} merge below; this only changes what a
-      // never-customized card starts as.
-      const DEFAULT_CARD_COLORS = { er:'slate', targetKRW:'slate', targetUSD:'slate', incentiveKRW:'slate', incentiveUSD:'slate', estimatedKRW:'slate', estimatedUSD:'slate', actEstimatedKRW:'slate', shipConfirmKRW:'slate', gapKRW:'slate', attainRate:'slate', gmppTarget:'slate', gmppEstimated:'slate', gmppGap:'slate' };
-      const [cardColors, setCardColors]       = useState(() => { try { const s = safeLS.get('summaryCardColors'); if (!s) return DEFAULT_CARD_COLORS; const p = JSON.parse(s); return (typeof p === 'object' && !Array.isArray(p)) ? {...DEFAULT_CARD_COLORS, ...p} : DEFAULT_CARD_COLORS; } catch { return DEFAULT_CARD_COLORS; } });
-      const [colorPickerOpen, setColorPickerOpen] = useState(null);
-
-      const [summaryLocked, setSummaryLocked]           = useState(true);
-      const [showSummaryPwdModal, setShowSummaryPwdModal] = useState(false);
-      const [showErModal, setShowErModal] = useState(false);
-      const [erPwdInput, setErPwdInput]   = useState('');
-      const [erPwdError, setErPwdError]   = useState(false);
-      const [erInputVal, setErInputVal]   = useState('');
-      const [erUnlocked, setErUnlocked]   = useState(false);
-      const [summaryPwdInput, setSummaryPwdInput]       = useState('');
-      const [summaryPwdError, setSummaryPwdError]       = useState(false);
-
-      const handleSummaryUnlock = () => {
-        if (summaryPwdInput === SECRET_PASSWORD) { setSummaryLocked(false); setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }
-        else { setSummaryPwdError(true); setSummaryPwdInput(''); }
-      };
-
-      // ── Ship Confirm 수정/삭제 비밀번호 모달 ──
-      const [showScPwdModal, setShowScPwdModal] = useState(false);
-      const [scPwdInput, setScPwdInput]         = useState('');
-      const [scPwdError, setScPwdError]         = useState(false);
-      const [pendingScAction, setPendingScAction] = useState(null); // { type:'edit'|'delete', data }
-
-      const unlockSummary = () => { if (requireTargetAdmin()) setSummaryLocked(false); };
-
-      // ── 담당자 변경 (Transfer Owner) ──────────────────────────────────────
-      const [showTransferModal, setShowTransferModal] = useState(false);
-      const [transferRow, setTransferRow]             = useState(null);
-      const [transferTarget, setTransferTarget]       = useState('');
-      const handleTransferOpen = (row) => {
-        // Ship Confirm 완료 데이터의 담당자 변경은 관리자만 (Firestore 규칙과 일치)
-        if (row.status === 'Ship Confirm' ? !requireScAdmin() : !requireAuth()) return;
-        setTransferRow(row); setTransferTarget(row.member); setShowTransferModal(true);
-      };
-      const handleTransferConfirm = () => {
-        if (!transferRow || !transferTarget) return;
-        if (transferTarget === transferRow.member) { setShowTransferModal(false); setTransferRow(null); return; }
-        const newTeam = Object.keys(teams).find(t => (Array.isArray(teams[t])?teams[t]:[]).includes(transferTarget)) || transferRow.team;
-        const before = transferRow;
-        db.collection("sales").doc(String(before.id)).update({ member: transferTarget, team: newTeam })
-          .then(() => {
-            db.collection("audit_logs").add({
-              action: 'edit', actor: (auth.currentUser?.email || ''), timestamp: new Date().toISOString(),
-              member: transferTarget, team: newTeam, quarter: before.quarter, account: before.account,
-              before: before, after: { ...before, member: transferTarget, team: newTeam },
-            }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
-            showToast(lang==='ko' ? `담당자 변경 완료: ${before.member} → ${transferTarget} ✓` : `Transferred: ${before.member} → ${transferTarget} ✓`);
-            setShowTransferModal(false); setTransferRow(null);
-          })
-          .catch(e => showToast((lang==='ko' ? '변경 실패: ' : 'Transfer failed: ') + e.message, 'error'));
-      };
-      const requestScAction = (type, data) => {
-        if (!requireScAdmin()) return;
-        if (type === 'edit')   handleEdit(data);
-        if (type === 'delete') deleteSalesData(data.id);
-      };
-      const handleScUnlock = () => {
-        if (scPwdInput === SECRET_PASSWORD) {
-          setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false);
-          if (pendingScAction?.type === 'edit')   handleEdit(pendingScAction.data);
-          if (pendingScAction?.type === 'delete') deleteSalesData(pendingScAction.data.id);
-          setPendingScAction(null);
-        } else { setScPwdError(true); setScPwdInput(''); }
-      };
-      const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); safeLS.set('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
-
-      // ── 분기 표기 정규화: "2026Q4", "2026 q4", "2026-Q4" → "2026 Q4" ──
-      const normalizeQuarter = (s) => {
-        const m = String(s||'').trim().match(/^(\d{4})\s*[-_]?\s*[Qq]\s*([1-4])$/);
-        return m ? `${m[1]} Q${m[2]}` : null;
-      };
-
-      // ── Firestore 구독 ──────────────────────────────────────────────────
-      useEffect(() => {
-        if (!currentUser) return;
-        const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
-        const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
-        const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
-        const unsubTeamTargets  = db.collection("targets").doc("teamTargets").onSnapshot(doc => { if (doc.exists) setTeamTargets(doc.data()); });
-        const unsubLayout       = db.collection("settings").doc("layout").onSnapshot(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            if (data.teams && typeof data.teams === 'object') setTeams(data.teams);
-            if (data.quarters && Array.isArray(data.quarters)) {
-              const cleaned = [...new Set(data.quarters.map(q => normalizeQuarter(q) || q))].sort();
-              setQuarters(cleaned);
-              if (auth.currentUser && JSON.stringify(cleaned) !== JSON.stringify(data.quarters)) {
-                db.collection("settings").doc("layout").set({ quarters: cleaned }, { merge: true });
-              }
-            }
-          } else if (auth.currentUser) {
-            db.collection("settings").doc("layout").set({ teams, quarters });
-          }
-        });
-        return () => { unsubSales(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
-      }, [currentUser]);
-
-      // [FIX #분기별 개인목표 — 데이터 보정] memberTargets를 정리한다:
-      //   1) 레거시 평면 형식({멤버:숫자})이면 분기별 형식으로 변환
-      //   2) 이미 분기별 형식이어도, 특정 분기에 어떤 멤버 값이 "아예 없는" 경우(예전 마이그레이션이
-      //      quarters 목록이 다 로드되기 전에 실행돼서 일부 분기가 누락된 경우) 다른 분기에 있는 값으로
-      //      채워 넣는다. 기존에 실제로 입력되어 있는 값은 절대 덮어쓰지 않고, "비어있는 칸만" 채운다.
-      // quarters(실제 분기 목록)가 로드된 뒤에만 동작하도록 quarters.length를 조건에 둬서, 이전 버전에
-      // 있던 "분기 목록이 로드되기 전에 마이그레이션이 먼저 실행되는" 레이스 컨디션을 없앴다.
-      useEffect(() => {
-        if (!currentUser) return;
-        if (!quarters.length) return;
-        if (!memberTargets || Object.keys(memberTargets).length === 0) return;
-
-        const isLegacyFlat = Object.values(memberTargets).some(v => typeof v === 'number');
-        let filled;
-        if (isLegacyFlat) {
-          filled = {};
-          quarters.forEach(q => { filled[q] = { ...memberTargets }; });
-        } else {
-          const allMemberNames = new Set();
-          Object.values(memberTargets).forEach(qd => Object.keys(qd||{}).forEach(m => allMemberNames.add(m)));
-          Object.values(teams).forEach(list => (list||[]).forEach(m => allMemberNames.add(m)));
-          filled = { ...memberTargets };
-          let changed = false;
-          quarters.forEach(q => {
-            const qd = { ...(filled[q]||{}) };
-            allMemberNames.forEach(m => {
-              if (qd[m] === undefined) {
-                const srcQ = Object.keys(memberTargets).find(qq => memberTargets[qq] && memberTargets[qq][m] !== undefined);
-                if (srcQ !== undefined) { qd[m] = memberTargets[srcQ][m]; changed = true; }
-              }
-            });
-            filled[q] = qd;
-          });
-          if (!changed) return;
-        }
-        if (JSON.stringify(filled) === JSON.stringify(memberTargets)) return;
-        setMemberTargets(filled);
-        db.collection("targets").doc("memberTargets").set(filled).catch(() => {});
-      }, [currentUser, quarters, memberTargets, teams]);
-
-      // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
-      useEffect(() => {
-        if (salesData.length === 0) return;
-        if (!currentUser) return; // 미선적 이월은 로그인된 사용자가 접속했을 때만 수행
-
-        // 현재 날짜 기준으로 해당 분기 계산
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1; // 1~12
-        const qNum = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-        const currentQ = `${year} Q${qNum}`;
-
-        // 이전 분기 계산
-        let prevYear = year, prevQNum = qNum - 1;
-        if (prevQNum === 0) { prevQNum = 4; prevYear = year - 1; }
-        const prevQ = `${prevYear} Q${prevQNum}`;
-
-        // 이미 이월 처리했는지 확인 (Firestore 플래그)
-        const rolloverKey = `rollover_${currentQ.replace(' ', '_')}`;
-        db.collection("settings").doc("rollover").get().then(doc => {
-          const flags = doc.exists ? doc.data() : {};
-          if (flags[rolloverKey]) return; // 이미 처리됨
-
-          // 이전 분기의 미선적(Ship Confirm 아님) 데이터 = ACT + Pending + Back up
-          const carryOver = salesData.filter(d => d.quarter === prevQ && d.status !== 'Ship Confirm');
-          if (carryOver.length === 0) return;
-
-          // quarters 목록에 현재 분기 없으면 추가
-          const needsQuarter = !quarters.includes(currentQ);
-
-          const batch = db.batch();
-
-          // 이동: 기존 문서의 분기만 현재 분기로 변경 (이전 분기에서는 빠지고 현재 분기에만 남음)
-          carryOver.forEach(d => {
-            batch.update(db.collection("sales").doc(String(d.id)), { quarter: currentQ });
-          });
-
-          // 롤오버 플래그 저장
-          batch.set(db.collection("settings").doc("rollover"), { ...flags, [rolloverKey]: true }, { merge: true });
-
-          batch.commit().then(() => {
-            if (needsQuarter) {
-              const nq = [...quarters, currentQ].sort();
-              setQuarters(nq);
-              db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
-            }
-            showToast(
-              `${prevQ} 미선적 ${carryOver.length}건(ACT·Pending·Back up) → ${currentQ}으로 이동됐습니다 ✓`,
-              'success'
-            );
-          });
-        });
-      }, [salesData.length, currentUser]);
-
-      // ── [FIX #2] 강화된 저장 검증 ────────────────────────────────────────
-      const handleSave = () => {
-        if (isSaving) return;
-        if (!requireAuth()) return;
-        const errors = [];
-        if (!form.account.trim())                              errors.push(T.valAccount);
-        if (!form.status)                                      errors.push(T.valStatus);
-        if (!form.deliveryDate)                                errors.push(T.valDelivery);
-        const krw = parseFloat(form.priceKRW);
-        if (form.priceKRW !== '' && isNaN(krw))               errors.push(T.valPriceNaN);
-        else if (!isNaN(krw) && krw < 0)                      errors.push(T.valPriceNeg);
-        else if (!isNaN(krw) && krw > 10_000_000_000)         errors.push(T.valPriceBig);
-
-        if (errors.length > 0) { alert(errors.join('\n')); return; }
-
-        setIsSaving(true);
-        const finalKRW = isNaN(krw) ? 0 : Math.round(krw);
-        const payload = {
-          status:       String(form.status || ''),
-          contractType: String(form.contractType || '일반'),
-          contractDate: String(form.contractDate || ''),
-          deliveryDate: String(form.deliveryDate || ''),
-          so:           String(form.so || ''),
-          account:      String(form.account || ''),
-          product:      String(form.product || 'GMPP'),
-          accType:      String(form.accType || ''),
-          dealerName:   String(form.dealerName || ''),
-          priceKRW:     finalKRW,
-          priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
-          id:           editingId ? String(editingId) : crypto.randomUUID(),
-          quarter:      selectedQuarter,
-          team:         selectedTeam,
-          member:       selectedMember,
-        };
-
-        // 수정 전 스냅샷 (edit인 경우)
-        const beforeSnap = editingId ? salesData.find(d => String(d.id) === String(editingId)) : null;
-        const auditAction = editingId ? 'edit' : 'create';
-
-        db.collection("sales").doc(payload.id).set(payload)
-          .then(() => {
-            // ── Audit Log 기록 ──
-            const logEntry = {
-              action:    auditAction,
-              actor:     (auth.currentUser?.email || ''),
-              timestamp: new Date().toISOString(),
-              member:    payload.member,
-              team:      payload.team,
-              quarter:   payload.quarter,
-              account:   payload.account,
-              after:     payload,
-            };
-            if (beforeSnap) logEntry.before = beforeSnap;
-            db.collection("audit_logs").add(logEntry).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
-
-            showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
-            setEditingId(null);
-            setForm(initialForm);
-            setShowEditModal(false);
-          })
-          .catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error'))
-          .finally(() => setIsSaving(false));
-      };
-
-      const deleteSalesData = (id) => {
-        if (!requireAuth()) return;
-        if (window.confirm(T.confirmDelete)) {
-          const targetData = salesData.find(d => String(d.id) === String(id));
-          db.collection("sales").doc(String(id)).delete()
-            .then(() => {
-              // ── Audit Log 기록 ──
-              if (targetData) {
-                db.collection("audit_logs").add({
-                  action:    'delete',
-                  actor:     (auth.currentUser?.email || ''),
-                  timestamp: new Date().toISOString(),
-                  member:    targetData.member,
-                  team:      targetData.team,
-                  quarter:   targetData.quarter,
-                  account:   targetData.account,
-                  before:    targetData,
-                }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
-              }
-              showToast(lang==='ko' ? '삭제 완료 ✓' : 'Deleted ✓');
-            })
-            .catch(e => showToast((lang==='ko' ? '삭제 실패: ' : 'Delete failed: ') + e.message, 'error'));
-        }
-      };
-
-      const handleTargetChange  = (field, value) => { if (!requireTargetAdmin()) return; const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n).catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error')); };
-      const handleErUnlock = () => {
-        if (erPwdInput === SECRET_PASSWORD) { setErUnlocked(true); setErPwdInput(''); setErPwdError(false); }
-        else { setErPwdError(true); setErPwdInput(''); }
-      };
-      const handleErSave = () => {
-        const v = parseFloat(erInputVal);
-        if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
-        setShowErModal(false); setErUnlocked(false); setErInputVal('');
-      };
-      // [FIX #분기별 개인목표] 이제 memberTargets는 { [분기]: { [멤버]: 목표값 } } 구조라서
-      // selectedQuarter 아래에만 값을 써서, 다른 분기의 목표는 그대로 유지된다.
-      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [selectedQuarter]: { ...(memberTargets[selectedQuarter]||{}), [member]: val } }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
-      const handleTeamTargetChange   = (team, quarter, value) => { if (!requireAuth()) return; const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
-      const [showEditModal, setShowEditModal] = useState(false);
-      const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
-
-      const addTeam = () => { if (!requireAuth()) return; const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const editMemberName = (oldName, e) => {
-        e.stopPropagation();
-        if (!requireAuth()) return;
-        const newName = prompt(T.promptRename, oldName);
-        if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
-          const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].map(m => m===oldName ? newName : m); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true });
-          const ntg = { ...memberTargets }; let ntgChanged = false;
-          Object.keys(ntg).forEach(q => { if (ntg[q] && ntg[q][oldName] !== undefined) { ntg[q] = { ...ntg[q], [newName]: ntg[q][oldName] }; delete ntg[q][oldName]; ntgChanged = true; } });
-          if (ntgChanged) { setMemberTargets(ntg); db.collection("targets").doc("memberTargets").set(ntg); }
-          salesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
-        }
-      };
-      const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } if (!memberTargets[q]) { const nmt = { ...memberTargets, [q]: { ...(memberTargets[selectedQuarter]||{}) } }; setMemberTargets(nmt); db.collection("targets").doc("memberTargets").set(nmt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
-
-      const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
-      // [FIX #분기별 개인목표] 현재 선택된 분기의 멤버별 목표만 뽑아낸 값. 화면에서 목표를 "읽을 때"는
-      // 항상 이 값을 쓰고, memberTargets 원본은 handleMemberTargetChange(분기별 저장)에서만 직접 다룬다.
-      const currentMemberTargets = memberTargets[selectedQuarter] || {};
-      const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        if (name === 'priceKRW') {
-          const krwValue = value ? parseFloat(value) : 0;
-          const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
-          setForm({ ...form, priceKRW: value, priceUSD: usdValue });
-        } else {
-          setForm({ ...form, [name]: value });
-        }
-      };
-
-      // ── [FIX #8] CSV 내보내기 — 필터 옵션 지원 ──────────────────────────
-      const exportToCSV = (mode = 'current') => {
-        let data = mode === 'all' ? salesData : salesData.filter(d => d.quarter === selectedQuarter);
-        if (data.length === 0) return alert(T.noExportData);
-        const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
-        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,d.deliveryDate,d.salesType,d.dealerName,d.so,d.account,d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
-        const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','))].join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a'); link.href = url;
-        const today = new Date().toISOString().slice(0,10);
-        const suffix = mode === 'all' ? 'All' : selectedQuarter.replace(' ','_');
-        link.setAttribute('download', `FCST_Sales_${suffix}_${today}.csv`);
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      };
-
-      const [showCsvMenu, setShowCsvMenu] = useState(false);
-
-      const moveCard = (idx, dir) => { const next = [...cardOrder]; const to = idx + dir; if (to < 0 || to >= next.length) return; [next[idx], next[to]] = [next[to], next[idx]]; setCardOrder(next); safeLS.set('summaryCardOrder', JSON.stringify(next)); };
-      const [dragOverIdx, setDragOverIdx] = useState(null);
-      const handleDragStart = (e, idx) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); };
-      const handleDragOver  = (e, idx) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverIdx(idx); };
-      const handleDrop      = (e, toIdx) => { e.preventDefault(); const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10); if (fromIdx === toIdx) { setDragOverIdx(null); return; } const next = [...cardOrder]; const [moved] = next.splice(fromIdx, 1); next.splice(toIdx, 0, moved); setCardOrder(next); safeLS.set('summaryCardOrder', JSON.stringify(next)); setDragOverIdx(null); };
-      const handleDragEnd   = () => setDragOverIdx(null);
-
-      const [allListFilters, setAllListFilters] = useState({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
-      const [allListFilterOpen, setAllListFilterOpen] = useState(null);
-      const toggleAllListFilter = (col, val) => setAllListFilters(prev => { const cur = prev[col]; return { ...prev, [col]: cur.includes(val) ? cur.filter(v => v!==val) : [...cur, val] }; });
-      const clearAllListFilter  = (col) => setAllListFilters(prev => ({ ...prev, [col]: [] }));
-      const clearAllListFilters = () => setAllListFilters({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
-
-      // ── 멤버 상세 테이블(Ship Confirm/ACT/Pending/Backup) 열 필터 (Excel 자동 필터 방식) ──
-      const [memberTableFilters, setMemberTableFilters] = useState({});
-      const [memberTableFilterOpen, setMemberTableFilterOpen] = useState(null);
-      const DEFAULT_MEMBER_FILTER = { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] };
-      const getMemberFilter = (tableKey) => memberTableFilters[tableKey] || DEFAULT_MEMBER_FILTER;
-      const toggleMemberTableFilter = (tableKey, col, val) => setMemberTableFilters(prev => { const cur = prev[tableKey] || DEFAULT_MEMBER_FILTER; const arr = cur[col]||[]; return { ...prev, [tableKey]: { ...cur, [col]: arr.includes(val) ? arr.filter(v=>v!==val) : [...arr, val] } }; });
-      const clearMemberTableFilter  = (tableKey, col) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { ...(prev[tableKey] || DEFAULT_MEMBER_FILTER), [col]: [] } }));
-      const clearMemberTableFilters = (tableKey) => setMemberTableFilters(prev => ({ ...prev, [tableKey]: { status:[], contractType:[], dealer:[], account:[], product:[], accType:[] } }));
-      const applyMemberTableFilter  = (tableKey, rawRows) => {
-        const f = getMemberFilter(tableKey);
-        return rawRows.filter(r =>
-          (f.status.length===0       || f.status.includes(r.status)) &&
-          (f.contractType.length===0 || f.contractType.includes(r.contractType||'일반')) &&
-          (f.dealer.length===0       || f.dealer.includes(r.dealerName||'-')) &&
-          (f.account.length===0      || f.account.includes(r.account)) &&
-          (f.product.length===0      || f.product.includes(r.product)) &&
-          (f.accType.length===0      || f.accType.includes(r.accType||'-'))
-        );
-      };
-
-      const [rowOrders, setRowOrders]   = useState({ ACT:{}, Pending:{}, Backup:{}, Minal:{} });
-      const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
-
-      useEffect(() => {
-        if (!currentUser) return;
-        const unsub = db.collection("settings").doc("rowOrders").onSnapshot(doc => { if (doc.exists) { const d = doc.data(); if (d && typeof d === 'object') setRowOrders(d); } });
-        return () => unsub();
-      }, [currentUser]);
-
-      const saveRowOrders = (next) => { if (!auth.currentUser) { setShowLoginModal(true); return; } setRowOrders(next); db.collection("settings").doc("rowOrders").set(next); };
-      const getOrderedRows = (status, rawRows) => {
-        const key = `${selectedQuarter}__${selectedMember}__${status}`;
-        const orderMap = rowOrders[status]?.[key];
-        if (!orderMap || !Array.isArray(orderMap) || orderMap.length === 0) return rawRows;
-        const mapped = {}; rawRows.forEach(r => { mapped[String(r.id)] = r; });
-        const ordered = orderMap.map(id => mapped[id]).filter(Boolean);
-        const rest = rawRows.filter(r => !orderMap.includes(String(r.id)));
-        return [...ordered, ...rest];
-      };
-      const handleRowDragStart = (e, status, rowId) => { e.dataTransfer.effectAllowed='move'; setRowDragState({ type:status, fromId:String(rowId), overId:null }); };
-      const handleRowDragOver  = (e, status, rowId) => { e.preventDefault(); if (rowDragState.type!==status) return; setRowDragState(s => ({ ...s, overId:String(rowId) })); };
-      const handleRowDrop      = (e, status, toRowId, rawRows) => {
-        e.preventDefault();
-        const { fromId } = rowDragState; const toId = String(toRowId);
-        if (!fromId || fromId===toId) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
-        const key = `${selectedQuarter}__${selectedMember}__${status}`;
-        const rawOrder = rowOrders[status]?.[key];
-        const currentOrder = (Array.isArray(rawOrder) ? rawOrder : null) || rawRows.map(r => String(r.id));
-        const fi = currentOrder.indexOf(fromId); const ti = currentOrder.indexOf(toId);
-        if (fi===-1 || ti===-1) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
-        const next = [...currentOrder]; next.splice(fi, 1); next.splice(ti, 0, fromId);
-        saveRowOrders({ ...rowOrders, [status]: { ...(rowOrders[status]||{}), [key]: next } });
-        setRowDragState({ type:null, fromId:null, overId:null });
-      };
-      const handleRowDragEnd = () => setRowDragState({ type:null, fromId:null, overId:null });
-
-      const safeQuarters = Array.isArray(quarters) ? quarters : [];
-      const groupedQuarters = safeQuarters.reduce((acc, q) => { const [year, quarter] = (q||'').split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
-
-      // ── Auth 확인 중 ──────────────────────────────────────────────────────
-      if (authChecking) {
-        return (
-          <div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center',background:'#1e293b',flexDirection:'column',gap:'16px'}}>
-            <div style={{width:'40px',height:'40px',border:'4px solid rgba(255,255,255,0.15)',borderTop:'4px solid #60a5fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
-            <p style={{color:'#94a3b8',fontSize:'14px',fontWeight:'600'}}>인증 확인 중...</p>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          </div>
-        );
-      }
-
-      // ── [FIX #1] 집계 기준: ACT + Pending 만 (Backup/미납 제외) ──────────
-      const currentQData   = salesData.filter(d => d.quarter === selectedQuarter);
-      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
-      const targetKRW      = currentTargets.target || 0;
-      const gmppTargetKRW  = currentTargets.gmppTarget || 0;
-      const activeER       = currentTargets.er || 1389;
-      const targetUSD      = targetKRW / activeER;
-      const incentiveTargetKRW = targetKRW / 1.2;
-      const incentiveTargetUSD = targetUSD / 1.2;
-
-      // ★ 핵심: ACT + Pending 만 집계
-      const expectedData   = currentQData.filter(d => isRevenue(d));
-      const expectedKRW    = expectedData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const expectedUSD    = expectedKRW / activeER;
-      const percent        = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
-      const gapKRW         = targetKRW - expectedKRW;
-      const gmppExpectedKRW = expectedData.filter(d => d.product==='GMPP').reduce((s, d) => s + (d.priceKRW||0), 0);
-      const gmppGapKRW      = gmppTargetKRW - gmppExpectedKRW;
-      const gmppTargetUSD   = gmppTargetKRW / activeER;
-      const gapUSD          = gapKRW / activeER;
-      const gmppGapUSD      = gmppGapKRW / activeER;
-      const gmppExpectedUSD = gmppExpectedKRW / activeER;
-
-      // ★ 누적 달성치 = status === 'Ship Confirm' 인 것만 (Target 대비 매출 기준)
-      const shipConfirmData  = currentQData.filter(d => d.status === 'Ship Confirm');
-      const shipConfirmKRW   = shipConfirmData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const shipConfirmUSD   = shipConfirmKRW / activeER;
-      const shipConfirmCount = shipConfirmData.length;
-      const shipConfirmPct   = targetKRW ? (shipConfirmKRW / targetKRW) * 100 : 0;
-      const actData          = currentQData.filter(d => d.status === 'ACT');
-      const actKRW           = actData.reduce((s, d) => s + (d.priceKRW || 0), 0);
-      const actUSD           = actKRW / activeER;
-      const actPct           = targetKRW ? (actKRW / targetKRW) * 100 : 0;
-
-      const memberActFcstData = selectedMember ? expectedData.filter(d => d.member===selectedMember) : [];
-      const memberACT         = memberActFcstData.reduce((s, d) => s + (d.priceKRW||0), 0);
-      // 개인 Ship Confirm 달성치 (Target 대비)
-      const memberSCData      = selectedMember ? currentQData.filter(d => d.member===selectedMember && d.status==='Ship Confirm') : [];
-      const memberActData     = selectedMember ? currentQData.filter(d => d.member===selectedMember && d.status==='ACT') : [];
-      const memberActKRW      = memberActData.reduce((s, d) => s + (d.priceKRW||0), 0);
-      const memberSCKRW       = memberSCData.reduce((s, d) => s + (d.priceKRW||0), 0);
-
-      // SC 기준 집계 데이터
-      const scData = currentQData.filter(d => d.status === 'Ship Confirm');
-
-      const allProducts = ['GMPP','Picoway','Cryo7','VBP','Hand Piece','Nordlys','Nordlys Mini','GMP'];
-      const productStats = {};
-      allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
-      scData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
-
-      const ALL_DEALERS = ['병원', 'Innomed', 'SEVEN U', 'TMI', '알펙스메디'];
-      const dealerStats = {};
-      ALL_DEALERS.forEach(d => dealerStats[d] = { count:0, sumKRW:0 });
-      scData.forEach(cur => {
-        const dealer = cur.dealerName || '기타';
-        if (!dealerStats[dealer]) dealerStats[dealer] = { count:0, sumKRW:0 };
-        dealerStats[dealer].count += 1;
-        dealerStats[dealer].sumKRW += (cur.priceKRW||0);
-      });
-
-      const allMembers = Object.values(teams).flat();
-      const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0 });
-      // 달성률 집계: Ship Confirm 기준
-      scData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
-
-      // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
-      const renderProgressBar = (scAmt, actAmt, tgtKRW, er) => {
-        if (!tgtKRW) return null;
-        const usedER = er || activeER || 1389;
-        const target120 = tgtKRW * 1.2; const target150 = tgtKRW * 1.5;
-        const maxScale = Math.max(target150, (scAmt + actAmt) * 1.05);
-        const scPer  = (scAmt / tgtKRW) * 100;
-        const actPer = (actAmt / tgtKRW) * 100;
-        const totalPer = scPer + actPer;
-        const scW  = (scAmt / maxScale) * 100;
-        const actW = (actAmt / maxScale) * 100;
-        // ── 3-zone ascending achievement family (zone1 slate <100%, zone2 blue 100-120%, zone3 emerald 120%+) ──
-        const zone1W = (tgtKRW/maxScale)*100;
-        const zone2W = (target120/maxScale)*100 - zone1W;
-        const zone3W = 100 - zone1W - zone2W;
-        const markerPos = Math.min((scAmt+actAmt)/maxScale*100, 100);
-        const totalZone = totalPer>=120?3:totalPer>=100?2:1;
-        const totalColor = totalZone===3?'#047857':totalZone===2?'#1d4ed8':'#475569';
-        return (
-          <div className="w-full mt-6 md:mt-8" data-region="achievement-bar">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
-              <div className="mb-2 md:mb-0 flex flex-wrap gap-2 items-center">
-                <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
-                <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
-              </div>
-              <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
-              <div className="block absolute w-full -bottom-6 left-0 h-5">
-                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(tgtKRW/maxScale)*100}%`, color:'#475569' }}>100%</div>
-                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target120/maxScale)*100}%`, color:'#1d4ed8' }}>120%</div>
-                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target150/maxScale)*100}%`, color:'#047857' }}>150%</div>
-              </div>
-            </div>
-            <div className="relative w-full h-6 md:h-8 rounded-full overflow-hidden border border-gray-200" style={{display:'flex'}}>
-              {/* ascending zone track (context, sits behind the actual SC/ACT fills) */}
-              <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
-                <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
-                <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
-                <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
-              </div>
-              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-blue-500 relative" style={{ width:`${scW}%`, overflow:'hidden' }}>
-                {/* Desktop keeps the original achievement-based threshold (track is wide enough that it always fit).
-                    Mobile switches to the visual fill-width (scW), which is what actually determines whether the
-                    label physically has room in its own segment at a narrow track — the two percentages diverge
-                    because the track is scaled to 150% while the achievement % is relative to the 100% target. */}
-                <span className="toss-tnum hidden md:inline">{scPer > 4 && `${scPer.toFixed(1)}%`}</span>
-                <span className="toss-tnum md:hidden">{scW > 8 && `${scPer.toFixed(1)}%`}</span>
-              </div>
-              <div className="h-full transition-all duration-1000 ease-out flex items-center justify-end pr-1 text-white font-bold text-xs bg-emerald-500 relative" style={{ width:`${actW}%`, overflow:'hidden' }}>
-                <span className="toss-tnum hidden md:inline">{actPer > 4 && `${actPer.toFixed(1)}%`}</span>
-                <span className="toss-tnum md:hidden">{actW > 8 && `${actPer.toFixed(1)}%`}</span>
-              </div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(tgtKRW/maxScale)*100}%`, borderColor:'#94a3b8' }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target120/maxScale)*100}%`, borderColor:'#93c5fd' }}></div>
-              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target150/maxScale)*100}%`, borderColor:'#6ee7b7' }}></div>
-              {/* current-value position marker pin (TREMOR-CATEGORYBAR anatomy) */}
-              <div className="absolute top-0 bottom-0" style={{ left:`${markerPos}%`, width:'2px', background:'#1e293b', boxShadow:'0 0 0 1px rgba(255,255,255,0.6)' }} title={lang==='ko'?`현재 위치: ${totalPer.toFixed(1)}%`:`Current: ${totalPer.toFixed(1)}%`}></div>
-            </div>
-            <div className="flex gap-4 mt-2 text-xs">
-              <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#3b82f6'}}></span>{lang==='ko'?'SC (Ship Confirm)':'SC'}</span>
-              <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#10b981'}}></span>{lang==='ko'?'ACT (납품완료)':'ACT'}</span>
-            </div>
-          </div>
-        );
-      };
-
-      const renderBarChart = (dataObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a,b) => b[1].sumKRW - a[1].sumKRW);
-        const maxVal  = Math.max(...dataArr.map(d => d[1].sumKRW), 1);
-        return (
-          <div className="space-y-4">
-            {dataArr.map(([key, stat]) => {
-              const per = maxVal === 0 ? 0 : (stat.sumKRW / maxVal) * 100;
-              return (
-                <div key={key} className="flex flex-col">
-                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
-                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
-                    <span className="font-mono font-bold text-gray-700 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width:`${per}%` }}></div></div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      };
-
-      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a,b) => b[1].sumKRW - a[1].sumKRW);
-        return (
-          <div className="space-y-5">
-            {dataArr.map(([key, stat]) => {
-              const target = targetsObj[key] || 0;
-              const per    = target === 0 ? 0 : (stat.sumKRW / target) * 100;
-              return (
-                <div key={key} className="flex flex-col">
-                  <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
-                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
-                    <div className="text-right flex flex-col">
-                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
-                      {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width:`${per > 100 ? 100 : per}%` }}></div></div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      };
-
-      // ── 공통 테이블 행 렌더러 ──────────────────────────────────────────────
-      const renderTableRow = (row, status, colorCls, editCls, requirePwd=false) => (
-        <tr key={row.id}
-          draggable
-          onDragStart={e => handleRowDragStart(e, status, row.id)}
-          onDragOver={e => handleRowDragOver(e, status, row.id)}
-          onDrop={e => handleRowDrop(e, status, row.id, salesData.filter(d => d.quarter===selectedQuarter && d.member===selectedMember && d.status===(status==='Backup'?'Back up':status==='ShipConfirm'?'Ship Confirm':status)))}
-          onDragEnd={handleRowDragEnd}
-          className={`border-b ${colorCls} hover:brightness-95 transition cursor-grab active:cursor-grabbing ${rowDragState.type===status && rowDragState.overId===String(row.id) ? 'outline outline-2 outline-blue-400 opacity-70' : ''}`}
-          data-region="account-table-row-actions">
-          <td className="p-2 md:p-3 font-bold select-none"><span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>{row.status}</td>
-          <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
-          <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate||'-'}</td>
-          <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType||'일반'}</td>
-          <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName||'-'}</td>
-          <td className="p-2 md:p-3 font-mono text-gray-500">{row.so||'-'}</td>
-          <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
-          <td className="p-2 md:p-3">{row.product}</td>
-          <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
-          <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>{'₩ ' + (row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>{'$ ' + (row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
-          <td className={`p-2 md:p-3 text-center space-x-1 sld-row-actions ${requirePwd ? 'sld-row-actions--gated' : ''}`}>
-            {requirePwd
-              ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
-                  <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
-              : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
-                  <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
-            }
-          </td>
-        </tr>
-      );
-
-      const memberTableHeadProps = (tableKey) => ({
-        tableKey, T,
-        filters: getMemberFilter(tableKey),
-        openKey: memberTableFilterOpen,
-        onToggleOpen: (col) => { const key = `${tableKey}__${col}`; setMemberTableFilterOpen(memberTableFilterOpen===key ? null : key); },
-        onToggleValue: (col, val) => toggleMemberTableFilter(tableKey, col, val),
-        onClear: (col) => clearMemberTableFilter(tableKey, col),
-      });
-
-      // ── 로그인 게이트: 인증 전에는 대시보드 비노출 ──
-      if (!authReady) {
-        return (
-          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',color:'#64748b',fontFamily:'monospace',fontSize:'13px'}}>
-            Loading...
-          </div>
-        );
-      }
-      if (!currentUser) {
-        return (
-          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
-            <div style={{background:'#fff',borderRadius:'18px',padding:'36px 32px',width:'100%',maxWidth:'380px',boxShadow:'0 12px 50px rgba(0,0,0,0.5)'}}>
-              <div style={{fontSize:'34px',textAlign:'center',marginBottom:'10px'}}>📊</div>
-              <h1 style={{fontWeight:'800',fontSize:'21px',color:'#1e293b',textAlign:'center',marginBottom:'4px'}}>Sales Dashboard</h1>
-              <p style={{fontSize:'12px',color:'#94a3b8',textAlign:'center',marginBottom:'26px',fontFamily:'monospace'}}>Candela Medical Korea</p>
-              <input type="email" autoFocus value={loginEmail} onChange={e=>{setLoginEmail(e.target.value);setLoginError('');}} placeholder="Email"
-                onKeyDown={e=>e.key==='Enter'&&handleLogin()}
-                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
-              <input type="password" value={loginPwd} onChange={e=>{setLoginPwd(e.target.value);setLoginError('');}} placeholder="Password"
-                onKeyDown={e=>e.key==='Enter'&&handleLogin()}
-                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
-              {loginError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{loginError}</p>}
-              <button onClick={handleLogin} disabled={isLoggingIn}
-                style={{width:'100%',padding:'13px',background:isLoggingIn?'#93c5fd':'#2563eb',color:'#fff',border:'none',borderRadius:'10px',fontWeight:'800',fontSize:'15px',cursor:isLoggingIn?'default':'pointer',marginTop:'6px'}}>
-                {isLoggingIn ? '확인 중...' : '로그인'}
-              </button>
-              <p style={{fontSize:'11px',color:'#cbd5e1',textAlign:'center',marginTop:'18px'}}>계정 문의: 채윤길</p>
-            </div>
-          </div>
-        );
-      }
-
-      return (
-        <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireTargetAdmin()) return; setErInputVal(String(activeER)); setErUnlocked(true); setShowErModal(true); }}
-            user={currentUser} onLoginClick={() => setShowLoginModal(true)}
-            onLogoutClick={() => { if (window.confirm(lang==='ko' ? '로그아웃 하시겠습니까?' : 'Sign out?')) handleLogout(); }} />
-          {/* [FIX #10] 토스트 */}
-          {toast && <Toast msg={toast.msg} type={toast.type} />}
-
-          {/* Firebase 로그인 모달 */}
-          {showLoginModal && (
-            <div style={{position:'fixed',inset:0,zIndex:9500,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
-              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
-              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowLoginModal(false); setLoginError(''); } }}>
-              <div style={{background:'#fff',borderRadius:'14px',padding:'28px',width:'100%',maxWidth:'360px',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '🔐 로그인' : '🔐 Sign In'}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '데이터를 추가/수정/삭제하려면 로그인하세요.' : 'Sign in to add, edit, or delete data.'}</p>
-                <input type="email" autoFocus value={loginEmail} onChange={e=>{setLoginEmail(e.target.value);setLoginError('');}} placeholder="Email"
-                  onKeyDown={e=>e.key==='Enter'&&handleLogin()}
-                  style={{width:'100%',padding:'10px 12px',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
-                <input type="password" value={loginPwd} onChange={e=>{setLoginPwd(e.target.value);setLoginError('');}} placeholder="Password"
-                  onKeyDown={e=>e.key==='Enter'&&handleLogin()}
-                  style={{width:'100%',padding:'10px 12px',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box'}}/>
-                {loginError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{loginError}</p>}
-                <div style={{display:'flex',gap:'8px',marginTop:'6px'}}>
-                  <button onClick={handleLogin} disabled={isLoggingIn}
-                    style={{flex:1,padding:'10px',background:isLoggingIn?'#93c5fd':'#2563eb',color:'#fff',border:'none',borderRadius:'8px',fontWeight:'700',fontSize:'14px',cursor:isLoggingIn?'default':'pointer'}}>
-                    {isLoggingIn ? (lang==='ko'?'확인 중...':'Signing in...') : (lang==='ko'?'로그인':'Sign In')}
-                  </button>
-                  <button onClick={()=>{setShowLoginModal(false);setLoginError('');}}
-                    style={{padding:'10px 16px',background:'#fff',color:'#64748b',border:'1.5px solid #cbd5e1',borderRadius:'8px',fontWeight:'700',fontSize:'14px',cursor:'pointer'}}>
-                    {lang==='ko'?'취소':'Cancel'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 담당자 변경 모달 */}
-          {showTransferModal && transferRow && (
-            <div style={{position:'fixed',inset:0,zIndex:9400,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
-              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
-              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowTransferModal(false); setTransferRow(null); } }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',width:'100%',maxWidth:'360px'}}>
-                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>🔄</div>
-                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>{lang==='ko' ? '담당자 변경' : 'Transfer Owner'}</h3>
-                <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
-                  <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{transferRow.account}</div>
-                  <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{transferRow.product} · {'₩' + (transferRow.priceKRW||0).toLocaleString()}</div>
-                </div>
-                <div style={{marginBottom:'6px',fontSize:'12px',color:'#64748b'}}>{lang==='ko' ? '현재 담당자' : 'Current'}: <span style={{fontWeight:'800',color:'#7c3aed'}}>{transferRow.member}</span> <span style={{color:'#cbd5e1'}}>({transferRow.team})</span></div>
-                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '변경할 담당자 선택' : 'Select new owner'}</div>
-                <select value={transferTarget} onChange={e => setTransferTarget(e.target.value)}
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #a78bfa',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
-                  {Object.entries(teams).map(([team, members]) => (
-                    <optgroup key={team} label={team}>
-                      {(Array.isArray(members)?members:[]).map(m => <option key={m} value={m}>{m}{m===transferRow.member ? (lang==='ko'?' (현재)':' (current)') : ''}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <div style={{display:'flex',gap:'8px'}}>
-                  <button onClick={() => { setShowTransferModal(false); setTransferRow(null); }}
-                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleTransferConfirm} disabled={!transferTarget || transferTarget===transferRow.member}
-                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:(!transferTarget||transferTarget===transferRow.member)?'#c4b5fd':'#7c3aed',color:'white',fontWeight:'800',cursor:(!transferTarget||transferTarget===transferRow.member)?'default':'pointer',fontSize:'14px'}}>{lang==='ko' ? '변경' : 'Transfer'}</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ER 환율 편집 모달 */}
-          {showErModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowErModal(false); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>💱</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '환율 (ER) 수정' : 'Edit Exchange Rate'}</h3>
-                {!erUnlocked ? (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '환율을 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit the exchange rate.'}</p>
-                    <input type="password" autoFocus value={erPwdInput} onChange={e => { setErPwdInput(e.target.value); setErPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleErUnlock()} placeholder="Password"
-                      style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:erPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                    {erPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{'❌ ' + (lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.')}</p>}
-                    <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErPwdInput(''); setErPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? ('새 환율 입력 (현재: ₩' + activeER.toLocaleString() + ')') : ('New exchange rate (current: ₩' + activeER.toLocaleString() + ')')}</p>
-                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',justifyContent:'center'}}>
-                      <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
-                      <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
-                        style={{width:'160px',padding:'10px 14px',borderRadius:'8px',border:'2px solid #93c5fd',fontFamily:'monospace',fontSize:'18px',fontWeight:'700',textAlign:'center',outline:'none',boxSizing:'border-box',color:'#1e3a5f'}} />
-                    </div>
-                    <div style={{display:'flex',gap:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErUnlocked(false); setErInputVal(''); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErSave} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '저장' : 'Save'}</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 분기 요약 비밀번호 모달 */}
-          {showSummaryPwdModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🔐</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '수정 잠금 해제' : 'Unlock Editing'}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '분기 요약 지표를 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit Quarter Summary values.'}</p>
-                <input type="password" autoFocus value={summaryPwdInput} onChange={e => { setSummaryPwdInput(e.target.value); setSummaryPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleSummaryUnlock()} placeholder="Password"
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:summaryPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                {summaryPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
-                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                  <button onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleSummaryUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Ship Confirm 수정/삭제 비밀번호 모달 */}
-          {showScPwdModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🚢</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{T.shipConfirmPwdTitle}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{T.shipConfirmPwdDesc}</p>
-                <input type="password" autoFocus value={scPwdInput} onChange={e => { setScPwdInput(e.target.value); setScPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleScUnlock()} placeholder="Password"
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:scPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                {scPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
-                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                  <button onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleScUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#1e40af',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* paddingTop cleared below the fixed top-right identity/ER/lang pill row (LangBtn, top:16px)
-              so the mobile brand title and hamburger never sit underneath it. */}
-          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20" style={{paddingTop:'56px'}}>
-            <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
-          </div>
-
-          {/* 사이드바 */}
-          <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
-            <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
-            <div className="flex-1">
-              {Object.entries(groupedQuarters).sort().reverse().map(([year, qList]) => (
-                <div key={year} className="mb-6">
-                  <h4 className="text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1">{year}{T.yearSuffix}</h4>
-                  <div className="space-y-1">
-                    {qList.sort().map(q => {
-                      const fullQ = `${year} ${q}`;
-                      return <button key={fullQ} onClick={() => { setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter===fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
-                    })}
-                  </div>
-                </div>
-              ))}
-              <button onClick={addQuarter} className="w-full mt-2 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
-            </div>
-            <div className="mt-8 border-t border-slate-600 pt-4">
-              <div className="mb-4">
-                <button onClick={() => window.open('report.html', '_blank')} className="w-full bg-slate-700 text-white font-extrabold py-3 rounded-lg hover:bg-slate-600 transition flex items-center justify-center shadow-lg border border-slate-500">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                  {T.execReport}
-                </button>
-              </div>
-              <div className="mb-4">
-                <button onClick={() => window.open('audit.html', '_blank')} className="w-full bg-slate-800 text-slate-300 font-extrabold py-3 rounded-lg hover:bg-slate-700 transition flex items-center justify-center shadow-lg border border-slate-600">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                  {lang==='ko' ? '🔐 Audit Log (변경 이력)' : '🔐 Audit Log'}
-                </button>
-              </div>
-              {/* [FIX #8] CSV 내보내기 드롭다운 */}
-              <div className="relative">
-                <button onClick={() => setShowCsvMenu(v => !v)} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                  {T.exportCSV} ▾
-                </button>
-                {showCsvMenu && (
-                  <div style={{position:'absolute',bottom:'44px',left:0,right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',overflow:'hidden',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',zIndex:200}}>
-                    <button onClick={() => { exportToCSV('current'); setShowCsvMenu(false); }} style={{display:'block',width:'100%',padding:'10px 14px',textAlign:'left',fontSize:'13px',fontWeight:'600',color:'#1e293b',background:'none',border:'none',borderBottom:'1px solid #f1f5f9',cursor:'pointer'}}>{T.csvCurrent} ({selectedQuarter})</button>
-                    <button onClick={() => { exportToCSV('all'); setShowCsvMenu(false); }} style={{display:'block',width:'100%',padding:'10px 14px',textAlign:'left',fontSize:'13px',fontWeight:'600',color:'#1e293b',background:'none',border:'none',cursor:'pointer'}}>{T.csvAll}</button>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-
-          {/* 메인 콘텐츠 */}
-          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
-            {!selectedMember ? (
-              <div>
-                <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
-
-                {/* 전체 목표 달성 현황 */}
-                <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
-                  <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
-                  <div className="toss-threshold-row">
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
-                  </div>
-                  {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
-                </div>
-
-                {/* 분기 요약 지표 */}
-                <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
-                  <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
-                      {T.quarterSummary}
-                      {summaryLocked
-                        ? <button onClick={() => unlockSummary()} data-action="quarter-summary-lock" style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #fbbf24',background:'#fefce8',color:'#b45309',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔒</button>
-                        : <button onClick={() => setSummaryLocked(true)} data-action="quarter-summary-lock" style={{fontSize:'15px',padding:'2px 8px',borderRadius:'6px',border:'1.5px solid #86efac',background:'#f0fdf4',color:'#15803d',cursor:'pointer',fontWeight:'700',lineHeight:1.4}}>🔓</button>}
-                    </h3>
-                    {/* [FIX #4] 현재 selectedQuarter를 파라미터로 전달 */}
-                    <a href={`dashboard_26.html?quarter=${encodeURIComponent(selectedQuarter)}`} target="_blank" rel="noopener noreferrer" data-action="detail-report" className="toss-btn-primary flex items-center gap-1.5 text-white text-[11px] md:text-xs font-bold px-3 md:px-4 py-2 rounded-lg transition whitespace-nowrap">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                      Detail Report
-                    </a>
-                  </div>
-                  {(() => {
-                    // Legacy classes kept only for the unreachable-via-UI `attainRate` slot below
-                    // (never in DEFAULT_CARD_ORDER; only reachable via a hand-edited localStorage
-                    // cardOrder). The 9 real cards all render through <CardShell> instead, below.
-                    const titleCls = "block font-bold text-[13px] tracking-tight mb-2";
-                    const cardBase = "p-4 rounded-xl border flex flex-col justify-between shadow-sm min-h-[130px]";
-                    const C = (id) => CARD_PALETTES[cardColors[id] || 'slate'];
-                    // ── Toss-anchor quiet register: one fixed-height template for every card (title →
-                    // reserved badge slot → one focal value → sub-value), so all 9 Quarter Summary
-                    // cards measure identically regardless of which ones carry a badge or an editable
-                    // input. Non-badge cards render the same sld-badge markup with visibility:hidden
-                    // (not display:none) so the reserved row occupies exactly the same box. ──
-                    const CardShell = ({ dataCard, c, title, badge, value, sub }) => (
-                      <div className="qsg-card" data-card={dataCard} style={{background:c.bg,borderColor:c.border}}>
-                        <span className="qsg-title" style={{color:c.title}}>{title}</span>
-                        <div className={`qsg-badge-slot${badge ? '' : ' qsg-badge-slot--empty'}`}>
-                          <span className={`sld-badge ${badge && badge.ahead===false ? 'sld-badge--behind' : 'sld-badge--ahead'}`} data-badge={badge ? badge.dataBadge : undefined}>
-                            {badge ? (<>{badge.arrow && <span aria-hidden="true">{badge.ahead ? '▲' : '▼'}</span>}{badge.text}</>) : '—'}
-                          </span>
-                        </div>
-                        <div className="qsg-value-row">{value}</div>
-                        <span className="qsg-sub" style={{color:c.title}}>{sub}</span>
-                      </div>
-                    );
-                    const allCards = {
-                      er: (id) => null,
-                      targetKRW: (id) => { const c=C(id); return (
-                        <CardShell dataCard="targetKRW" c={c} title={<>Target <span aria-hidden="true">✏️</span></>} badge={null}
-                          sub={'$ ' + targetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                          value={<input type="number" data-field="target-krw" value={targetKRW===0?'':targetKRW} onChange={e=>handleTargetChange('target',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="qsg-value" style={{color:c.value,borderBottomColor:c.inputBorder,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.targetPlaceholder}/>}
-                        />
-                      ); },
-                      targetUSD: (id) => null,
-                      incentiveKRW: (id) => { const c=C(id); const incentivePct = incentiveTargetKRW ? (expectedKRW / incentiveTargetKRW * 100) : 0; const ahead = incentivePct>=100; return (
-                        <CardShell dataCard="incentiveKRW" c={c} title="Incentive Target ÷120%"
-                          badge={{ahead, arrow:false, text:'ACT+SC: ' + incentivePct.toFixed(1) + '%', dataBadge:'pct-status'}}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {incentiveTargetKRW.toLocaleString(undefined,{maximumFractionDigits:0})}</span>}
-                          sub={'$ ' + incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      incentiveUSD: (id) => null,
-                      estimatedKRW: (id) => { const c=C(id); return (
-                        <CardShell dataCard="estimatedKRW" c={c} title={lang==='ko' ? '예상치 (ACT+SC)' : 'Estimated (ACT+SC)'} badge={null}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {expectedKRW.toLocaleString()}</span>}
-                          sub={'$ ' + expectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      estimatedUSD: (id) => null,
-                      gapKRW: (id) => { const c=C(id); const ahead = gapKRW <= 0; return (
-                        <CardShell dataCard="gap" c={c} title="GAP"
-                          badge={{ahead, arrow:true, text: ahead ? T.gapStatusAhead : T.gapStatusBehind, dataBadge:'gap-status'}}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gapKRW.toLocaleString()}</span>}
-                          sub={'$ ' + gapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      attainRate: (id) => { const c=C(id); return <div className={cardBase} style={{background:c.bg,borderColor:c.border}} data-card="attainRate"><span className={titleCls} style={{color:c.title}}>{lang==='ko' ? '% 달성률' : '% Attainment'}</span><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px',marginBottom:'2px'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:c.title,opacity:0.65}}>ACT</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:actPct>=100?'#047857':c.value}}>{actPct.toFixed(1) + '%'}</span></div><div style={{height:'1px',background:'rgba(0,0,0,0.08)',marginBottom:'2px'}}></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontFamily:'monospace',fontSize:'11px',color:'#1d4ed8',opacity:0.8}}>SC</span><span style={{fontFamily:'monospace',fontWeight:'800',fontSize:'17px',color:shipConfirmPct>=100?'#047857':'#1d4ed8'}}>{shipConfirmPct.toFixed(1) + '%'}</span></div></div>; },
-                      gmppTarget: (id) => { const c=C(id); return (
-                        <CardShell dataCard="gmppTarget" c={c} title={<>GMPP Target <span aria-hidden="true">✏️</span></>} badge={null}
-                          sub={'$ ' + gmppTargetUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                          value={<input type="number" data-field="gmpp-target-krw" value={gmppTargetKRW===0?'':gmppTargetKRW} onChange={e=>handleTargetChange('gmppTarget',e.target.value)} readOnly={summaryLocked} onClick={()=>{if(summaryLocked)unlockSummary();}} className="qsg-value" style={{color:c.value,borderBottomColor:c.inputBorder,cursor:summaryLocked?'pointer':'text',opacity:summaryLocked?0.6:1}} placeholder={T.gmppTargetPH}/>}
-                        />
-                      ); },
-                      gmppEstimated: (id) => { const c=C(id); const gmppPct = gmppTargetKRW ? (gmppExpectedKRW / gmppTargetKRW * 100) : 0; const ahead = gmppPct>=100; return (
-                        <CardShell dataCard="gmppEstimated" c={c} title="GMPP 예상치 (ACT+SC)"
-                          badge={{ahead, arrow:false, text:'vs Target: ' + gmppPct.toFixed(1) + '%', dataBadge:'pct-status'}}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gmppExpectedKRW.toLocaleString()}</span>}
-                          sub={'$ ' + gmppExpectedUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      gmppGap: (id) => { const c=C(id); const ahead = gmppGapKRW <= 0; return (
-                        <CardShell dataCard="gmppGap" c={c} title="GMPP GAP"
-                          badge={{ahead, arrow:true, text: ahead ? T.gapStatusAhead : T.gapStatusBehind, dataBadge:'gap-status'}}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {gmppGapKRW.toLocaleString()}</span>}
-                          sub={'$ ' + gmppGapUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      actEstimatedKRW: (id) => { const c=C(id); return (
-                        <CardShell dataCard="actEstimatedKRW" c={c} title={lang==='ko' ? 'ACT 예상치' : 'ACT Estimated'} badge={null}
-                          value={<span className="qsg-value" style={{color:c.value}}>₩ {actKRW.toLocaleString()}</span>}
-                          sub={'$ ' + actUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                      shipConfirmKRW: (id) => { const c=C(id); return (
-                        <CardShell dataCard="shipConfirmKRW" c={c} title={lang==='ko' ? 'SC 예상치' : 'SC Estimated'} badge={null}
-                          value={<span className="qsg-value" style={{color:c.value}}>{'₩ ' + shipConfirmKRW.toLocaleString()}</span>}
-                          sub={'$ ' + shipConfirmUSD.toLocaleString(undefined,{maximumFractionDigits:2})}
-                        />
-                      ); },
-                    };
-                    return (
-                      <div className="qsg-grid mb-4" data-region="quarter-summary">
-                        {cardOrder.map((id, idx) => allCards[id] ? (
-                          <div key={id} draggable data-card={id} onDragStart={e=>handleDragStart(e,idx)} onDragOver={e=>handleDragOver(e,idx)} onDrop={e=>handleDrop(e,idx)} onDragEnd={handleDragEnd}
-                            className={`qsg-card-wrapper relative cursor-grab active:cursor-grabbing ${dragOverIdx===idx?'ring-2 ring-blue-400':''}`}>
-                            {allCards[id](id)}
-                            <div style={{position:'absolute',top:'6px',right:'6px',display:'flex',gap:'4px'}}>
-                              <button onClick={() => setColorPickerOpen(colorPickerOpen===id?null:id)} data-action="palette-picker" style={{fontSize:'10px',padding:'2px 5px',borderRadius:'4px',border:'1px solid #e2e8f0',background:'#f8fafc',cursor:'pointer',color:'#64748b',lineHeight:1.4}}>🎨</button>
-                            </div>
-                            {colorPickerOpen===id && (
-                              <div style={{position:'absolute',top:'30px',right:'6px',zIndex:100,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',padding:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',display:'flex',gap:'6px',flexWrap:'wrap',maxWidth:'140px'}} onClick={e=>e.stopPropagation()}>
-                                {Object.entries(CARD_PALETTES).map(([key,pal])=><button key={key} onClick={()=>setCardColor(id,key)} style={{width:'22px',height:'22px',borderRadius:'50%',background:pal.bg,border:`2px solid ${pal.border}`,cursor:'pointer',outline:cardColors[id]===key?`2px solid ${pal.title}`:'none',outlineOffset:'1px'}} title={pal.label}/>)}
-                              </div>
-                            )}
-                          </div>
-                        ) : null)}
-                      </div>
-                    );
-                  })()}
-
-
-                </div>
-
-                {/* 통계 탭 */}
-                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm mb-12" data-region="stat-chart-tabs">
-                  <div className="grid grid-cols-3 md:flex bg-gray-50 border-b">
-                    <button onClick={() => setActiveStatTab('product')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab==='product'?'bg-white text-blue-600 border-blue-600 md:border-b-2':'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabByEquip}</button>
-                    <button onClick={() => setActiveStatTab('dealer')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab==='dealer'?'bg-white text-purple-600 border-purple-600 md:border-b-2':'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabDealer}</button>
-                    <button onClick={() => setActiveStatTab('member')} className={`col-span-1 md:flex-1 py-3 md:py-4 font-bold text-xs md:text-sm transition-colors border-b-2 md:border-b-0 ${activeStatTab==='member'?'bg-white text-emerald-600 border-emerald-600 md:border-b-2':'text-gray-500 hover:bg-gray-100 border-transparent'}`}>{T.tabMember}</button>
-                  </div>
-                  <div className="p-4 md:p-8">
-                    {activeStatTab==='product' && renderBarChart(productStats, 'bg-blue-500')}
-                    {activeStatTab==='dealer'  && renderBarChart(dealerStats,  'bg-purple-500')}
-                    {activeStatTab==='member'  && renderMemberChart(memberStats, currentMemberTargets, 'bg-emerald-500')}
-                  </div>
-                </div>
-
-                {/* 팀 탭 */}
-                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar" data-region="team-tabs">
-                  {Object.keys(teams).sort().map(team => (
-                    <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam===team?'bg-blue-600 text-white shadow-md':'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
-                  ))}
-                  <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
-                </div>
-
-                <div className="flex flex-col lg:flex-row gap-6 mb-10">
-                  {/* 팀 달성률 + 멤버 카드 */}
-                  <div className="lg:w-80 flex-shrink-0">
-                    {(() => {
-                      const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
-                      const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
-                      const teamPer    = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
-                      // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
-                      const teamZone   = teamPer>=120?3:teamPer>=100?2:1;
-                      const perColor   = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
-                      const fillColor  = teamZone===3?'#10b981':teamZone===2?'#3b82f6':'#94a3b8';
-                      const scaleMax   = teamTarget>0 ? Math.max(teamTarget*1.5, teamActKRW*1.05) : 0;
-                      const fillPct    = scaleMax>0 ? Math.min((teamActKRW/scaleMax)*100,100) : 0;
-                      const zone1W     = scaleMax>0 ? (teamTarget/scaleMax)*100 : 0;
-                      const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
-                      const zone3W     = 100 - zone1W - zone2W;
-                      return (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" data-region="team-progress-bar">
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
-                            <span className="font-extrabold text-lg" style={{color:perColor}}>{teamTarget>0?`${teamPer.toFixed(1)}%`:'-'}</span>
-                          </div>
-                          <div className="flex items-center gap-1 mb-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
-                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🎯 팀 목표</span>
-                            <span className="text-slate-400 font-bold text-xs mx-1">₩</span>
-                            <input type="number" min="0" value={teamTargets[selectedTeam]?.[selectedQuarter]||''} onChange={e=>handleTeamTargetChange(selectedTeam,selectedQuarter,e.target.value)} placeholder="목표 금액 입력" className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0" style={{borderBottom:'1.5px solid #cbd5e1'}}/>
-                          </div>
-                          <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
-                            <span>{lang==='ko'?'누적 달성 (Ship Confirm 기준)':'Cumulative (Ship Confirm)'}</span>
-                            <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
-                          </div>
-                          {teamTarget>0 && (
-                            <>
-                              <div className="relative" style={{height:'13px'}}>
-                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W}%`,color:'#475569'}}>100%</div>
-                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W+zone2W}%`,color:'#1d4ed8'}}>120%</div>
-                              </div>
-                              <div className="relative w-full rounded-full overflow-hidden shadow-inner border border-gray-200" style={{height:'10px'}}>
-                                <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
-                                  <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
-                                  <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
-                                  <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
-                                </div>
-                                <div className="h-full rounded-full transition-all duration-700 relative" style={{width:`${fillPct}%`,background:fillColor}}/>
-                              </div>
-                              <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span style={{color:'#94a3b8'}}>{lang==='ko'?'목표':'Target'} ₩ {teamTarget.toLocaleString()}</span></div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-base font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
-                      <button onClick={addMember} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      {teams[selectedTeam].length===0 ? (
-                        <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
-                      ) : (
-                        teams[selectedTeam].map(member => {
-                          const mActKRW = memberStats[member]?.sumKRW || 0;
-                          const mTarget = currentMemberTargets[member] || 0;
-                          const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
-                          // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
-                          const mZone      = mPer>=120?3:mPer>=100?2:1;
-                          const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
-                          const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
-                          const mCount  = memberStats[member]?.count || 0;
-                          return (
-                            <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
-                              <div className="flex justify-between items-start mb-2">
-                                <div><div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div><div className="text-[10px] text-gray-400 mt-0.5">{mCount}{T.cases} · {T.memberSubtitle}</div></div>
-                                <div className="flex gap-1" onClick={e=>e.stopPropagation()}>
-                                  <button onClick={e=>editMemberName(member,e)} className="text-[10px] text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-1.5 py-1 rounded border transition">{T.rename}</button>
-                                  <button onClick={e=>deleteMember(member,e)} className="text-[10px] text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-1 rounded border border-red-200 transition">{T.delete}</button>
-                                </div>
-                              </div>
-                              <div className="flex justify-between items-end mb-1.5">
-                                <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
-                                <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
-                              </div>
-                              {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
-                              {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* All List */}
-                  {(() => {
-                    const baseRows = salesData.filter(d => d.quarter===selectedQuarter);
-                    const STATUS_ORDER = { 'Ship Confirm':0, 'ACT':1, 'Pending':2, 'Back up':3 };
-                    const STATUS_COLOR = { 'Ship Confirm':{ row:'bg-blue-900/10', badge:'bg-blue-900 text-white' }, 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
-                    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
-                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
-                    const f = allListFilters;
-                    const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
-                    const hasAnyFilter = Object.values(f).some(v=>v.length>0);
-                    const ColHeader = ({ col, label }) => {
-                      const isOpen = allListFilterOpen===col;
-                      const active = f[col].length > 0;
-                      const vals   = colVals[col] || [];
-                      return (
-                        <th className="px-3 py-0 font-bold relative" style={{userSelect:'none'}}>
-                          <div className="flex items-center gap-1 py-2">
-                            <span>{label}</span>
-                            <button onClick={e=>{e.stopPropagation();setAllListFilterOpen(isOpen?null:col);}} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}} title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
-                          </div>
-                          {isOpen && (
-                            <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',left:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                              <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
-                                <button onClick={()=>clearAllListFilter(col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
-                              </div>
-                              <div style={{overflowY:'auto',flex:1}}>
-                                {vals.map(val=>{
-                                  const checked = f[col].includes(val);
-                                  const count   = baseRows.filter(d=>{const dv=col==='team'?(d.team||'-'):col==='dealer'?(d.dealerName||'-'):col==='salesType'?d.salesType:d[col];return dv===val;}).length;
-                                  return (
-                                    <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
-                                      <input type="checkbox" checked={checked} onChange={()=>toggleAllListFilter(col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
-                                      <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
-                                      <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </th>
-                      );
-                    };
-                    return (
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2">📋 {lang==='ko'?'전체 리스트':'All List'}<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
-                          <div className="flex items-center gap-2">
-                            {hasAnyFilter && <button onClick={clearAllListFilters} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                            <span className="text-xs text-gray-400 font-semibold bg-gray-100 px-3 py-1 rounded-full">{filteredRows.length}{hasAnyFilter?` / ${baseRows.length}`:''}{lang==='ko'?'건':' items'}</span>
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                          <div className="overflow-x-auto hide-scrollbar">
-                            <table className="min-w-full text-xs text-left whitespace-nowrap">
-                              <thead>
-                                <tr className="bg-slate-700 text-white">
-                                  <ColHeader col="team"      label="Team"/>
-                                  <ColHeader col="member"    label={lang==='ko'?'멤버':'Member'}/>
-                                  <ColHeader col="status"    label="Status"/>
-                                  <ColHeader col="account"   label="Account"/>
-                                  <ColHeader col="product"   label="Product"/>
-                                  <ColHeader col="dealer"    label="Dealer"/>
-                                  <th className="px-3 py-2 font-bold">SO</th>
-                                  <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
-                                  filteredRows.map((row,i) => {
-                                    const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
-                                    return (
-                                      <tr key={row.id||i} className={`border-b ${sc.row} hover:brightness-95 transition cursor-pointer`} onClick={()=>{ setSelectedTeam(row.team||selectedTeam); setSelectedMember(row.member); }}>
-                                        <td className="px-3 py-2 font-semibold text-slate-600">{row.team||'-'}</td>
-                                        <td className="px-3 py-2 font-bold text-gray-800">{row.member}</td>
-                                        <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sc.badge}`}>{row.status}</span></td>
-                                        <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
-                                        <td className="px-3 py-2 text-gray-600">{row.product}</td>
-                                        <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
-                                        <td className="px-3 py-2 font-mono text-gray-600">{row.so||'-'}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                              {filteredRows.length>0 && (
-                                <tfoot>
-                                  <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                    <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
-                                    <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
-                                  </tr>
-                                </tfoot>
-                              )}
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            ) : (
-              // ── 멤버 상세 뷰 ────────────────────────────────────────────────
-              <div>
-                <button onClick={() => { setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className="mb-4 flex items-center bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-slate-800 transition">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                  {T.backBtn}
-                </button>
-
-                <div className="bg-white p-4 md:p-8 rounded-xl shadow-md border border-gray-100 mb-8">
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-gray-800 mb-6">{selectedMember} <span className="text-lg md:text-xl text-gray-500 font-medium block md:inline mt-1 md:mt-0">Account FCST</span></h3>
-
-                  {(() => {
-                    // [FIX #분기별 개인목표] 이 분기(selectedQuarter)에 값이 아직 없어도(undefined)
-                    // 입력창은 항상 보여준다 — 그래야 새 분기에 처음 목표를 기재할 수 있다.
-                    const selMemberTarget = currentMemberTargets[selectedMember] || 0;
-                    return (
-                    <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
-                      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
-                        <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative} <span className="text-xs md:text-sm text-gray-400 font-semibold ml-1">({selectedQuarter})</span></h4>
-                        <div className="mtg-row gap-2 lg:gap-3 w-full lg:w-auto">
-                          <div className="flex flex-col bg-white px-1.5 py-2 rounded shadow-sm border-l-4 border-2 flex-1 lg:flex-none" style={{borderLeftColor:'#94a3b8'}}>
-                            <span className="text-[10px] block font-bold mb-1" style={{color:'#475569'}}>{T.target100label}</span>
-                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>₩</span><input type="number" min="0" value={selMemberTarget===0?'':selMemberTarget} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
-                          </div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>₩ {(selMemberTarget*1.2).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>₩ {(selMemberTarget*1.4).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>₩ {(selMemberTarget*1.5).toLocaleString()}</span></div>
-                        </div>
-                      </div>
-                      {renderProgressBar(memberSCKRW, memberActKRW, selMemberTarget)}
-                    </div>
-                    );
-                  })()}
-
-                  {/* 수정 모달 */}
-                  {showEditModal && (
-                    <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
-                      onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
-                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);} }}>
-                      <div style={{background:'#fff',borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'680px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-                          <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>✨ {T.editMode}</span>
-                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
-                            <option value="">{T.selectRequired}</option>
-                            <option value="병원">병원</option>
-                            <option value="Innomed">Innomed (이노메드)</option>
-                            <option value="SEVEN U">SEVEN U (세븐유)</option>
-                            <option value="TMI">TMI</option>
-                            <option value="알펙스메디">알펙스메디</option>
-                          </select></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.accountLabel} <span className="text-red-500">*</span></label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price_KR (₩) <span className="text-red-500">*</span></label><input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} readOnly className="w-full p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`}/></div>
-                        </div>
-                        <div className="flex gap-3 mt-2">
-                          <button type="button" onClick={handleSave} disabled={isSaving} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded shadow transition flex items-center justify-center gap-2">
-                            {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
-                            {T.saveEdit}
-                          </button>
-                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* [FIX #2] 입력 폼 — min="0" 추가, 저장 중 비활성화 */}
-                  <form className="bg-slate-50 p-4 md:p-6 rounded-lg border border-gray-200 transition" data-region="account-entry-form">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
-                        <option value="">{T.selectRequired}</option>
-                        <option value="병원">병원</option>
-                        <option value="Innomed">Innomed (이노메드)</option>
-                        <option value="SEVEN U">SEVEN U (세븐유)</option>
-                        <option value="TMI">TMI</option>
-                        <option value="알펙스메디">알펙스메디</option>
-                      </select></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.accountLabel} <span className="text-red-500">*</span></label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
-                      {/* [FIX #2] min="0" 추가 */}
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_KR (₩) <span className="text-red-500">*</span></label><input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price_USD ($)</label><input type="number" name="priceUSD" value={form.priceUSD} readOnly className="w-full p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`원화 ÷ ${currentER}`}/></div>
-                    </div>
-                    <div className="mt-2 text-right">
-                      <button type="button" onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold w-full py-3 rounded shadow transition flex items-center justify-center gap-2">
-                        {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
-                        {T.saveNew}
-                      </button>
-                    </div>
-                  </form>
-
-                  {/* Ship Confirm 완료 테이블 (맨 위) */}
-                  {(() => {
-                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Ship Confirm');
-                    const filteredRows = applyMemberTableFilter('ShipConfirm', rawRows);
-                    const hasFilter = Object.values(getMemberFilter('ShipConfirm')).some(v=>v.length>0);
-                    return (
-                      <div className="mt-8">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                          <h4 className="text-lg md:text-xl font-bold flex items-center gap-2" style={{color:'#1d4ed8'}}>
-                            🚢 {T.shipConfirmList}
-                            <span className="text-sm font-normal text-gray-500">{hasFilter ? `(${filteredRows.length} / ${shipConfirmCount}${T.cases})` : `(${shipConfirmCount}${T.cases})`}</span>
-                          </h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('ShipConfirm')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                        </div>
-                        <div className="overflow-x-auto rounded-lg border border-blue-900">
-                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ShipConfirm')}/></thead>
-                            <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : filteredRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* ACT 테이블 */}
-                  {(() => {
-                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='ACT');
-                    const filteredRows = applyMemberTableFilter('ACT', rawRows);
-                    const hasFilter = Object.values(getMemberFilter('ACT')).some(v=>v.length>0);
-                    return (
-                      <div className="mt-10">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                          <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-800">{T.deliveryStatus} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('ACT')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                        </div>
-                        <div className="overflow-x-auto rounded-lg border border-blue-200">
-                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-blue-800 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ACT')}/></thead>
-                            <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',filteredRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700'))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Pending 테이블 */}
-                  {(() => {
-                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Pending');
-                    const filteredRows = applyMemberTableFilter('Pending', rawRows);
-                    const hasFilter = Object.values(getMemberFilter('Pending')).some(v=>v.length>0);
-                    return (
-                      <div className="mt-10">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                          <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-700">{T.pendingList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Pending')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                        </div>
-                        <div className="overflow-x-auto rounded-lg border border-blue-200">
-                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-blue-700 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Pending')}/></thead>
-                            <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',filteredRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800'))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Backup 테이블 */}
-                  {(() => {
-                    const rawRows = salesData.filter(d=>d.quarter===selectedQuarter&&d.member===selectedMember&&d.status==='Back up');
-                    const filteredRows = applyMemberTableFilter('Backup', rawRows);
-                    const hasFilter = Object.values(getMemberFilter('Backup')).some(v=>v.length>0);
-                    return (
-                      <div className="mt-10">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                          <h4 className="text-lg md:text-xl font-bold flex items-center text-orange-600">{T.backupList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Backup')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                        </div>
-                        <div className="overflow-x-auto rounded-lg border border-orange-200">
-                          <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
-                            <thead className="bg-orange-500 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Backup')}/></thead>
-                            <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',filteredRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800'))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-
-
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    };
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
   </script>
 
   <style>
-    .hide-scrollbar::-webkit-scrollbar { display: none; }
-    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-    html, body { overflow-x: hidden; max-width: 100vw; }
-    .main-content { min-width: 0; overflow-x: hidden; }
-
-    /* 테이블 블록 가로 스크롤바 표시 */
-    .overflow-x-auto:not(.hide-scrollbar) {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
+    body { background-color: #f3f4f6; }
+    /* Toss-anchor quiet register (see index.html's .toss-panel/.qsg-card — .omd/scout-toss.md,
+       .omd/decisions.md "report.html ... 포팅"): near-flat elevation, no drop shadow, 1px hairline
+       neutral border, 14px radius — same tokens as index.html's qsg-card, applied to this report's
+       own "card" unit (the excel-container wrapping each table). */
+    :root {
+      --toss-blue: #3182f6;
+      --toss-blue-hover: #2272eb;
+      --toss-grey200: #e5e8eb;
     }
-    .overflow-x-auto:not(.hide-scrollbar)::-webkit-scrollbar { height: 7px; }
-    .overflow-x-auto:not(.hide-scrollbar)::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-    .overflow-x-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
-    .overflow-x-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    .excel-container { overflow-x: auto; background: white; padding: 16px; border-radius: 14px; box-shadow: none; border: 1px solid var(--toss-grey200); margin-bottom: 30px; }
+    @media (min-width: 768px) { .excel-container { padding: 24px; } }
+    .excel-table { border-collapse: collapse; white-space: nowrap; width: max-content; }
+    .excel-table th, .excel-table td { border: 1px solid #94a3b8; padding: 6px 12px; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+    .excel-table th { background-color: #dbeafe; color: #1e293b; font-weight: bold; text-align: center; }
+    .excel-table .header-dark { background-color: #1e293b; color: white; border-color: #334155; }
+    .text-left { text-align: left !important; }
+    .text-center { text-align: center !important; }
+    .bg-yellow { background-color: #fef3c7 !important; }
+    .bg-blue { background-color: #eff6ff !important; }
+    .bg-red-light { background-color: #fee2e2 !important; }
+    .text-red { color: #dc2626 !important; font-weight: bold; }
+    .text-blue { color: #2563eb !important; font-weight: bold; }
+    .font-bold { font-weight: bold !important; }
+    ::-webkit-scrollbar { height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+    .week-date-label { display: block; font-size: 9px; font-weight: normal; color: #1e293b; margin-top: 3px; letter-spacing: 0.2px; }
+    .progress-cell { font-weight: bold !important; }
 
-    /* 테이블 셀 텍스트 복사 허용 */
-    table td, table th {
-      user-select: text !important;
-      -webkit-user-select: text !important;
-    }
+    /* [FIX #1] 집계 기준 배너 — same tinted-chip idiom as index.html's SC/ACT achievement-bar labels
+       (text-xs font-bold text-blue-700 bg-blue-50 border-blue-200), not a one-off indigo. This
+       idiom is unchanged by the Toss restyle (still present verbatim in current index.html), so
+       it is left as-is here too. */
+    .basis-note { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #1d4ed8; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
 
-    @media (max-width: 768px) {
-      table { font-size: 11px; }
-    }
+    /* Scarce Toss blue accent, reserved for this report's one primary/interactive element (the
+       quarter selector) and its login-gate submit button — same tokens/hover as index.html's
+       .toss-btn-primary, which replaced the old indigo-600 CTA. */
+    .rpt-select:hover, .rpt-select:focus { border-color: var(--toss-blue) !important; }
+    .rpt-btn-primary { background: var(--toss-blue); }
+    .rpt-btn-primary:hover { background: var(--toss-blue-hover); }
 
     /* ══════════════════════════════════════════════════════════════════════
-       Status-Legible Ledger — full-page restyle tokens + shared components
-       (.omd/composition.md). Kept separate from the compiled-Tailwind block
-       above: new colors are not in that fixed utility list, so they live here
-       as plain CSS rather than assumed (never-verified) Tailwind classes.
+       Status-Legible Ledger — shared tokens/components ported from index.html
+       (.omd/composition.md). Same signed-delta badge + 3-zone ascending
+       (zone1 slate <100%, zone2 blue 100–120%, zone3 emerald 120%+) family
+       used for every ahead/behind and attainment signal in this report.
        ══════════════════════════════════════════════════════════════════════ */
     :root {
-      --sld-zone-1-fg: #475569;  /* below target — muted slate */
-      --sld-zone-2-fg: #1d4ed8;  /* 100–120% — blue */
-      --sld-zone-3-fg: #047857;  /* 120%+ — emerald */
+      --sld-zone-1-fg: #475569;
+      --sld-zone-2-fg: #1d4ed8;
+      --sld-zone-3-fg: #047857;
       --sld-accent: #2563eb;
       --sld-focus-ring: #2563eb;
     }
-
-    /* Signed-delta status badge (GAP / GMPP GAP cards) — low-opacity tint + ring, never a solid fill */
     .sld-badge {
       display: inline-flex;
       align-items: center;
@@ -2300,122 +486,14 @@ img,video{max-width:100%;height:auto}
       white-space: nowrap;
       line-height: 1.5;
     }
-    /* Solid pre-composited tints (not rgba) so contrast is unambiguous against any card background */
     .sld-badge--ahead  { background: #e2f7f0; color: #047857; box-shadow: inset 0 0 0 1px rgba(16,185,129,0.35); }
     .sld-badge--behind { background: #fbe9e9; color: #b91c1c; box-shadow: inset 0 0 0 1px rgba(220,38,38,0.32); }
+    /* Compact table-cell adaptation of the same ahead/behind tokens — a table row has no room for a
+       standalone pill beside the ₩ value, so the whole Gap cell takes the badge's tint (documented
+       deviation, see .omd/decisions.md) */
+    .sld-cell--ahead  { background: #e2f7f0 !important; color: #047857 !important; font-weight: bold; }
+    .sld-cell--behind { background: #fbe9e9 !important; color: #b91c1c !important; font-weight: bold; }
 
-    /* ══════════════════════════════════════════════════════════════════════
-       Toss-anchor quiet register (index-toss-variant.html only — see
-       .omd/scout-toss.md + .omd/reference-board-toss.json, candidate
-       "toss-quiet-numeral-focus"). Near-flat elevation, hairline neutral
-       borders, one scarce interactive blue, one dominant focal value per
-       card, tabular-nums on every figure. Kept as its own block so this
-       variant's diff against index.html stays legible.
-       ══════════════════════════════════════════════════════════════════════ */
-    :root {
-      --toss-blue: #3182f6;
-      --toss-blue-hover: #2272eb;
-      --toss-grey900: #191f28;
-      --toss-grey700: #4e5968;
-      --toss-grey500: #8b95a1;
-      --toss-grey200: #e5e8eb;
-      --toss-grey100: #f2f4f6;
-    }
-
-    /* Flat panel chrome shared by the header "전체 목표 달성 현황" card and the
-       Quarter Summary card — hairline border, no drop shadow, 16px radius. */
-    .toss-panel { background: #ffffff; border: 1px solid var(--toss-grey200); border-radius: 16px; box-shadow: none; }
-
-    /* Scarce-blue primary action (replaces the indigo CTA) */
-    .toss-btn-primary { background: var(--toss-blue); }
-    .toss-btn-primary:hover { background: var(--toss-blue-hover); }
-
-    /* Header threshold row (100/120/150% Target) — flat cards, a small status
-       dot carries the hue instead of a solid tinted background + thick left
-       border, so color stays reserved for meaning rather than decoration. */
-    .toss-threshold-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    @media (min-width: 768px) {
-      .toss-threshold-row { flex-direction: row; gap: 12px; }
-    }
-    .toss-threshold-card { flex: 1; display: flex; align-items: center; gap: 8px; background: #ffffff; border: 1px solid var(--toss-grey200); border-radius: 12px; padding: 12px 16px; min-width: 0; }
-    .toss-threshold-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .toss-threshold-label { font-size: 12px; font-weight: 700; color: var(--toss-grey700); white-space: nowrap; }
-    .toss-threshold-value { margin-left: auto; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; color: var(--toss-grey900); white-space: nowrap; }
-    @media (min-width: 768px) {
-      .toss-threshold-value { font-size: 16px; }
-    }
-
-    /* Any figure inside the header achievement bar — chips, the Total
-       readout, zone-boundary labels, in-track segment labels. */
-    .toss-tnum { font-variant-numeric: tabular-nums; }
-
-    /* Quarter Summary grid — real CSS grid, fixed-height cells so all 9 cards
-       measure identically regardless of which ones carry a badge or an
-       editable input (the defect this variant exists to remove). */
-    .qsg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    @media (min-width: 768px) {
-      .qsg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-    }
-    .qsg-card-wrapper { border-radius: 14px; }
-    .qsg-card {
-      height: 172px;
-      box-sizing: border-box;
-      padding: 18px 16px;
-      border: 1px solid var(--toss-grey200);
-      border-radius: 14px;
-      box-shadow: none;
-      display: flex;
-      flex-direction: column;
-    }
-    @media (min-width: 768px) {
-      .qsg-card { padding: 18px 20px; }
-    }
-    .qsg-title { display: block; font-size: 12px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; margin-bottom: 10px; flex-shrink: 0; }
-    .qsg-badge-slot { display: flex; justify-content: flex-end; height: 20px; margin-bottom: 6px; flex-shrink: 0; }
-    .qsg-badge-slot--empty { visibility: hidden; }
-    .qsg-value-row { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; }
-    .qsg-value {
-      display: block; width: 100%; text-align: right;
-      font-size: 14px; font-weight: 800; line-height: 1.2;
-      font-variant-numeric: tabular-nums;
-      font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
-      white-space: nowrap;
-    }
-    @media (min-width: 768px) {
-      .qsg-value { font-size: 21px; }
-    }
-    input.qsg-value { background: transparent; border: none; border-bottom: 1.5px solid #d1d6db; outline: none; padding: 2px; transition: border-color .15s ease; }
-    input.qsg-value:focus { border-bottom-color: var(--toss-blue); }
-    .qsg-sub { display: block; flex-shrink: 0; text-align: right; margin-top: 6px; font-size: 12px; font-weight: 600; opacity: 0.72; line-height: 1.3; font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
-
-    /* Editable numeric target input (member-detail 100% Target card) — kill native spin buttons so
-       every pixel of the narrow mobile box goes to the value itself, not browser chrome. */
-    .no-spinner::-webkit-outer-spin-button,
-    .no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .no-spinner { -moz-appearance: textfield; }
-
-    /* Member-detail 100/120/140% Target row — below `lg` this is a real 3-column grid (equal
-       thirds regardless of each card's own content width) instead of content-driven flexbox, so the
-       editable 100% Target card can never be squeezed narrower than its read-only siblings; the
-       150% Target card spans all 3 columns via its own inline gridColumn. At `lg`+ this reverts to
-       the original flex-wrap row so desktop layout is unchanged. */
-    .mtg-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    @media (min-width: 1024px) {
-      .mtg-row { display: flex; flex-wrap: wrap; }
-    }
-
-    /* Hover-revealed row actions (non-gated Pending/ACT/Back up rows); gated Ship Confirm rows
-       (.sld-row-actions--gated) stay permanently visible — the lock glyph must never hide. */
-    .sld-row-actions { opacity: 0; transition: opacity .15s ease; }
-    tr:hover .sld-row-actions,
-    tr:focus-within .sld-row-actions { opacity: 1; }
-    .sld-row-actions--gated { opacity: 1 !important; }
-    @media (max-width: 768px) {
-      /* no hover on touch input — row actions stay reachable at every width */
-      .sld-row-actions { opacity: 1; }
-    }
-
-    /* ── finish pass: selection, focus ring, scrollbar (craft/finish-pass.md) ── */
     ::selection { background-color: rgba(37,99,235,0.22); color: #0f172a; }
     :focus-visible {
       outline: none;
@@ -2426,5 +504,349 @@ img,video{max-width:100%;height:auto}
       scrollbar-width: thin;
     }
   </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ── top-right identity/lang pill row — same dark-slate chip chrome as index.html's LangBtn ──
+    const LangBtn = ({ lang, setLang, onLogout, logoutLabel }) => (
+      <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:9999, display:'flex', alignItems:'center', gap:'8px' }}>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid #475569', background:'#0f172a', color:'#94a3b8', fontWeight:'700', fontSize:'11px', display:'flex', alignItems:'center', gap:'5px', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', cursor:'pointer', whiteSpace:'nowrap' }}
+          >
+            🔓 {logoutLabel}
+          </button>
+        )}
+        <button
+          onClick={() => { const next = lang==='ko'?'en':'ko'; setLang(next); localStorage.setItem('lang',next); }}
+          style={{ padding:'6px 14px', borderRadius:'20px', border:'1.5px solid #64748b', background:'#1e293b', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:'6px' }}
+        >
+          {lang==='ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+        </button>
+      </div>
+    );
+
+    // ── 3-zone ascending attainment family, identical thresholds/hues to index.html's achievement bar
+    //    (zone1 slate <100%, zone2 blue 100–120%, zone3 emerald 120%+) — light tints for white table
+    //    rows, lighter on-dark tints for the dark TOTAL row. ──
+    const zoneColor = (pct, dark) => {
+      if (pct >= 120) return dark ? { fg:'#6ee7b7' } : { bg:'#ecfdf5', fg:'#047857' };
+      if (pct >= 100) return dark ? { fg:'#93c5fd' } : { bg:'#eff6ff', fg:'#1d4ed8' };
+      return dark ? { fg:'#cbd5e1' } : { bg:'#f1f5f9', fg:'#475569' };
+    };
+
+    // Monthly sub-progress cell (was a flat, always-blue `.progress-cell` regardless of actual
+    // attainment) — now tinted by the same 3-zone family as the achievement bar.
+    const ProgressCell = ({ val, budget }) => {
+      const has = budget > 0;
+      const pct = has ? (val / budget * 100) : 0;
+      const z = zoneColor(pct, false);
+      return (
+        <td className="progress-cell" style={has ? { background:z.bg, color:z.fg } : undefined}>
+          {has ? pct.toFixed(1) + '%' : '-'}
+        </td>
+      );
+    };
+
+    const ReportApp = () => {
+      const [lang, setLang]           = useState(localStorage.getItem('lang') || 'ko');
+      const [currentUser, setCurrentUser] = useState(null);
+      const [authReady, setAuthReady]     = useState(false);
+      const [emailInput, setEmailInput]   = useState('');
+      const [pwdInput, setPwdInput]       = useState('');
+      const [loginError, setLoginError]   = useState('');
+      const [loggingIn, setLoggingIn]     = useState(false);
+      const isLoggedIn = !!currentUser;
+
+      useEffect(() => auth.onAuthStateChanged(u => { setCurrentUser(u); setAuthReady(true); }), []);
+
+      const T = {
+        loginTitle:     lang==='ko' ? '📈 보고용 리포트 보안접속'  : '📈 Secure Access — Sales Report',
+        loginBtn:       lang==='ko' ? '접속하기'                   : 'Log In',
+        loginDesc:      lang==='ko' ? '대시보드 계정으로 로그인하세요.' : 'Sign in with your dashboard account.',
+        wrongPwd:       lang==='ko' ? '⛔ 이메일 또는 비밀번호가 올바르지 않습니다.' : '⛔ Invalid email or password.',
+        logoutBtn:      lang==='ko' ? '로그아웃'                   : 'Log Out',
+        closeBtn:       lang==='ko' ? '닫기'                       : 'Close',
+        unitSuffix:     lang==='ko' ? '대'                         : 'unit(s)',
+        noData:         lang==='ko' ? '-'                          : '-',
+        // [FIX #1] 집계 기준 명시
+        basisNote:      lang==='ko'
+          ? 'ℹ 집계 기준: Status = Ship Confirm 인 데이터만 (Target 대비 매출 기준) — index.html과 동일 기준'
+          : 'ℹ Revenue basis: Status = Ship Confirm only (vs Target) — aligned with index.html',
+      };
+
+      const [quarters, setQuarters]             = useState(['2026 Q1', '2026 Q2']);
+      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const [salesData, setSalesData]           = useState([]);
+      const [quarterTargets, setQuarterTargets] = useState({});
+      const [memberTargets, setMemberTargets]   = useState({});
+      const [teams, setTeams] = useState({ 'Team 1':['Kim SH','Oh SG'], 'Team 2':['Baek SC','Lee GR'], 'Team 3':['YC lim'] });
+
+      const getWeekRanges = (year, month) => {
+        const pad = n => String(n).padStart(2,'0');
+        const lastDay = new Date(year, month, 0).getDate();
+        const ranges = [
+          `${pad(month)}/01~${pad(month)}/07`,
+          `${pad(month)}/08~${pad(month)}/14`,
+          `${pad(month)}/15~${pad(month)}/21`,
+          `${pad(month)}/22~${pad(month)}/28`,
+        ];
+        ranges.push(lastDay >= 29 ? `${pad(month)}/29~${pad(month)}/${lastDay}` : null);
+        return ranges;
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (!emailInput.trim() || !pwdInput) return;
+        setLoggingIn(true); setLoginError('');
+        auth.signInWithEmailAndPassword(emailInput.trim(), pwdInput)
+          .catch(() => { setLoginError(T.wrongPwd); setPwdInput(''); })
+          .finally(() => setLoggingIn(false));
+      };
+
+      useEffect(() => {
+        if (!isLoggedIn) return;
+        const unsubSales   = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
+        const unsubQTarget = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
+        const unsubMTarget = db.collection("targets").doc("memberTargets").onSnapshot(doc => { if (doc.exists) setMemberTargets(doc.data()); });
+        const unsubLayout  = db.collection("settings").doc("layout").onSnapshot(doc => {
+          if (doc.exists) { const d = doc.data(); if (d.teams) setTeams(d.teams); if (d.quarters) setQuarters(d.quarters); }
+        });
+        return () => { unsubSales(); unsubQTarget(); unsubMTarget(); unsubLayout(); };
+      }, [isLoggedIn]);
+
+      if (!authReady) {
+        return (
+          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',color:'#64748b',fontFamily:'monospace',fontSize:'13px'}}>
+            Loading...
+          </div>
+        );
+      }
+
+      if (!isLoggedIn) {
+        return (
+          <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
+            <LangBtn lang={lang} setLang={setLang} />
+            <form onSubmit={handleLogin} style={{background:'#fff',borderRadius:'18px',padding:'36px 32px',width:'100%',maxWidth:'380px',boxShadow:'0 12px 50px rgba(0,0,0,0.5)',textAlign:'center'}}>
+              <h2 style={{fontWeight:'800',fontSize:'19px',color:'#1e293b',marginBottom:'4px'}}>{T.loginTitle}</h2>
+              <p style={{fontSize:'12px',color:'#94a3b8',marginBottom:'22px'}}>{T.loginDesc}</p>
+              <input type="email" value={emailInput} onChange={e=>setEmailInput(e.target.value)} autoComplete="username" placeholder="Email"
+                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box',textAlign:'center',fontFamily:'monospace'}}/>
+              <input type="password" value={pwdInput} onChange={e=>setPwdInput(e.target.value)} autoComplete="current-password" placeholder="Password"
+                style={{width:'100%',padding:'12px 14px',border:'1.5px solid #cbd5e1',borderRadius:'10px',fontSize:'14px',marginBottom:'10px',outline:'none',boxSizing:'border-box',textAlign:'center',letterSpacing:'0.2em',fontFamily:'monospace'}}/>
+              {loginError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{loginError}</p>}
+              <button type="submit" disabled={loggingIn}
+                className={loggingIn ? '' : 'rpt-btn-primary'}
+                style={{width:'100%',padding:'13px',background:loggingIn?'#93c5fd':undefined,color:'#fff',border:'none',borderRadius:'10px',fontWeight:'800',fontSize:'15px',cursor:loggingIn?'default':'pointer',marginTop:'6px'}}>
+                {loggingIn ? '...' : T.loginBtn}
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      // 월 설정
+      const qStr = selectedQuarter.split(' ')[1] || 'Q1';
+      let m1=1, m2=2, m3=3, m1Name='Jan', m2Name='Feb', m3Name='Mar';
+      if (qStr==='Q2') { m1=4; m2=5; m3=6; m1Name='Apr'; m2Name='May'; m3Name='Jun'; }
+      if (qStr==='Q3') { m1=7; m2=8; m3=9; m1Name='Jul'; m2Name='Aug'; m3Name='Sep'; }
+      if (qStr==='Q4') { m1=10; m2=11; m3=12; m1Name='Oct'; m2Name='Nov'; m3Name='Dec'; }
+
+      const year = parseInt(selectedQuarter.split(' ')[0], 10) || new Date().getFullYear();
+      const weekRangesM1 = getWeekRanges(year, m1);
+      const weekRangesM2 = getWeekRanges(year, m2);
+      const weekRangesM3 = getWeekRanges(year, m3);
+
+      const getMonthIdx = dStr => { if (!dStr) return -1; const m = parseInt(dStr.split('-')[1],10); return isNaN(m) ? -1 : m; };
+      const getWeekIdx  = dStr => {
+        if (!dStr) return 0;
+        const d = parseInt(dStr.split('-')[2],10);
+        if (isNaN(d)) return 0;
+        if (d<=7) return 1; if (d<=14) return 2; if (d<=21) return 3; if (d<=28) return 4; return 5;
+      };
+
+      const toM     = val => val / 1000000;
+      const formatM = val => val===0 ? '-' : val.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+      const formatP = val => (val*100).toFixed(1)+'%';
+      const formatPct = (num, den) => den>0 ? (num/den*100).toFixed(1)+'%' : '-';
+
+      // ── 집계 기준: status === 'Ship Confirm' 만 (index.html과 동일) ──
+      const currentQData = salesData.filter(d =>
+        d.quarter === selectedQuarter && d.status === 'Ship Confirm'
+      );
+
+      // [FIX #분기별 개인목표] memberTargets는 이제 {분기:{멤버:목표}} 구조 (index.html과 동일).
+      // 혹시 아직 레거시 {멤버:목표}(모든 분기 공용) 형태로 남아있는 경우도 대비해서 같이 처리한다.
+      const _isLegacyFlatMemberTargets = memberTargets && Object.values(memberTargets).some(v => typeof v === 'number');
+      const getMemberBudget = (member) => {
+        if (!memberTargets) return 0;
+        if (_isLegacyFlatMemberTargets) return memberTargets[member] || 0;
+        return memberTargets?.[selectedQuarter]?.[member] || 0;
+      };
+
+      let rows = [];
+      Object.entries(teams).sort(([a],[b])=>a.localeCompare(b)).forEach(([team, members]) => {
+        members.forEach(member => {
+          const mData = currentQData.filter(d => d.member===member);
+          const calcMonth = m => mData.filter(d=>getMonthIdx(d.deliveryDate)===m).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const calcWeek  = (m,w) => mData.filter(d=>getMonthIdx(d.deliveryDate)===m&&getWeekIdx(d.deliveryDate)===w).reduce((a,b)=>a+toM(b.priceKRW),0);
+
+          const valM1 = calcMonth(m1), valM2 = calcMonth(m2), valM3 = calcMonth(m3);
+          const valTBD = mData.filter(d=>getMonthIdx(d.deliveryDate)===-1).reduce((a,b)=>a+toM(b.priceKRW),0);
+          const total   = valM1 + valM2 + valM3 + valTBD;
+          const budget  = toM(getMemberBudget(member));
+          const gap     = budget - total;
+          const progress = budget ? total/budget : 0;
+          const weeksM1 = [1,2,3,4,5].map(w=>calcWeek(m1,w));
+          const weeksM2 = [1,2,3,4,5].map(w=>calcWeek(m2,w));
+          const weeksM3 = [1,2,3,4,5].map(w=>calcWeek(m3,w));
+          rows.push({ team, member, valM1, valM2, valM3, valTBD, total, budget, gap, progress, weeksM1, weeksM2, weeksM3 });
+        });
+      });
+
+      const sumM1     = rows.reduce((a,b)=>a+b.valM1,0);
+      const sumM2     = rows.reduce((a,b)=>a+b.valM2,0);
+      const sumM3     = rows.reduce((a,b)=>a+b.valM3,0);
+      const sumTBD    = rows.reduce((a,b)=>a+b.valTBD,0);
+      const sumTotal  = rows.reduce((a,b)=>a+b.total,0);
+      const currentTargets = quarterTargets[selectedQuarter] || {};
+      const sumBudget = toM(currentTargets.target || 0);
+      const sumGap    = sumBudget - sumTotal;
+      const sumProgress = sumBudget ? sumTotal/sumBudget : 0;
+      const sumWeeksM1 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM1[i-1],0));
+      const sumWeeksM2 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM2[i-1],0));
+      const sumWeeksM3 = [1,2,3,4,5].map(i=>rows.reduce((a,b)=>a+b.weeksM3[i-1],0));
+
+      const allProducts = ['GMPP','Picoway','Cryo7','VBP','Hand Piece','Nordlys','Nordlys Mini','GMP'];
+      const productCounts = {};
+      allProducts.forEach(p => productCounts[p] = { count:0 });
+      currentQData.forEach(d => { if (productCounts[d.product]) productCounts[d.product].count += 1; });
+      const weekLabels = ['1st w','2nd w','3rd w','4th w','5th w'];
+
+      return (
+        <div className="p-6 md:p-8">
+          <LangBtn lang={lang} setLang={setLang} onLogout={() => auth.signOut()} logoutLabel={T.logoutBtn} />
+          <div className="flex justify-between items-end mb-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">Monthly Sales Progress Check</h1>
+              <p className="text-gray-500 text-sm font-bold mt-1">Candela Korea - Capital Sales Only <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded ml-2">(Unit: M₩)</span></p>
+            </div>
+            <div className="flex gap-3">
+              <select value={selectedQuarter} onChange={e=>setSelectedQuarter(e.target.value)} className="rpt-select px-4 py-2 border-2 border-slate-400 rounded-lg font-bold outline-none cursor-pointer transition">
+                {quarters.map(q=><option key={q} value={q}>{q}</option>)}
+              </select>
+              <button onClick={()=>window.close()} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-4 py-2 rounded-lg font-bold transition">{T.closeBtn}</button>
+            </div>
+          </div>
+
+          {/* [FIX #1] 집계 기준 배너 */}
+          <div className="basis-note">{T.basisNote}</div>
+
+          <div className="excel-container">
+            <table className="excel-table">
+              <thead>
+                <tr>
+                  <th rowSpan="2" className="text-left w-16">Team</th>
+                  <th rowSpan="2" className="text-left w-24">Sales Reps</th>
+                  <th rowSpan="2">{m1Name}</th>
+                  <th rowSpan="2">{m2Name}</th>
+                  <th rowSpan="2">{m3Name}</th>
+                  <th rowSpan="2" className="bg-yellow">Q Total</th>
+                  <th rowSpan="2" className="bg-blue">Q Budget</th>
+                  <th rowSpan="2">%</th>
+                  <th rowSpan="2" className="bg-red-light text-red">Gap</th>
+                  <th colSpan="7" className="header-dark">{m1Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-700">{m2Name} Progress</th>
+                  <th colSpan="7" className="header-dark bg-slate-600">{m3Name} Progress</th>
+                </tr>
+                <tr>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m1w${idx}`}>{label}{weekRangesM1[idx]&&<span className="week-date-label">{weekRangesM1[idx]}</span>}</th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m2w${idx}`}>{label}{weekRangesM2[idx]&&<span className="week-date-label">{weekRangesM2[idx]}</span>}</th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
+                  {weekLabels.map((label,idx)=>(
+                    <th key={`m3w${idx}`}>{label}{weekRangesM3[idx]&&<span className="week-date-label">{weekRangesM3[idx]}</span>}</th>
+                  ))}
+                  <th className="bg-yellow text-slate-800">Total</th>
+                  <th className="bg-blue text-blue-800">Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i)=>(
+                  <tr key={i} className="hover:bg-slate-50 transition">
+                    <td className="text-left text-slate-500 font-bold">{r.team}</td>
+                    <td className="text-left font-bold">{r.member}</td>
+                    <td className={r.valM1?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM1)}</td>
+                    <td className={r.valM2?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM2)}</td>
+                    <td className={r.valM3?'text-slate-800 font-bold':'text-slate-300'}>{formatM(r.valM3)}</td>
+                    <td className="bg-yellow font-bold text-blue-700">{formatM(r.total)}</td>
+                    <td className="bg-blue">{formatM(r.budget)}</td>
+                    <td style={{fontWeight:'bold', color: zoneColor(r.progress*100,false).fg}}>{formatP(r.progress)}</td>
+                    <td className={r.budget>0 ? (r.gap<=0?'sld-cell--ahead':'sld-cell--behind') : ''}>{formatM(r.gap)}</td>
+                    {r.weeksM1.map((w,idx)=><td key={'m1'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM1)}</td>
+                    <ProgressCell val={r.valM1} budget={r.budget}/>
+                    {r.weeksM2.map((w,idx)=><td key={'m2'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM2)}</td>
+                    <ProgressCell val={r.valM2} budget={r.budget}/>
+                    {r.weeksM3.map((w,idx)=><td key={'m3'+idx} className={w?'':'text-slate-300'}>{formatM(w)}</td>)}
+                    <td className="bg-yellow font-bold">{formatM(r.valM3)}</td>
+                    <ProgressCell val={r.valM3} budget={r.budget}/>
+                  </tr>
+                ))}
+                <tr className="header-dark font-bold text-[13px]">
+                  <td colSpan="2" className="text-center">TOTAL</td>
+                  <td>{formatM(sumM1)}</td>
+                  <td>{formatM(sumM2)}</td>
+                  <td>{formatM(sumM3)}</td>
+                  <td className="text-yellow-300">{formatM(sumTotal)}</td>
+                  <td className="text-blue-300">{formatM(sumBudget)}</td>
+                  <td style={{color: zoneColor(sumProgress*100,true).fg}}>{formatP(sumProgress)}</td>
+                  <td style={{color: sumBudget>0 ? (sumGap<=0?'#6ee7b7':'#fca5a5') : '#94a3b8'}}>{formatM(sumGap)}</td>
+                  {sumWeeksM1.map((w,idx)=><td key={'sm1'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM1)}</td>
+                  <td style={{color: zoneColor(sumBudget>0?sumM1/sumBudget*100:0,true).fg}}>{formatPct(sumM1,sumBudget)}</td>
+                  {sumWeeksM2.map((w,idx)=><td key={'sm2'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM2)}</td>
+                  <td style={{color: zoneColor(sumBudget>0?sumM2/sumBudget*100:0,true).fg}}>{formatPct(sumM2,sumBudget)}</td>
+                  {sumWeeksM3.map((w,idx)=><td key={'sm3'+idx}>{formatM(w)}</td>)}
+                  <td className="text-yellow-300">{formatM(sumM3)}</td>
+                  <td style={{color: zoneColor(sumBudget>0?sumM3/sumBudget*100:0,true).fg}}>{formatPct(sumM3,sumBudget)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="excel-container w-full md:w-1/3">
+            <table className="excel-table w-full">
+              <thead>
+                <tr><th colSpan="2" className="header-dark bg-slate-600">System Required (# of unit · Ship Confirm 기준)</th></tr>
+                <tr><th className="text-left w-1/2">Product</th><th className="w-1/2">Sales Count</th></tr>
+              </thead>
+              <tbody>
+                {Object.entries(productCounts).sort((a,b)=>b[1].count-a[1].count).map(([p,data])=>(
+                  <tr key={p}><td className="text-left font-bold">{p}</td><td className="font-bold text-blue-600">{data.count>0?`${data.count} ${T.unitSuffix}`:'-'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ReportApp />);
+  </script>
 </body>
 </html>
