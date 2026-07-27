@@ -143,6 +143,11 @@ html,body{overflow-x:hidden;max-width:100vw;}
 :root{scrollbar-color:#94a3b8 transparent;scrollbar-width:thin;}
 @media(max-width:768px){.wrap{padding:16px 12px;}}
 @media print{
+  /* Chrome/Edge don't print background colors by default unless the user manually checks
+     "Background graphics" in the print dialog — every colored bar/badge/zone on this page
+     (achievement bar fills, status badges, zone tints) relies on background-color, so without
+     this override the whole page prints as an outline with no fills at all. */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
   .back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;}
   .card{break-inside:avoid;page-break-inside:avoid;}
   .section-title{break-after:avoid;page-break-after:avoid;}
@@ -631,10 +636,15 @@ function render(salesData,memberTargets,qTargets){
   // the page before this frame ran, leaving every per-rep monthly-trend chart blank. cont.innerHTML
   // is already committed synchronously above, so the canvases exist now — no need to wait a frame.
   allMs.forEach((m,mi)=>{
-    const col=MC[mi%MC.length];
-    const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
-    const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
-    mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
+    // Wrapped per-member: one member's malformed record (bad date, missing field, etc.) must
+    // not throw and silently abort chart creation for every member after them in the loop.
+    try{
+      const col=MC[mi%MC.length];
+      const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+      const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
+      mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
+      if(CI[`c-m-${sid}`])CI[`c-m-${sid}`].update('none'); // belt-and-suspenders: force an immediate, non-animated paint right now rather than trusting the constructor's own first-render timing
+    }catch(e){console.error(`[chart] failed to build monthly-trend chart for member "${m}":`,e);}
   });
 }
 
