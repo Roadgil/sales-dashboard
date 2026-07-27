@@ -374,7 +374,33 @@ function mkChart(id,cfg){if(CI[id])CI[id].destroy();const el=document.getElement
 // (see @media print above) changes every chart's container size too — resize() alone proved
 // unreliable across browsers for a canvas that was 0x0 at creation, so fully recreate every
 // chart from current data right before the print pass, once print layout/CSS has settled.
-window.addEventListener('beforeprint',()=>{if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);});
+window.addEventListener('beforeprint',()=>{
+  if(!(_loaded.s&&_loaded.t&&_loaded.q))return;
+  render(_sales,_targets,_qTargets);
+  // Belt-and-suspenders beyond the render() above: don't trust that the browser's print
+  // media/layout has already taken effect by the time this handler runs (that timing is
+  // inconsistent enough across real browsers that relying on it was the whole source of this
+  // bug). Instead, drive the SAME 'active' class the normal screen-mode tab click already uses
+  // (`.tab-pane.active{display:block}`, not scoped to print) to genuinely, visibly reveal each
+  // rep's pane one at a time — a real, non-zero layout box every time, independent of whatever
+  // print CSS has or hasn't applied yet — and resize its chart while it is actually visible.
+  const panes=[...document.querySelectorAll('#memberTabContent .tab-pane')];
+  const wasActive=panes.find(p=>p.classList.contains('active'));
+  panes.forEach(p=>{
+    p.classList.add('active');
+    const canvas=p.querySelector('canvas');
+    if(canvas){const ch=Chart.getChart(canvas);if(ch)ch.resize();}
+  });
+  // Leave every pane's `active` class ON: the @media print rule below shows every `.tab-pane`
+  // regardless of this class, and restoring only one active class here would just race the
+  // same uncertain print-CSS-timing question this loop exists to avoid.
+  window.__d26RestoreActivePane=wasActive;
+});
+window.addEventListener('afterprint',()=>{
+  const panes=[...document.querySelectorAll('#memberTabContent .tab-pane')];
+  panes.forEach(p=>p.classList.remove('active'));
+  (window.__d26RestoreActivePane||panes[0])?.classList.add('active');
+});
 
 // ── 3-zone ascending achievement family (ported from index.html): zone1 slate <100%,
 // zone2 blue 100-120%, zone3 emerald 120%+ — the only status color vocabulary this page uses. ──
