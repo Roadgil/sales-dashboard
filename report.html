@@ -680,6 +680,15 @@ img,video{max-width:100%;height:auto}
         d.quarter === selectedQuarter && d.status === 'Ship Confirm'
       );
 
+      // [FIX #분기별 개인목표] memberTargets는 이제 {분기:{멤버:목표}} 구조 (index.html과 동일).
+      // 혹시 아직 레거시 {멤버:목표}(모든 분기 공용) 형태로 남아있는 경우도 대비해서 같이 처리한다.
+      const _isLegacyFlatMemberTargets = memberTargets && Object.values(memberTargets).some(v => typeof v === 'number');
+      const getMemberBudget = (member) => {
+        if (!memberTargets) return 0;
+        if (_isLegacyFlatMemberTargets) return memberTargets[member] || 0;
+        return memberTargets?.[selectedQuarter]?.[member] || 0;
+      };
+
       let rows = [];
       Object.entries(teams).sort(([a],[b])=>a.localeCompare(b)).forEach(([team, members]) => {
         members.forEach(member => {
@@ -690,7 +699,7 @@ img,video{max-width:100%;height:auto}
           const valM1 = calcMonth(m1), valM2 = calcMonth(m2), valM3 = calcMonth(m3);
           const valTBD = mData.filter(d=>getMonthIdx(d.deliveryDate)===-1).reduce((a,b)=>a+toM(b.priceKRW),0);
           const total   = valM1 + valM2 + valM3 + valTBD;
-          const budget  = toM(memberTargets[member] || 0);
+          const budget  = toM(getMemberBudget(member));
           const gap     = budget - total;
           const progress = budget ? total/budget : 0;
           const weeksM1 = [1,2,3,4,5].map(w=>calcWeek(m1,w));
