@@ -672,7 +672,7 @@ img,video{max-width:100%;height:auto}
         achievement:       lang==='ko' ? '달성률'                      : 'Achievement',
         cases:             lang==='ko' ? '건'                          : 'cs',
         gmppTargetPH:      lang==='ko' ? 'GMPP 목표 기입'              : 'Enter GMPP target',
-        erPlaceholder:     lang==='ko' ? '예: 1389'                    : 'e.g. 1389',
+        erPlaceholder:     lang==='ko' ? '예: 1388.92'                    : 'e.g. 1388.92',
         // [FIX #2] 검증 메시지
         valAccount:        lang==='ko' ? 'Account(납품처)를 입력해주세요.' : 'Please enter the Account name.',
         valStatus:         lang==='ko' ? 'Status를 선택해주세요.' : 'Please select a Status.',
@@ -696,9 +696,14 @@ img,video{max-width:100%;height:auto}
       const [selectedTeam, setSelectedTeam]     = useState('Team 1');
       const [selectedMember, setSelectedMember] = useState(null);
       const [activeStatTab, setActiveStatTab]   = useState('product');
-      const [memberTargets, setMemberTargets]   = useState({ 'Kim SH': 1500000000, 'Oh SG': 1200000000, 'Baek SC': 1300000000, 'Lee GR': 1000000000, 'YC lim': 1000000000 });
+      const [memberTargets, setMemberTargets]   = useState({
+        '2026 Q1': { 'Kim SH': 1041690000, 'Oh SG': 1041690000, 'Baek SC': 1041690000, 'Lee GR': 486122000, 'YC lim': 694460000 },
+        '2026 Q2': { 'Kim SH': 1041690000, 'Oh SG': 1041690000, 'Baek SC': 1041690000, 'Lee GR': 486122000, 'YC lim': 694460000 },
+        '2026 Q3': { 'Kim SH': 1041690000, 'Oh SG': 1041690000, 'Baek SC': 1041690000, 'Lee GR': 555568000, 'YC lim': 0 },
+        '2026 Q4': { 'Kim SH': 1041690000, 'Oh SG': 1041690000, 'Baek SC': 1041690000, 'Lee GR': 555568000, 'YC lim': 0 },
+      });
       const [teamTargets, setTeamTargets]       = useState({});
-      const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
+      const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1388.92 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1388.92 } });
       const [salesData, setSalesData]           = useState([]);
 
       const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '' };
@@ -952,7 +957,7 @@ img,video{max-width:100%;height:auto}
           accType:      String(form.accType || ''),
           dealerName:   String(form.dealerName || ''),
           priceKRW:     finalKRW,
-          priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
+          priceUSD:     parseFloat((finalKRW / (currentER || 1388.92)).toFixed(2)),
           id:           editingId ? String(editingId) : crypto.randomUUID(),
           quarter:      selectedQuarter,
           team:         selectedTeam,
@@ -1023,27 +1028,28 @@ img,video{max-width:100%;height:auto}
         if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
         setShowErModal(false); setErUnlocked(false); setErInputVal('');
       };
-      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [member]: val }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
+      const handleMemberTargetChange = (member, value) => { if (!requireAuth()) return; const val = value==='' ? '' : Number(value); const n = { ...memberTargets, [selectedQuarter]: { ...memberTargets[selectedQuarter], [member]: val } }; setMemberTargets(n); db.collection("targets").doc("memberTargets").set(n); };
+      const handleMemberTargetChangeUSD = (member, usdValue) => { handleMemberTargetChange(member, usdValue==='' ? '' : Number(usdValue) * (activeER || 1388.92)); };
       const handleTeamTargetChange   = (team, quarter, value) => { if (!requireAuth()) return; const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
 
       const addTeam = () => { if (!requireAuth()) return; const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
+      const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); const ntg = {}; Object.keys(memberTargets).forEach(q => { ntg[q] = { ...memberTargets[q], [n]: 0 }; }); if (quarters && !ntg[selectedQuarter]) ntg[selectedQuarter] = { [n]: 0 }; setMemberTargets(ntg); db.collection("targets").doc("memberTargets").set(ntg); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
       const editMemberName = (oldName, e) => {
         e.stopPropagation();
         if (!requireAuth()) return;
         const newName = prompt(T.promptRename, oldName);
         if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
           const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].map(m => m===oldName ? newName : m); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true });
-          const ntg = { ...memberTargets }; if (ntg[oldName] !== undefined) { ntg[newName] = ntg[oldName]; delete ntg[oldName]; db.collection("targets").doc("memberTargets").set(ntg); }
+          const ntg = {}; Object.keys(memberTargets).forEach(q => { ntg[q] = { ...memberTargets[q] }; if (ntg[q][oldName] !== undefined) { ntg[q][newName] = ntg[q][oldName]; delete ntg[q][oldName]; } }); setMemberTargets(ntg); db.collection("targets").doc("memberTargets").set(ntg);
           salesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
         }
       };
       const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
-      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
+      const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1388.92 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
-      const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
+      const currentER      = quarterTargets[selectedQuarter]?.er || 1388.92;
       const handleInputChange = (e) => {
         const { name, value } = e.target;
         if (name === 'priceKRW') {
@@ -1158,10 +1164,10 @@ img,video{max-width:100%;height:auto}
 
       // ── [FIX #1] 집계 기준: ACT + Pending 만 (Backup/미납 제외) ──────────
       const currentQData   = salesData.filter(d => d.quarter === selectedQuarter);
-      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
+      const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1388.92 };
       const targetKRW      = currentTargets.target || 0;
       const gmppTargetKRW  = currentTargets.gmppTarget || 0;
-      const activeER       = currentTargets.er || 1389;
+      const activeER       = currentTargets.er || 1388.92;
       const targetUSD      = targetKRW / activeER;
       const incentiveTargetKRW = targetKRW / 1.2;
       const incentiveTargetUSD = targetUSD / 1.2;
@@ -1222,9 +1228,9 @@ img,video{max-width:100%;height:auto}
       scData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
-      const renderProgressBar = (scAmt, actAmt, tgtKRW, er) => {
+      const renderProgressBar = (scAmt, actAmt, tgtKRW, er, symbol='₩', divisor=1) => {
         if (!tgtKRW) return null;
-        const usedER = er || activeER || 1389;
+        const usedER = er || activeER || 1388.92;
         const target120 = tgtKRW * 1.2; const target150 = tgtKRW * 1.5;
         const maxScale = Math.max(target150, (scAmt + actAmt) * 1.05);
         const scPer  = (scAmt / tgtKRW) * 100;
@@ -1243,8 +1249,8 @@ img,video{max-width:100%;height:auto}
           <div className="w-full mt-6 md:mt-8" data-region="achievement-bar">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 relative">
               <div className="mb-2 md:mb-0 flex flex-wrap gap-2 items-center">
-                <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
-                <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
+                <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: {symbol} {(scAmt/divisor).toLocaleString(undefined,{maximumFractionDigits:divisor>1?2:0})} ({scPer.toFixed(1)}%)</span>
+                <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: {symbol} {(actAmt/divisor).toLocaleString(undefined,{maximumFractionDigits:divisor>1?2:0})} ({actPer.toFixed(1)}%)</span>
               </div>
               <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
               <div className="block absolute w-full -bottom-6 left-0 h-5">
@@ -1307,7 +1313,7 @@ img,video{max-width:100%;height:auto}
         );
       };
 
-      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
+      const renderMemberChart = (dataObj, targetsObj, colorClass, symbol='₩', divisor=1) => {
         const dataArr = Object.entries(dataObj).sort((a,b) => b[1].sumKRW - a[1].sumKRW);
         return (
           <div className="space-y-5">
@@ -1319,8 +1325,8 @@ img,video{max-width:100%;height:auto}
                   <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
                     <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
                     <div className="text-right flex flex-col">
-                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
-                      {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
+                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">{symbol} {(stat.sumKRW/divisor).toLocaleString(undefined,{maximumFractionDigits:divisor>1?2:0})} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
+                      {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: {symbol} {(target/divisor).toLocaleString(undefined,{maximumFractionDigits:divisor>1?2:0})}</span>}
                     </div>
                   </div>
                   <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width:`${per > 100 ? 100 : per}%` }}></div></div>
@@ -1498,7 +1504,7 @@ img,video{max-width:100%;height:auto}
                     <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? ('새 환율 입력 (현재: ₩' + activeER.toLocaleString() + ')') : ('New exchange rate (current: ₩' + activeER.toLocaleString() + ')')}</p>
                     <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',justifyContent:'center'}}>
                       <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
-                      <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
+                      <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1388.92"
                         style={{width:'160px',padding:'10px 14px',borderRadius:'8px',border:'2px solid #93c5fd',fontFamily:'monospace',fontSize:'18px',fontWeight:'700',textAlign:'center',outline:'none',boxSizing:'border-box',color:'#1e3a5f'}} />
                     </div>
                     <div style={{display:'flex',gap:'8px'}}>
@@ -1615,11 +1621,11 @@ img,video{max-width:100%;height:auto}
                 <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
                   <div className="toss-threshold-row">
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">$ {targetUSD.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>$ {incentiveTargetUSD.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>$ {(targetUSD*1.5).toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
                   </div>
-                  {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
+                  {renderProgressBar(shipConfirmKRW, actKRW, targetKRW, activeER, '$', activeER||1388.92)}
                 </div>
 
                 {/* 분기 요약 지표 */}
@@ -1759,7 +1765,7 @@ img,video{max-width:100%;height:auto}
                   <div className="p-4 md:p-8">
                     {activeStatTab==='product' && renderBarChart(productStats, 'bg-blue-500')}
                     {activeStatTab==='dealer'  && renderBarChart(dealerStats,  'bg-purple-500')}
-                    {activeStatTab==='member'  && renderMemberChart(memberStats, memberTargets, 'bg-emerald-500')}
+                    {activeStatTab==='member'  && renderMemberChart(memberStats, memberTargets[selectedQuarter] || {}, 'bg-emerald-500', '$', activeER)}
                   </div>
                 </div>
 
@@ -1832,7 +1838,7 @@ img,video{max-width:100%;height:auto}
                       ) : (
                         teams[selectedTeam].map(member => {
                           const mActKRW = memberStats[member]?.sumKRW || 0;
-                          const mTarget = memberTargets[member] || 0;
+                          const mTarget = memberTargets[selectedQuarter]?.[member] || 0;
                           const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
                           // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
                           const mZone      = mPer>=120?3:mPer>=100?2:1;
@@ -1849,11 +1855,11 @@ img,video{max-width:100%;height:auto}
                                 </div>
                               </div>
                               <div className="flex justify-between items-end mb-1.5">
-                                <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
+                                <span className="text-[11px] font-mono font-bold text-gray-700">$ {(mActKRW/activeER).toLocaleString(undefined,{maximumFractionDigits:0})}</span>
                                 <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                               </div>
                               {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
-                              {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
+                              {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target $ {(mTarget/activeER).toLocaleString(undefined,{maximumFractionDigits:0})}</div>}
                             </div>
                           );
                         })
@@ -1975,21 +1981,21 @@ img,video{max-width:100%;height:auto}
                 <div className="bg-white p-4 md:p-8 rounded-xl shadow-md border border-gray-100 mb-8">
                   <h3 className="text-2xl md:text-3xl font-extrabold text-gray-800 mb-6">{selectedMember} <span className="text-lg md:text-xl text-gray-500 font-medium block md:inline mt-1 md:mt-0">Account FCST</span></h3>
 
-                  {memberTargets[selectedMember] !== undefined && (
+                  {memberTargets[selectedQuarter]?.[selectedMember] !== undefined && (
                     <div className="bg-blue-50/50 p-4 md:p-6 rounded-lg border border-blue-100 mb-8">
                       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4">
                         <h4 className="font-bold text-base md:text-lg text-gray-700 mb-4 lg:mb-0">{T.cumulative}</h4>
                         <div className="mtg-row gap-2 lg:gap-3 w-full lg:w-auto">
                           <div className="flex flex-col bg-white px-1.5 py-2 rounded shadow-sm border-l-4 border-2 flex-1 lg:flex-none" style={{borderLeftColor:'#94a3b8'}}>
                             <span className="text-[10px] block font-bold mb-1" style={{color:'#475569'}}>{T.target100label}</span>
-                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>₩</span><input type="number" min="0" value={memberTargets[selectedMember]===0?'':memberTargets[selectedMember]} onChange={e=>handleMemberTargetChange(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
+                            <div className="flex items-center"><span className="font-bold text-[10px] text-gray-700" style={{marginRight:'2px'}}>$</span><input type="number" min="0" value={memberTargets[selectedQuarter][selectedMember]===0?'':Math.round(memberTargets[selectedQuarter][selectedMember]/(activeER||1388.92))} onChange={e=>handleMemberTargetChangeUSD(selectedMember,e.target.value)} className="w-full min-w-0 md:w-28 bg-transparent border-b border-gray-300 font-mono font-bold text-[10px] md:text-[15px] outline-none focus:border-blue-500 text-gray-800 transition text-right no-spinner" placeholder={T.targetPlaceholder2}/></div>
                           </div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>₩ {(memberTargets[selectedMember]*1.2).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>₩ {(memberTargets[selectedMember]*1.4).toLocaleString()}</span></div>
-                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>₩ {(memberTargets[selectedMember]*1.5).toLocaleString()}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#3b82f6'}}><span className="text-[10px] block font-bold" style={{color:'#1d4ed8'}}>120% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#1d4ed8'}}>$ {(memberTargets[selectedQuarter][selectedMember]/(activeER||1388.92)*1.2).toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#0d9488'}}><span className="text-[10px] block font-bold" style={{color:'#0f766e'}}>140% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#0f766e'}}>$ {(memberTargets[selectedQuarter][selectedMember]/(activeER||1388.92)*1.4).toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                          <div className="flex flex-col justify-center bg-white px-2 md:px-3 py-2 h-auto md:h-[52px] rounded shadow-sm border-l-4 flex-1 lg:flex-none" style={{borderLeftColor:'#10b981', gridColumn:'1 / -1'}}><span className="text-[10px] block font-bold" style={{color:'#047857'}}>150% Target</span><span className="font-bold text-xs md:text-sm text-right" style={{color:'#047857'}}>$ {(memberTargets[selectedQuarter][selectedMember]/(activeER||1388.92)*1.5).toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
                         </div>
                       </div>
-                      {renderProgressBar(memberSCKRW, memberActKRW, memberTargets[selectedMember])}
+                      {renderProgressBar(memberSCKRW, memberActKRW, memberTargets[selectedQuarter][selectedMember], activeER, '$', activeER||1388.92)}
                     </div>
                   )}
 
