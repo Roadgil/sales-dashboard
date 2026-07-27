@@ -99,14 +99,14 @@ h1 span{color:var(--accent);}
 .card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:none;}
 .ctitle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .ctitle::before{content:'';width:3px;height:10px;background:var(--accent);border-radius:2px;flex-shrink:0;}
-.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap;}
+.srow{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;}
 .srow:last-child{border-bottom:none;}
 .savt{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
-.sinfo{flex:1 1 160px;min-width:0;}
+.sinfo{flex:1;}
 .sname{font-size:12px;margin-bottom:4px;font-weight:600;color:#1e293b;}
 .sbw{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px;}
 .sbf{height:100%;border-radius:3px;transition:width 1s ease;}
-.samt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;min-width:90px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);margin-left:auto;}
+.samt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;min-width:90px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
 .spct{font-size:9px;color:var(--muted);}
 /* Signed-delta status badge (ahead/behind target) — same low-opacity-tint + ring pattern as
    index.html's .sld-badge, ported verbatim so achievement signals read identically on both pages. */
@@ -142,22 +142,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
 :focus-visible{outline:none;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent);}
 :root{scrollbar-color:#94a3b8 transparent;scrollbar-width:thin;}
 @media(max-width:768px){.wrap{padding:16px 12px;}}
-@media print{
-  /* Chrome/Edge don't print background colors by default unless the user manually checks
-     "Background graphics" in the print dialog — every colored bar/badge/zone on this page
-     (achievement bar fills, status badges, zone tints) relies on background-color, so without
-     this override the whole page prints as an outline with no fills at all. */
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
-  .back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;}
-  .card{break-inside:avoid;page-break-inside:avoid;}
-  .section-title{break-after:avoid;page-break-after:avoid;}
-  #memberTabNav{display:none!important;}
-  #memberTabContent .tab-pane{display:block!important;page-break-after:always;}
-  #memberTabContent .tab-pane:last-child{page-break-after:auto;}
-  .rep-name-heading{display:block!important;}
-  .g11,.g21,.g12{grid-template-columns:1fr!important;}
-  .kpi-5,.kpi-3{grid-template-columns:1fr 1fr!important;}
-}
+@media print{.back-link,.view-toggle,#langToggleBtn,#erDisplay,#printBtn{display:none!important;} .card{break-inside:avoid;}}
 </style>
 </head>
 <body>
@@ -165,7 +150,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
 
 <header>
   <div>
-    <a class="back-link" href="index.html" data-ko="← Dashboard로 돌아가기" data-en="← Back to Dashboard">← Dashboard로 돌아가기</a>
+    <a class="back-link" href="index.html">← Dashboard로 돌아가기</a>
     <h1>Sales <span>Dashboard</span></h1>
     <div class="sub">Candela Korea · <span id="quarterSubLabel">--</span> Detail Report</div>
   </div>
@@ -181,20 +166,20 @@ html,body{overflow-x:hidden;max-width:100vw;}
 <div class="view-toggle">
   <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">View:</span>
   <button class="vt-btn active" id="btn-quarter-view" onclick="setViewMode('quarter')">📅 Quarter</button>
-  <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')" data-ko="🌓 상반기 Total" data-en="🌓 H1 Total">🌓 상반기 Total</button>
-  <button class="vt-btn" id="btn-h2-view" onclick="setViewMode('h2')" data-ko="🌗 하반기 Total" data-en="🌗 H2 Total">🌗 하반기 Total</button>
+  <button class="vt-btn" id="btn-h1-view" onclick="setViewMode('h1')">🌓 상반기 Total</button>
+  <button class="vt-btn" id="btn-h2-view" onclick="setViewMode('h2')">🌗 하반기 Total</button>
   <button class="vt-btn" id="btn-year-view" onclick="setViewMode('year')">📆 Full Year</button>
   <span style="color:var(--border);margin:0 4px">|</span>
   <span id="yearQuarterBtns" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
   <span style="color:var(--border);margin:0 4px">|</span>
-  <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기" data-ko-title="이전 분기" data-en-title="Previous Quarter">◀</button>
+  <button class="vt-btn" onclick="stepQuarter(-1)" title="이전 분기">◀</button>
   <select id="quarterSelect" onchange="changeQuarter(this.value)" style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-weight:700;font-size:10px;cursor:pointer;"></select>
-  <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기" data-ko-title="다음 분기" data-en-title="Next Quarter">▶</button>
+  <button class="vt-btn" onclick="stepQuarter(1)" title="다음 분기">▶</button>
 </div>
 <div id="quarterBreakdown" style="display:none"><div class="qbreak-grid" id="qbreakGrid"></div></div>
 
 <!-- ① 핵심 KPI -->
-<div class="section-title" data-ko-html="핵심 지표 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Key Metrics &lt;span&gt;· By SC&lt;/span&gt;">핵심 지표 <span>· SC 기준</span></div>
+<div class="section-title">핵심 지표 <span>Key Metrics · SC 기준</span></div>
 <div class="kpi-row kpi-5">
   <div class="kpi k1">
     <div class="klabel">Total Revenue</div>
@@ -205,56 +190,56 @@ html,body{overflow-x:hidden;max-width:100vw;}
       <div class="kpi-pbar-label"><span id="kpi-pbar-pct">--</span><span id="kpi-pbar-tgt">--</span></div>
     </div>
   </div>
-  <div class="kpi k2"><div class="klabel" data-ko="건수 (SC)" data-en="Count (SC)">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
-  <div class="kpi k4"><div class="klabel" data-ko="1인당 생산성" data-en="Revenue per Rep">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
+  <div class="kpi k2"><div class="klabel">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
+  <div class="kpi k4"><div class="klabel">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
   <div class="kpi k3"><div class="klabel">Top Performer</div><div class="kval v3" id="kpi-top" style="font-size:18px;padding-top:4px">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
-  <div class="kpi kg"><div class="klabel" data-ko="달성률 vs Target" data-en="Attainment vs Target">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
+  <div class="kpi kg"><div class="klabel">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
 </div>
 
 <!-- ② Achievement vs Target -->
-<div class="section-title" data-ko-html="Target 달성 현황 &lt;span&gt;목표 대비 달성&lt;/span&gt;" data-en-html="Target Achievement &lt;span&gt;Progress vs Target&lt;/span&gt;">Target 달성 현황 <span>목표 대비 달성</span></div>
+<div class="section-title">Target 달성 현황 <span>Achievement vs Target</span></div>
 <div class="card" style="margin-bottom:14px" id="targetCard">
   <div class="loading"><div class="spinner"></div></div>
 </div>
 
 <!-- ③ 월별 추이 + 제품 구성비 -->
-<div class="section-title" data-ko-html="매출 추이 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Monthly Trend &lt;span&gt;· By SC&lt;/span&gt;">매출 추이 <span>· SC 기준</span></div>
+<div class="section-title">매출 추이 <span>Monthly Trend · SC 기준</span></div>
 <div class="g g21">
-  <div class="card"><div class="ctitle" id="ct-monthly" data-ko="월별 매출 추이" data-en="Monthly Revenue Trend">월별 매출 추이</div><div style="position:relative;height:230px"><canvas id="monthlyChart"></canvas></div></div>
-  <div class="card"><div class="ctitle" data-ko="제품 구성비" data-en="Product Mix">제품 구성비</div><div style="position:relative;height:230px"><canvas id="prodChart"></canvas></div></div>
+  <div class="card"><div class="ctitle" id="ct-monthly">월별 매출 추이</div><div style="position:relative;height:230px"><canvas id="monthlyChart"></canvas></div></div>
+  <div class="card"><div class="ctitle">제품 구성비</div><div style="position:relative;height:230px"><canvas id="prodChart"></canvas></div></div>
 </div>
 
 <!-- ④ 담당자별 달성 -->
-<div class="section-title" data-ko-html="담당자별 달성 현황 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="Rep Achievement &lt;span&gt;· By SC&lt;/span&gt;">담당자별 달성 현황 <span>· SC 기준</span></div>
+<div class="section-title">담당자별 달성 현황 <span>Rep Achievement · SC 기준</span></div>
 <div class="g g12">
-  <div class="card"><div class="ctitle" data-ko="달성률 비교" data-en="Attainment Comparison">달성률 비교</div><div id="memberList"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle" data-ko="담당자별 매출" data-en="Revenue by Rep">담당자별 매출</div><div style="position:relative;height:260px"><canvas id="memberChart"></canvas></div></div>
+  <div class="card"><div class="ctitle">달성률 비교</div><div id="memberList"><div class="loading"><div class="spinner"></div></div></div></div>
+  <div class="card"><div class="ctitle">담당자별 매출</div><div style="position:relative;height:260px"><canvas id="memberChart"></canvas></div></div>
 </div>
 
 <!-- ⑤ 제품별 상세 -->
-<div class="section-title" data-ko-html="제품별 매출 상세 &lt;span&gt;· SC 기준&lt;/span&gt;" data-en-html="By Product &lt;span&gt;· By SC&lt;/span&gt;">제품별 매출 상세 <span>· SC 기준</span></div>
+<div class="section-title">제품별 매출 상세 <span>By Product · SC 기준</span></div>
 <div class="g g11">
-  <div class="card"><div class="ctitle" data-ko="제품별 매출 · 건수" data-en="Revenue & Count by Product">제품별 매출 · 건수</div><div id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle" data-ko="월별 제품 구성 추이" data-en="Monthly Product Mix Trend">월별 제품 구성 추이</div><div style="position:relative;height:260px"><canvas id="prodMonthChart"></canvas></div></div>
+  <div class="card"><div class="ctitle">제품별 매출 · 건수</div><div id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
+  <div class="card"><div class="ctitle">월별 제품 구성 추이</div><div style="position:relative;height:260px"><canvas id="prodMonthChart"></canvas></div></div>
 </div>
 
 <!-- ⑥ 파이프라인 -->
-<div class="section-title" data-ko-html="납품 파이프라인 &lt;span&gt;· 현재 분기&lt;/span&gt;" data-en-html="Pipeline &lt;span&gt;· Current Quarter&lt;/span&gt;">납품 파이프라인 <span>· 현재 분기</span></div>
+<div class="section-title">납품 파이프라인 <span>Pipeline · 현재 분기</span></div>
 <div class="kpi-row kpi-3">
-  <div class="kpi k1"><div class="klabel" data-ko="Pending 예상 매출" data-en="Pending Revenue (Est.)">Pending 예상 매출</div><div class="kval v1" id="pipe-amt">--</div><div class="ksub" id="pipe-cnt">--</div></div>
-  <div class="kpi k4"><div class="klabel" data-ko="ACT (납품완료)" data-en="ACT (Delivered)">ACT (납품완료)</div><div class="kval v4" id="act-amt">--</div><div class="ksub" id="act-cnt">--</div></div>
-  <div class="kpi kg"><div class="klabel">SC + ACT + Pending</div><div class="kval vg" id="total-pipe">--</div><div class="ksub" data-ko="전체 예상치" data-en="Total Estimate">전체 예상치</div></div>
+  <div class="kpi k1"><div class="klabel">Pending 예상 매출</div><div class="kval v1" id="pipe-amt">--</div><div class="ksub" id="pipe-cnt">--</div></div>
+  <div class="kpi k4"><div class="klabel">ACT (납품완료)</div><div class="kval v4" id="act-amt">--</div><div class="ksub" id="act-cnt">--</div></div>
+  <div class="kpi kg"><div class="klabel">SC + ACT + Pending</div><div class="kval vg" id="total-pipe">--</div><div class="ksub">전체 예상치</div></div>
 </div>
 
 <!-- ⑦ 담당자별 상세 -->
-<div class="section-title" data-ko-html="담당자별 상세 &lt;span&gt;· 개인별 내역&lt;/span&gt;" data-en-html="Rep Detail &lt;span&gt;· Individual Breakdown&lt;/span&gt;">담당자별 상세 <span>· 개인별 내역</span></div>
+<div class="section-title">담당자별 상세 <span>Rep Detail</span></div>
 <div class="card" style="margin-bottom:14px">
   <div class="tab-nav" id="memberTabNav"></div>
   <div id="memberTabContent"><div class="loading"><div class="spinner"></div></div></div>
 </div>
 
 <footer>
-  <span data-ko="Source: Firebase Firestore · 실시간 연동 · SC 기준" data-en="Source: Firebase Firestore · Real-time Sync · By SC">Source: Firebase Firestore · 실시간 연동 · SC 기준</span>
+  <span>Source: Firebase Firestore · 실시간 연동 · SC 기준</span>
   <span>Candela Korea Sales Ops</span>
 </footer>
 </div>
@@ -269,18 +254,11 @@ html,body{overflow-x:hidden;max-width:100vw;}
 let _lang = localStorage.getItem('lang')||'ko';
 function t(ko,en){return _lang==='en'?en:ko;}
 function toggleLang(){_lang=_lang==='ko'?'en':'ko';localStorage.setItem('lang',_lang);applyLang();if(_loaded.s&&_loaded.t&&_loaded.q)render(_sales,_targets,_qTargets);}
-function applyStaticI18n(){
-  document.querySelectorAll('[data-ko]').forEach(el=>{el.textContent=_lang==='en'?(el.getAttribute('data-en')||el.getAttribute('data-ko')):el.getAttribute('data-ko');});
-  document.querySelectorAll('[data-ko-html]').forEach(el=>{el.innerHTML=_lang==='en'?(el.getAttribute('data-en-html')||el.getAttribute('data-ko-html')):el.getAttribute('data-ko-html');});
-  document.querySelectorAll('[data-ko-title]').forEach(el=>{el.title=_lang==='en'?(el.getAttribute('data-en-title')||el.getAttribute('data-ko-title')):el.getAttribute('data-ko-title');});
-}
 function applyLang(){
   document.getElementById('langToggleBtn').textContent=_lang==='ko'?'🇺🇸 EN':'🇰🇷 KO';
   const nb=document.getElementById('dataNoteBar');
   if(nb) nb.textContent=t('집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외)','Revenue basis: Ship Confirm only (ACT·Pending·Back up excluded)');
-  applyStaticI18n();
 }
-applyLang();
 
 const firebaseConfig={apiKey:"AIzaSyDpdX6I7fkE1m9jQDARg5l4Skv3vhD7iyI",authDomain:"sales-dashboard-d0d13.firebaseapp.com",projectId:"sales-dashboard-d0d13",storageBucket:"sales-dashboard-d0d13.firebasestorage.app",messagingSenderId:"870275096697",appId:"1:870275096697:web:cd7373b77358681e21b4a8"};
 if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
@@ -363,44 +341,8 @@ const COLORS=['#5b4fcf','#0faaa0','#e84d6f','#e09c10','#0fa878','#8b7ff0','#3ecf
 const MC=['#e09c10','#5b4fcf','#0faaa0','#e84d6f','#0fa878','#8b7ff0','#3ecfc9'];
 const TT={backgroundColor:'#fff',borderColor:'#e4e6eb',borderWidth:1,padding:10,titleColor:'#1a1a2e',bodyColor:'#1a1a2e'};
 Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable', ui-sans-serif, system-ui, sans-serif";Chart.defaults.font.size=11;
-Chart.defaults.animation=false; // this is a static report, not an interactive dashboard — instant,
-// fully-drawn charts every time avoid a whole class of "chart mid-animation when captured" bugs
-// (blank/partial print output, since a hidden-then-shown chart's progressive draw-in would
-// otherwise be mid-flight the instant the browser rasterizes the print page).
 const CI={};
 function mkChart(id,cfg){if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
-// Charts created inside a hidden (display:none) tab-pane are sized 0x0 by Chart.js and don't
-// self-correct when print CSS makes every pane visible, and print's grid-to-1-column reflow
-// (see @media print above) changes every chart's container size too — resize() alone proved
-// unreliable across browsers for a canvas that was 0x0 at creation, so fully recreate every
-// chart from current data right before the print pass, once print layout/CSS has settled.
-window.addEventListener('beforeprint',()=>{
-  if(!(_loaded.s&&_loaded.t&&_loaded.q))return;
-  render(_sales,_targets,_qTargets);
-  // Belt-and-suspenders beyond the render() above: don't trust that the browser's print
-  // media/layout has already taken effect by the time this handler runs (that timing is
-  // inconsistent enough across real browsers that relying on it was the whole source of this
-  // bug). Instead, drive the SAME 'active' class the normal screen-mode tab click already uses
-  // (`.tab-pane.active{display:block}`, not scoped to print) to genuinely, visibly reveal each
-  // rep's pane one at a time — a real, non-zero layout box every time, independent of whatever
-  // print CSS has or hasn't applied yet — and resize its chart while it is actually visible.
-  const panes=[...document.querySelectorAll('#memberTabContent .tab-pane')];
-  const wasActive=panes.find(p=>p.classList.contains('active'));
-  panes.forEach(p=>{
-    p.classList.add('active');
-    const canvas=p.querySelector('canvas');
-    if(canvas){const ch=Chart.getChart(canvas);if(ch)ch.resize();}
-  });
-  // Leave every pane's `active` class ON: the @media print rule below shows every `.tab-pane`
-  // regardless of this class, and restoring only one active class here would just race the
-  // same uncertain print-CSS-timing question this loop exists to avoid.
-  window.__d26RestoreActivePane=wasActive;
-});
-window.addEventListener('afterprint',()=>{
-  const panes=[...document.querySelectorAll('#memberTabContent .tab-pane')];
-  panes.forEach(p=>p.classList.remove('active'));
-  (window.__d26RestoreActivePane||panes[0])?.classList.add('active');
-});
 
 // ── 3-zone ascending achievement family (ported from index.html): zone1 slate <100%,
 // zone2 blue 100-120%, zone3 emerald 120%+ — the only status color vocabulary this page uses. ──
@@ -458,6 +400,21 @@ function render(salesData,memberTargets,qTargets){
   if(_viewMode==='h1') qTarget=(qTargets?.[`${YR} Q1`]?.target||0)+(qTargets?.[`${YR} Q2`]?.target||0);
   if(_viewMode==='h2') qTarget=(qTargets?.[`${YR} Q3`]?.target||0)+(qTargets?.[`${YR} Q4`]?.target||0);
   const attain=qTarget?(totalKRW/qTarget*100):null;
+
+  // [FIX #분기별 개인목표] memberTargets는 이제 {분기:{멤버:목표}} 구조. index.html에서 아직
+  // 마이그레이션 전이라면(레거시 {멤버:목표} 형태) 예전처럼 모든 분기 동일 값으로 취급한다.
+  const _isLegacyFlatTargets=memberTargets&&Object.values(memberTargets).some(v=>typeof v==='number');
+  const memberTargetFor=(name,q)=>{
+    if(!memberTargets) return 0;
+    if(_isLegacyFlatTargets) return memberTargets[name]||0;
+    return memberTargets?.[q]?.[name]||0;
+  };
+  const getMemberTarget=(name)=>{
+    if(_viewMode==='year')  return ['Q1','Q2','Q3','Q4'].reduce((s,q)=>s+memberTargetFor(name,`${YR} ${q}`),0);
+    if(_viewMode==='h1')    return memberTargetFor(name,`${YR} Q1`)+memberTargetFor(name,`${YR} Q2`);
+    if(_viewMode==='h2')    return memberTargetFor(name,`${YR} Q3`)+memberTargetFor(name,`${YR} Q4`);
+    return memberTargetFor(name,QUARTER);
+  };
   const getM=dStr=>dStr?parseInt(dStr.split('-')[1],10):0;
   const mLabels=months.map(m=>_lang==='en'?MEN[m]:MKO[m]);
 
@@ -554,7 +511,7 @@ function render(salesData,memberTargets,qTargets){
   // ④ 담당자 달성률 리스트
   const maxMV=sortedM[0]?.[1]||1;
   document.getElementById('memberList').innerHTML=sortedM.map(([name,val],i)=>{
-    const col=MC[i%MC.length],tgt=memberTargets[name]||0,pct=tgt?(val/tgt*100):null;
+    const col=MC[i%MC.length],tgt=getMemberTarget(name),pct=tgt?(val/tgt*100):null;
     const bw=(val/maxMV*100).toFixed(0);
     return `<div class="srow">
       <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
@@ -573,7 +530,7 @@ function render(salesData,memberTargets,qTargets){
   // 담당자 바 차트
   mkChart('memberChart',{type:'bar',data:{labels:sortedM.map(([n])=>n),datasets:[
     {label:'SC',data:sortedM.map(([,v])=>toChart(v)),backgroundColor:MC.slice(0,sortedM.length),borderRadius:8},
-    {label:t('목표','Target'),data:sortedM.map(([n])=>{const tg=memberTargets[n]||0;return tg?toChart(tg):null;}),type:'line',borderColor:'#94a3b8',borderDash:[4,4],pointStyle:'crossRot',pointRadius:6,fill:false}
+    {label:t('목표','Target'),data:sortedM.map(([n])=>{const tg=getMemberTarget(n);return tg?toChart(tg):null;}),type:'line',borderColor:'#94a3b8',borderDash:[4,4],pointStyle:'crossRot',pointRadius:6,fill:false}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'circle',padding:12}},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},x:{grid:{display:false}}}}});
 
   // ⑤ 제품 테이블
@@ -611,12 +568,11 @@ function render(salesData,memberTargets,qTargets){
   nav.innerHTML=allMs.map((m,i)=>`<button class="tab-btn${i===0?' active':''}" onclick="switchMTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`).join('');
   cont.innerHTML=allMs.map((m,mi)=>{
     const mD=scData.filter(d=>d.member===m),mT=mD.reduce((s,d)=>s+(d.priceKRW||0),0);
-    const tgt=memberTargets[m]||0,aP=tgt?(mT/tgt*100):null,col=MC[mi%MC.length];
+    const tgt=getMemberTarget(m),aP=tgt?(mT/tgt*100):null,col=MC[mi%MC.length];
     const mp={},mc={};mD.forEach(d=>{mp[d.product]=(mp[d.product]||0)+(d.priceKRW||0);mc[d.product]=(mc[d.product]||0)+1;});
     const mpe=Object.entries(mp).sort((a,b)=>b[1]-a[1]),mmp=mpe[0]?.[1]||1;
     const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
     return `<div class="tab-pane${mi===0?' active':''}" id="tab-m-${sid}">
-      <div class="rep-name-heading" style="display:none;font-weight:800;font-size:15px;color:#1e293b;margin-bottom:10px">${m}</div>
       <div class="sr-kpis">
         <div class="sr-kpi"><div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col}"></div>
           <div class="klabel">Total (SC)</div>
@@ -649,34 +605,19 @@ function render(salesData,memberTargets,qTargets){
         </div>
         <div class="card" style="padding:16px">
           <div class="ctitle">${t('월별 추이','Monthly')}</div>
-          <div style="position:relative;height:150px"><canvas id="c-m-idx-${mi}"></canvas></div>
+          <div style="position:relative;height:150px"><canvas id="c-m-${sid}"></canvas></div>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  // Was requestAnimationFrame-deferred; every other chart on this page (monthlyChart, prodChart,
-  // memberChart, prodMonthChart) is created synchronously right here in the same tick and all
-  // print fine. Deferring only these per-rep charts by a frame meant a print pass that samples
-  // the page shortly after calling render() (see the beforeprint handler above) could capture
-  // the page before this frame ran, leaving every per-rep monthly-trend chart blank. cont.innerHTML
-  // is already committed synchronously above, so the canvases exist now — no need to wait a frame.
-  allMs.forEach((m,mi)=>{
-    // Wrapped per-member: one member's malformed record (bad date, missing field, etc.) must
-    // not throw and silently abort chart creation for every member after them in the loop.
-    try{
+  requestAnimationFrame(()=>{
+    allMs.forEach((m,mi)=>{
       const col=MC[mi%MC.length];
-      // Index-based id, not name-derived: two members whose names both sanitize to the same
-      // string (accented characters, punctuation stripped to nothing, near-duplicate names)
-      // would silently collide on a name-derived id — getElementById only ever returns the
-      // first match, so the second member's chart would attach to the first member's canvas
-      // and the second member's own (visually correct, positioned) canvas stayed forever blank
-      // with no error anywhere. mi is unique by construction, so this can't collide.
-      const cid=`c-m-idx-${mi}`;
+      const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
       const mMo=months.map(mo=>toChart(scData.filter(d=>d.member===m&&getM(d.deliveryDate)===mo).reduce((s,d)=>s+(d.priceKRW||0),0)));
-      mkChart(cid,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
-      if(CI[cid])CI[cid].update('none'); // belt-and-suspenders: force an immediate, non-animated paint right now rather than trusting the constructor's own first-render timing
-    }catch(e){console.error(`[chart] failed to build monthly-trend chart for member "${m}":`,e);}
+      mkChart(`c-m-${sid}`,{type:'bar',data:{labels:mLabels,datasets:[{label:m,data:mMo,backgroundColor:col+'99',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
+    });
   });
 }
 
@@ -685,15 +626,7 @@ function switchMTab(id,btn){
   document.querySelectorAll('#memberTabNav .tab-btn').forEach(b=>b.classList.remove('active'));
   const sid=id.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
   const pane=document.getElementById('tab-m-'+sid);
-  if(pane){
-    pane.classList.add('active');
-    // Every rep's monthly-trend chart was created while its own tab-pane was still
-    // display:none (only the first/default tab starts visible), so Chart.js drew it at
-    // 0x0 and never repaints on its own just because a CSS class later makes it visible.
-    // Resize it now that the pane is actually on-screen with real dimensions.
-    const canvas=pane.querySelector('canvas');
-    if(canvas){const ch=Chart.getChart(canvas);if(ch)ch.resize();}
-  }
+  if(pane)pane.classList.add('active');
   btn.classList.add('active');
 }
 
@@ -711,8 +644,8 @@ function showNotice(html){
 // Firestore 구독 — 에러 콜백 포함(권한 거부 등이 조용히 무시되지 않도록)
 function subscribe(){
   const onErr=(label)=>(e)=>{
-    console.error(`[Firestore] ${label} subscribe failed:`,e);
-    showNotice(t(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`,`⚠️ Failed to load data (${label})<br>${e.code||e.message||''}<br><br>Please check Firestore permissions or your network connection.`));
+    console.error(`[Firestore] ${label} 구독 실패:`,e);
+    showNotice(`⚠️ 데이터를 불러오지 못했습니다 (${label})<br>${e.code||e.message||''}<br><br>Firestore 권한 또는 네트워크를 확인하세요.`);
   };
   db.collection("targets").doc("quarterTargets").onSnapshot(doc=>{if(doc.exists){_qTargets=doc.data();updateER();}_loaded.q=true;tryRender();}, onErr('quarterTargets'));
   db.collection("sales").onSnapshot(snap=>{_sales=snap.docs.map(d=>d.data());_loaded.s=true;tryRender();}, onErr('sales'));
@@ -731,7 +664,7 @@ auth.onAuthStateChanged(user=>{
     _subscribed=true;
     subscribe();
   } else {
-    showNotice(t(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--accent);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`,`🔒 Login required.<br><br>Please log in from the <a href="index.html" style="color:var(--accent);text-decoration:underline">main dashboard</a> first,<br>then reopen this page.`));
+    showNotice(`🔒 로그인이 필요합니다.<br><br>먼저 <a href="index.html" style="color:var(--accent);text-decoration:underline">메인 대시보드</a>에서 로그인한 뒤<br>이 페이지를 다시 열어주세요.`);
   }
 });
 </script>
