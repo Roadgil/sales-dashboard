@@ -11,6 +11,20 @@ MAIN_PRODUCT_CODES = {
     "PTO103576": "ACC",
 }
 
+# GMPP 오퍼튜니티 안에 같이 딸려오는, GMPP와는 별개의 시스템 상품 - Product Name이 이 정규식과
+# 매치되면 GMPP 합계에서 빼서 별도의 후보(같은 Account/SO, 다른 product)로 분리한다.
+# 순서가 중요함: 더 구체적인 패턴(Nordlys Mini)을 먼저 검사해서 일반 패턴(Nordlys)이 가로채지 않게 함.
+# "GMP"는 "GMPP"의 부분 문자열이라 반드시 단어 경계(\b)로 매칭 - 그래야 GMPP 라인이 GMP로 오인되지 않음.
+COMPANION_SYSTEMS = [
+    ("Cryo7", r"\bcryo\s?7\b"),
+    ("Nordlys Mini", r"\bnordlys\s+mini\b"),
+    ("Nordlys", r"\bnordlys\b"),
+    ("Picoway", r"\bpicoway\b"),
+    ("VBP", r"\bvbp\b"),
+    ("Hand Piece", r"\bhand\s?piece\b"),
+    ("GMP", r"\bgmp\b"),
+]
+
 
 def parse_report(xls_path):
     """Salesforce에서 export한 .xls(실제로는 HTML 표) 파일을 읽어 DataFrame으로 반환."""
@@ -28,6 +42,29 @@ def make_doc_id(owner, opportunity_name, product_code):
     return "sfimport_" + hashlib.md5(key.encode("utf-8")).hexdigest()
 
 
+def _build_candidate(opp_name, owner, member, team, account, so_str, product, line_type_hint,
+                      stage, sales_type, close_date, price_krw, price_usd, now_iso, id_key):
+    return {
+        "id": make_doc_id(owner, opp_name, id_key),
+        "used": False,
+        "suggestedQuarter": compute_quarter(close_date),
+        "suggestedTeam": team,
+        "suggestedMember": member,
+        "owner": owner,
+        "so": so_str,
+        "account": account,
+        "product": product,
+        "lineTypeHint": line_type_hint,
+        "priceKRW": price_krw,
+        "priceUSD": price_usd,
+        "salesType": sales_type,
+        "stage": stage,
+        "opportunityName": opp_name,
+        "closeDate": close_date.isoformat(),
+        "importedAt": now_iso,
+    }
+
+
 def build_candidates(df, prev_to, new_to, from_fixed):
     """
     df: parse_report()의 결과.
@@ -35,72 +72,113 @@ def build_candidates(df, prev_to, new_to, from_fixed):
     from_fixed 이상인 행만 대상으로 함. Stage(Closed Won 여부)는 가리지 않고 전부 포함 -
     최종 반영 여부/분기/담당자/상태는 대시보드에서 사람이 후보를 클릭해 확정한다.
 
+    가격(KRW/USD)은 PTO103577/PTO103576 라인 하나가 아니라, 같은 Opportunity에 딸린
+    라인들의 Total Price를 더한 값 - 실제 계약 총액. 단, COMPANION_SYSTEMS에 해당하는
+    라인(예: Cryo7)은 GMPP와 별개 시스템이라 합계에서 빼고 같은 Account/SO의 별도
+    후보(product=Cryo7 등)로 분리한다.
+    Opportunity 안에 PTO103577/PTO103576 라인이 하나라도 있어야 GMPP 후보로 인정한다.
+
     반환: (candidates, skipped_unmapped_owners)
     """
     df = df.copy()
     df["_close_date"] = pd.to_datetime(df["Close Date"], format="%Y. %m. %d", errors="coerce").dt.date
 
-    mask_code = df["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())
-    mask_date = (df["_close_date"] > prev_to) & (df["_close_date"] <= new_to) & (df["_close_date"] >= from_fixed)
-    rows = df[mask_code & mask_date]
-
     candidates = []
     skipped_owners = set()
     now_iso = datetime.utcnow().isoformat()
 
-    for _, row in rows.iterrows():
-        owner = str(row["Opportunity Owner"]).strip()
+    for opp_name, group in df.groupby("Opportunity Name"):
+        main_rows = group[group["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())]
+        if main_rows.empty:
+            continue
+        main_row = main_rows.iloc[0]
+
+        close_date = main_row["_close_date"]
+        if pd.isna(close_date) or not (prev_to < close_date <= new_to and close_date >= from_fixed):
+            continue
+
+        owner = str(main_row["Opportunity Owner"]).strip()
         member = OWNER_TO_MEMBER.get(owner)
         team = OWNER_TO_TEAM.get(owner)
         if member is None or team is None:
             skipped_owners.add(owner)
             continue
 
-        product_code = str(row["Product Code"])
+        product_code = str(main_row["Product Code"])
         line_type_hint = MAIN_PRODUCT_CODES[product_code]
-        close_date = row["_close_date"]
-
-        so_num = row.get("Oracle Sales Order Number")
+        so_num = main_row.get("Oracle Sales Order Number")
         so_str = "" if pd.isna(so_num) else str(int(so_num))
+        account = str(main_row.get("Account Name", ""))
+        stage = str(main_row.get("Stage", ""))
+        sales_type = str(main_row.get("Sales Type", "") or "")
 
-        price_krw = row.get("Total Price")
-        price_krw = 0 if pd.isna(price_krw) else round(float(price_krw))
-        price_usd = row.get("Total Price (converted)")
-        price_usd = 0.0 if pd.isna(price_usd) else round(float(price_usd), 2)
+        names = group["Product Name"].astype(str).str.lower()
+        companion_mask = pd.Series(False, index=group.index)
+        companion_candidates = []
+        for sys_name, pattern in COMPANION_SYSTEMS:
+            sys_mask = names.str.contains(pattern, regex=True) & ~companion_mask
+            if not sys_mask.any():
+                continue
+            companion_mask = companion_mask | sys_mask
+            sys_price_krw = round(float(group.loc[sys_mask, "Total Price"].fillna(0).sum()))
+            sys_price_usd = round(float(group.loc[sys_mask, "Total Price (converted)"].fillna(0).sum()), 2)
+            companion_candidates.append(_build_candidate(
+                opp_name, owner, member, team, account, so_str, sys_name, "",
+                stage, sales_type, close_date, sys_price_krw, sys_price_usd, now_iso, sys_name.upper(),
+            ))
 
-        candidate = {
-            "id": make_doc_id(owner, row["Opportunity Name"], product_code),
-            "used": False,
-            "suggestedQuarter": compute_quarter(close_date),
-            "suggestedTeam": team,
-            "suggestedMember": member,
-            "owner": owner,
-            "so": so_str,
-            "account": str(row.get("Account Name", "")),
-            "product": "GMPP",
-            "lineTypeHint": line_type_hint,
-            "priceKRW": price_krw,
-            "priceUSD": price_usd,
-            "salesType": str(row.get("Sales Type", "") or ""),
-            "stage": str(row.get("Stage", "")),
-            "opportunityName": str(row.get("Opportunity Name", "")),
-            "closeDate": close_date.isoformat(),
-            "importedAt": now_iso,
-        }
-        candidates.append(candidate)
+        gmpp_rows = group[~companion_mask]
+        price_krw = round(float(gmpp_rows["Total Price"].fillna(0).sum()))
+        price_usd = round(float(gmpp_rows["Total Price (converted)"].fillna(0).sum()), 2)
+
+        candidates.append(_build_candidate(
+            opp_name, owner, member, team, account, so_str, "GMPP", line_type_hint,
+            stage, sales_type, close_date, price_krw, price_usd, now_iso, product_code,
+        ))
+        candidates.extend(companion_candidates)
 
     return candidates, skipped_owners
 
 
 def upload_candidates(candidates, db):
-    """이미 있는 후보(id)는 건너뛰고 새 후보만 sf_candidates 컬렉션에 생성한다."""
+    """새 후보는 생성하고, 아직 안 쓴(used=false) 기존 후보는 최신 Salesforce 값으로 덮어쓴다.
+    이미 사용(used=true, 즉 sales로 이미 넘어간) 후보는 건드리지 않는다."""
     ref = db.collection("sf_candidates")
-    created, skipped_existing = 0, 0
+    created, updated, skipped_used = 0, 0, 0
     for c in candidates:
         doc_ref = ref.document(c["id"])
-        if doc_ref.get().exists:
-            skipped_existing += 1
+        snap = doc_ref.get()
+        if not snap.exists:
+            doc_ref.set(c)
+            created += 1
+            continue
+        if snap.to_dict().get("used"):
+            skipped_used += 1
             continue
         doc_ref.set(c)
-        created += 1
-    return created, skipped_existing
+        updated += 1
+    return created, updated, skipped_used
+
+
+def sync_price_updates(candidates, db):
+    """이미 sales로 넘어간 건(같은 id의 sales 문서가 존재)의 Salesforce 금액이 바뀌었으면
+    priceKRW/priceUSD만 갱신한다. status/계약일/납품예정일/Dealer 등 수기 입력 필드는 그대로 둔다."""
+    sales_ref = db.collection("sales")
+    updated = 0
+    now_iso = datetime.utcnow().isoformat()
+    for c in candidates:
+        doc_ref = sales_ref.document(c["id"])
+        snap = doc_ref.get()
+        if not snap.exists:
+            continue
+        existing = snap.to_dict()
+        if existing.get("priceKRW") == c["priceKRW"]:
+            continue
+        doc_ref.update({
+            "priceKRW": c["priceKRW"],
+            "priceUSD": c["priceUSD"],
+            "_sfPriceUpdatedAt": now_iso,
+            "_sfPriceUpdatedFrom": existing.get("priceKRW"),
+        })
+        updated += 1
+    return updated

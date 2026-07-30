@@ -980,7 +980,7 @@ img,video{max-width:100%;height:auto}
           dealerName:   String(form.dealerName || ''),
           priceKRW:     finalKRW,
           priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
-          id:           editingId ? String(editingId) : crypto.randomUUID(),
+          id:           editingId ? String(editingId) : (convertingCandidateId || crypto.randomUUID()),
           quarter:      selectedQuarter,
           team:         selectedTeam,
           member:       selectedMember,
@@ -1733,6 +1733,7 @@ img,video{max-width:100%;height:auto}
                           <th className="py-2 px-2"></th>
                           <th className="py-2 px-2">Team</th>
                           <th className="py-2 px-2">Member</th>
+                          <th className="py-2 px-2">Product</th>
                           <th className="py-2 px-2">Account</th>
                           <th className="py-2 px-2">SO</th>
                           <th className="py-2 px-2">Close Date</th>
@@ -1744,14 +1745,27 @@ img,video{max-width:100%;height:auto}
                         {candidates
                           .filter(c => !candidatesPageFilter.team || c.suggestedTeam === candidatesPageFilter.team)
                           .filter(c => !candidatesPageFilter.member || c.suggestedMember === candidatesPageFilter.member)
+                          .slice()
+                          .sort((a, b) => {
+                            const opp = (a.opportunityName || '').localeCompare(b.opportunityName || '');
+                            if (opp !== 0) return opp;
+                            return a.product === b.product ? 0 : a.product === 'GMPP' ? -1 : 1;
+                          })
                           .map(c => (
-                            <tr key={c.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr key={c.id} style={{borderBottom: c.product === 'GMPP' ? '1px solid #f1f5f9' : '1px solid #e5e7eb'}}>
                               <td className="py-2 px-2"><button onClick={() => handleUseCandidate(c)} style={{fontSize:'11px', fontWeight:'bold', padding:'4px 10px', borderRadius:'6px', background:'#d97706', color:'#fff', border:'none', cursor:'pointer', whiteSpace:'nowrap'}}>가져오기</button></td>
                               <td className="py-2 px-2">{getCandidateTeam(c)}</td>
                               <td className="py-2 px-2">
                                 <select value={getCandidateMember(c)} onChange={e => setCandidateOverride(c.id, { member: e.target.value })} className="p-1 border border-gray-300 rounded text-xs font-bold">
                                   {Object.values(teams).flat().map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
+                              </td>
+                              <td className="py-2 px-2">
+                                <span style={{
+                                  fontSize:'11px', fontWeight:'bold', padding:'2px 8px', borderRadius:'999px',
+                                  background: c.product === 'GMPP' ? '#dbeafe' : '#ede9fe',
+                                  color: c.product === 'GMPP' ? '#1d4ed8' : '#6d28d9',
+                                }}>{c.product}{c.product !== 'GMPP' ? ' (동반)' : ''}</span>
                               </td>
                               <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" style={{marginLeft:'4px', color:'#dc2626'}}>⚠️중복의심</span>}</td>
                               <td className="py-2 px-2">{c.so}</td>
