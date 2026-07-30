@@ -1082,15 +1082,18 @@ img,video{max-width:100%;height:auto}
           );
           if (!proceed) return;
         }
-        if (!quarters.includes(c.suggestedQuarter)) {
-          const nq = [...quarters, c.suggestedQuarter].sort();
+        const targetQuarter = getCandidateQuarter(c);
+        const targetTeam = getCandidateTeam(c);
+        const targetMember = getCandidateMember(c);
+        if (!quarters.includes(targetQuarter)) {
+          const nq = [...quarters, targetQuarter].sort();
           setQuarters(nq);
           db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
         }
         setShowCandidatesPage(false);
-        setSelectedQuarter(c.suggestedQuarter);
-        setSelectedTeam(c.suggestedTeam);
-        setSelectedMember(c.suggestedMember);
+        setSelectedQuarter(targetQuarter);
+        setSelectedTeam(targetTeam);
+        setSelectedMember(targetMember);
         setForm({
           ...initialForm,
           so: c.so || '',
@@ -1157,6 +1160,15 @@ img,video{max-width:100%;height:auto}
       const [candidatesPageFilter, setCandidatesPageFilter] = useState({ member: '', team: '' });
       const [showMemberCandidateSearch, setShowMemberCandidateSearch] = useState(false);
       const [memberCandidateSearchQuery, setMemberCandidateSearchQuery] = useState('');
+      // 후보별로 "가져오기" 전에 담당자/분기를 직접 바꿀 수 있는 오버라이드 (기본값은 제안된 값)
+      const [candidateOverrides, setCandidateOverrides] = useState({});
+      const getCandidateMember = (c) => candidateOverrides[c.id]?.member || c.suggestedMember;
+      const getCandidateQuarter = (c) => candidateOverrides[c.id]?.quarter || c.suggestedQuarter;
+      const getCandidateTeam = (c) => {
+        const m = getCandidateMember(c);
+        return Object.keys(teams).find(t => (teams[t] || []).includes(m)) || c.suggestedTeam;
+      };
+      const setCandidateOverride = (id, patch) => setCandidateOverrides(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
       const moveCard = (idx, dir) => { const next = [...cardOrder]; const to = idx + dir; if (to < 0 || to >= next.length) return; [next[idx], next[to]] = [next[to], next[idx]]; setCardOrder(next); safeLS.set('summaryCardOrder', JSON.stringify(next)); };
       const [dragOverIdx, setDragOverIdx] = useState(null);
@@ -1647,7 +1659,7 @@ img,video{max-width:100%;height:auto}
           <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
             <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
             <div className="flex-1">
-              {Object.entries(groupedQuarters).sort().reverse().map(([year, qList]) => (
+              {Object.entries(groupedQuarters).sort().map(([year, qList]) => (
                 <div key={year} className="mb-6">
                   <h4 className="text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1">{year}{T.yearSuffix}</h4>
                   <div className="space-y-1">
@@ -1735,12 +1747,21 @@ img,video{max-width:100%;height:auto}
                           .map(c => (
                             <tr key={c.id} style={{borderBottom:'1px solid #f1f5f9'}}>
                               <td className="py-2 px-2"><button onClick={() => handleUseCandidate(c)} style={{fontSize:'11px', fontWeight:'bold', padding:'4px 10px', borderRadius:'6px', background:'#d97706', color:'#fff', border:'none', cursor:'pointer', whiteSpace:'nowrap'}}>가져오기</button></td>
-                              <td className="py-2 px-2">{c.suggestedTeam}</td>
-                              <td className="py-2 px-2 font-bold">{c.suggestedMember}</td>
+                              <td className="py-2 px-2">{getCandidateTeam(c)}</td>
+                              <td className="py-2 px-2">
+                                <select value={getCandidateMember(c)} onChange={e => setCandidateOverride(c.id, { member: e.target.value })} className="p-1 border border-gray-300 rounded text-xs font-bold">
+                                  {Object.values(teams).flat().map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </td>
                               <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" style={{marginLeft:'4px', color:'#dc2626'}}>⚠️중복의심</span>}</td>
                               <td className="py-2 px-2">{c.so}</td>
                               <td className="py-2 px-2">{c.closeDate}</td>
-                              <td className="py-2 px-2">{c.suggestedQuarter}</td>
+                              <td className="py-2 px-2">
+                                <select value={getCandidateQuarter(c)} onChange={e => setCandidateOverride(c.id, { quarter: e.target.value })} className="p-1 border border-gray-300 rounded text-xs">
+                                  {quarters.includes(c.suggestedQuarter) ? null : <option value={c.suggestedQuarter}>{c.suggestedQuarter}</option>}
+                                  {[...quarters].sort().map(q => <option key={q} value={q}>{q}</option>)}
+                                </select>
+                              </td>
                               <td className="py-2 px-2 text-right font-mono">₩ {(c.priceKRW || 0).toLocaleString()}</td>
                             </tr>
                           ))}
