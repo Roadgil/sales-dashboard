@@ -1720,7 +1720,6 @@ img,video{max-width:100%;height:auto}
                         <tr className="text-left text-amber-700 border-b-2 border-amber-200 bg-amber-50">
                           <th className="py-2 px-2">Team</th>
                           <th className="py-2 px-2">Member</th>
-                          <th className="py-2 px-2">Stage</th>
                           <th className="py-2 px-2">Account</th>
                           <th className="py-2 px-2">SO</th>
                           <th className="py-2 px-2">Close Date</th>
@@ -1737,7 +1736,6 @@ img,video{max-width:100%;height:auto}
                             <tr key={c.id} className="border-b border-gray-100 hover:bg-amber-50/50">
                               <td className="py-2 px-2">{c.suggestedTeam}</td>
                               <td className="py-2 px-2 font-bold">{c.suggestedMember}</td>
-                              <td className="py-2 px-2">{c.stage}</td>
                               <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" className="ml-1 text-red-600">⚠️중복의심</span>}</td>
                               <td className="py-2 px-2">{c.so}</td>
                               <td className="py-2 px-2">{c.closeDate}</td>
@@ -2217,7 +2215,7 @@ img,video{max-width:100%;height:auto}
                                   onClick={() => { handleUseCandidate(c); setShowMemberCandidateSearch(false); setMemberCandidateSearchQuery(''); }}
                                   className="p-2 hover:bg-amber-50 rounded cursor-pointer border-b border-gray-100 text-xs">
                                   <div className="font-bold text-gray-800">{c.account} {isCandidateLikelyDuplicate(c) && <span className="text-red-600">⚠️중복의심</span>}</div>
-                                  <div className="text-gray-500">{c.stage} · SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
+                                  <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
                                 </div>
                               ))}
                             {candidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (
