@@ -712,6 +712,8 @@ img,video{max-width:100%;height:auto}
       // Salesforce 자동 수집 후보 (sf_candidates) - 아직 대시보드에 반영 안 된 건들
       const [candidates, setCandidates]         = useState([]);
       const [convertingCandidateId, setConvertingCandidateId] = useState(null);
+      // 같은 오퍼튜니티에서 같이 딸려온 동반 시스템 후보(예: GMPP 옆의 Cryo7) - 저장 시 같은 상태/날짜/Dealer로 함께 sales에 생성됨
+      const [companionCandidates, setCompanionCandidates] = useState([]);
 
       const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '' };
       const [form, setForm]         = useState(initialForm);
@@ -1007,11 +1009,30 @@ img,video{max-width:100%;height:auto}
             db.collection("audit_logs").add(logEntry).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
 
             // Salesforce 후보에서 가져온 저장이면, 그 후보를 사용 완료 처리 (목록에서 사라짐)
+            // + 같은 오퍼튜니티에서 같이 딸려온 동반 시스템(예: Cryo7)도 상태/날짜/Dealer를 공유해서 함께 저장
             if (convertingCandidateId) {
+              const nowIso = new Date().toISOString();
+              const actor = auth.currentUser?.email || '';
               db.collection("sf_candidates").doc(convertingCandidateId).update({
-                used: true, usedAt: new Date().toISOString(), usedBy: (auth.currentUser?.email || ''),
+                used: true, usedAt: nowIso, usedBy: actor,
               }).catch(() => {});
+
+              companionCandidates.forEach(comp => {
+                const compKRW = comp.priceKRW || 0;
+                const compPayload = {
+                  status: payload.status, contractType: payload.contractType, contractDate: payload.contractDate,
+                  deliveryDate: payload.deliveryDate, dealerName: payload.dealerName,
+                  quarter: payload.quarter, team: payload.team, member: payload.member,
+                  so: comp.so || '', account: comp.account || '', product: comp.product || '',
+                  accType: '', priceKRW: compKRW, priceUSD: parseFloat((compKRW / (currentER || 1389)).toFixed(2)),
+                  id: comp.id,
+                };
+                db.collection("sales").doc(comp.id).set(compPayload).catch(() => {});
+                db.collection("sf_candidates").doc(comp.id).update({ used: true, usedAt: nowIso, usedBy: actor }).catch(() => {});
+              });
+
               setConvertingCandidateId(null);
+              setCompanionCandidates([]);
             }
 
             showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
@@ -1104,6 +1125,7 @@ img,video{max-width:100%;height:auto}
         });
         setEditingId(null);
         setConvertingCandidateId(c.id);
+        setCompanionCandidates(candidates.filter(x => x.id !== c.id && x.opportunityName === c.opportunityName));
         setShowEditModal(true);
       };
 
@@ -2180,12 +2202,17 @@ img,video{max-width:100%;height:auto}
                   {showEditModal && (
                     <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
                       onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
-                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);} }}>
+                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);setCompanionCandidates([]);} }}>
                       <div style={{background:'#fff',borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'680px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
                           <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>{convertingCandidateId ? '📥 Salesforce 후보 등록' : <>✨ {T.editMode}</>}</span>
-                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
+                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);setCompanionCandidates([]);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
                         </div>
+                        {companionCandidates.length > 0 && (
+                          <div style={{background:'#ede9fe', color:'#6d28d9', fontSize:'12px', fontWeight:'bold', padding:'8px 12px', borderRadius:'8px', marginBottom:'16px'}}>
+                            🔗 같은 계약의 동반 시스템도 함께 저장됩니다: {companionCandidates.map(cc => `${cc.product} (₩${(cc.priceKRW||0).toLocaleString()})`).join(', ')}
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
@@ -2217,7 +2244,7 @@ img,video{max-width:100%;height:auto}
                             {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
                             {T.saveEdit}
                           </button>
-                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
+                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);setCompanionCandidates([]);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
                         </div>
                       </div>
                     </div>
@@ -2250,7 +2277,15 @@ img,video{max-width:100%;height:auto}
                                 <div key={c.id}
                                   onClick={() => { handleUseCandidate(c); setShowMemberCandidateSearch(false); setMemberCandidateSearchQuery(''); }}
                                   style={{padding:'8px', borderRadius:'6px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:'12px'}}>
-                                  <div className="font-bold text-gray-800">{c.account} {isCandidateLikelyDuplicate(c) && <span style={{color:'#dc2626'}}>⚠️중복의심</span>}</div>
+                                  <div className="font-bold text-gray-800">
+                                    {c.account}{' '}
+                                    <span style={{
+                                      fontSize:'10px', fontWeight:'bold', padding:'1px 6px', borderRadius:'999px',
+                                      background: c.product === 'GMPP' ? '#dbeafe' : '#ede9fe',
+                                      color: c.product === 'GMPP' ? '#1d4ed8' : '#6d28d9',
+                                    }}>{c.product}</span>
+                                    {isCandidateLikelyDuplicate(c) && <span style={{color:'#dc2626'}}> ⚠️중복의심</span>}
+                                  </div>
                                   <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
                                 </div>
                               ))}
