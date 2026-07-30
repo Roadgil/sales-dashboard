@@ -709,6 +709,9 @@ img,video{max-width:100%;height:auto}
       const [teamTargets, setTeamTargets]       = useState({});
       const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
       const [salesData, setSalesData]           = useState([]);
+      // Salesforce 자동 수집 후보 (sf_candidates) - 아직 대시보드에 반영 안 된 건들
+      const [candidates, setCandidates]         = useState([]);
+      const [convertingCandidateId, setConvertingCandidateId] = useState(null);
 
       const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '' };
       const [form, setForm]         = useState(initialForm);
@@ -858,6 +861,7 @@ img,video{max-width:100%;height:auto}
       useEffect(() => {
         if (!currentUser) return;
         const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
+        const unsubCandidates   = db.collection("sf_candidates").where("used","==",false).onSnapshot(snap => setCandidates(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
         const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => {
           if (!doc.exists) return;
@@ -890,7 +894,7 @@ img,video{max-width:100%;height:auto}
             db.collection("settings").doc("layout").set({ teams, quarters });
           }
         });
-        return () => { unsubSales(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
+        return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
       }, [currentUser]);
 
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
@@ -1002,6 +1006,14 @@ img,video{max-width:100%;height:auto}
             if (beforeSnap) logEntry.before = beforeSnap;
             db.collection("audit_logs").add(logEntry).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
 
+            // Salesforce 후보에서 가져온 저장이면, 그 후보를 사용 완료 처리 (목록에서 사라짐)
+            if (convertingCandidateId) {
+              db.collection("sf_candidates").doc(convertingCandidateId).update({
+                used: true, usedAt: new Date().toISOString(), usedBy: (auth.currentUser?.email || ''),
+              }).catch(() => {});
+              setConvertingCandidateId(null);
+            }
+
             showToast(editingId ? (lang==='ko' ? '수정 완료 ✓' : 'Updated ✓') : (lang==='ko' ? '저장 완료 ✓' : 'Saved ✓'));
             setEditingId(null);
             setForm(initialForm);
@@ -1052,6 +1064,44 @@ img,video{max-width:100%;height:auto}
       const handleTeamTargetChange   = (team, quarter, value) => { if (!requireAuth()) return; const val = value==='' ? 0 : Number(value); const n = { ...teamTargets, [team]: { ...(teamTargets[team]||{}), [quarter]: val } }; setTeamTargets(n); db.collection("targets").doc("teamTargets").set(n); };
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
+
+      // 같은 SO 또는 같은 Account로 이미 등록된 sales 데이터가 있는지 (중복 의심) 체크
+      const isCandidateLikelyDuplicate = (c) => salesData.some(d =>
+        (c.so && d.so === c.so) || (d.account === c.account)
+      );
+
+      // Salesforce 후보를 선택하면: 분기/팀/멤버를 후보 기준으로 맞추고, 폼에 SO/Account/Product/가격을
+      // 미리 채운 뒤 편집 모달을 새 항목 작성 모드(editingId=null)로 연다. 상태/계약일/납품예정일/
+      // Dealer/Acc type은 비워둬서 사람이 직접 채우도록 한다.
+      const handleUseCandidate = (c) => {
+        if (!requireAuth()) return;
+        if (isCandidateLikelyDuplicate(c)) {
+          const proceed = window.confirm(
+            `⚠️ "${c.account}" (SO: ${c.so || '-'})와 같은 SO 또는 Account를 가진 데이터가 이미 등록되어 있습니다.\n` +
+            `중복으로 저장될 수 있습니다. 계속 진행할까요?`
+          );
+          if (!proceed) return;
+        }
+        if (!quarters.includes(c.suggestedQuarter)) {
+          const nq = [...quarters, c.suggestedQuarter].sort();
+          setQuarters(nq);
+          db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
+        }
+        setSelectedQuarter(c.suggestedQuarter);
+        setSelectedTeam(c.suggestedTeam);
+        setSelectedMember(c.suggestedMember);
+        setForm({
+          ...initialForm,
+          so: c.so || '',
+          account: c.account || '',
+          product: c.product || 'GMPP',
+          priceKRW: c.priceKRW ? String(c.priceKRW) : '',
+          priceUSD: c.priceUSD ? String(c.priceUSD) : '',
+        });
+        setEditingId(null);
+        setConvertingCandidateId(c.id);
+        setShowEditModal(true);
+      };
 
       const addTeam = () => { if (!requireAuth()) return; const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
       const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
@@ -2028,15 +2078,52 @@ img,video{max-width:100%;height:auto}
                     );
                   })()}
 
+                  {/* Salesforce 자동 수집 후보 목록 - 클릭하면 아래 입력 폼에 SO/Account/Product/가격이 미리 채워짐 */}
+                  {candidates.filter(c => c.suggestedMember === selectedMember).length > 0 && (
+                    <div className="mb-8 bg-amber-50 border border-amber-200 rounded-lg p-4 md:p-6">
+                      <h4 className="font-bold text-base md:text-lg text-amber-800 mb-3">
+                        📥 Salesforce 신규 후보 ({candidates.filter(c => c.suggestedMember === selectedMember).length}건)
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs md:text-sm">
+                          <thead>
+                            <tr className="text-left text-amber-700 border-b border-amber-200">
+                              <th className="py-1 pr-3">Stage</th>
+                              <th className="py-1 pr-3">Account</th>
+                              <th className="py-1 pr-3">SO</th>
+                              <th className="py-1 pr-3">Close Date</th>
+                              <th className="py-1 pr-3">제안 분기</th>
+                              <th className="py-1 pr-3 text-right">KRW</th>
+                              <th className="py-1"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {candidates.filter(c => c.suggestedMember === selectedMember).map(c => (
+                              <tr key={c.id} className="border-b border-amber-100">
+                                <td className="py-1 pr-3">{c.stage}</td>
+                                <td className="py-1 pr-3">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" className="ml-1 text-red-600">⚠️중복의심</span>}</td>
+                                <td className="py-1 pr-3">{c.so}</td>
+                                <td className="py-1 pr-3">{c.closeDate}</td>
+                                <td className="py-1 pr-3">{c.suggestedQuarter}</td>
+                                <td className="py-1 pr-3 text-right font-mono">₩ {(c.priceKRW||0).toLocaleString()}</td>
+                                <td className="py-1"><button onClick={() => handleUseCandidate(c)} className="text-xs font-bold px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition">가져오기</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 수정 모달 */}
                   {showEditModal && (
                     <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
                       onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
-                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);} }}>
+                      onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);} }}>
                       <div style={{background:'#fff',borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'680px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 8px 40px rgba(0,0,0,0.3)'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-                          <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>✨ {T.editMode}</span>
-                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
+                          <span style={{color:'#2563eb',fontWeight:'700',fontSize:'15px'}}>{convertingCandidateId ? '📥 Salesforce 후보 등록' : <>✨ {T.editMode}</>}</span>
+                          <button onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);}} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',color:'#94a3b8',lineHeight:1}}>✕</button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
@@ -2069,7 +2156,7 @@ img,video{max-width:100%;height:auto}
                             {isSaving && <span style={{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.4)',borderTop:'2px solid white',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'}}/>}
                             {T.saveEdit}
                           </button>
-                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
+                          <button type="button" onClick={()=>{setShowEditModal(false);setEditingId(null);setForm(initialForm);setConvertingCandidateId(null);}} className="px-6 py-3 rounded border border-gray-300 text-gray-600 font-bold hover:bg-gray-50 transition">{T.cancelEdit}</button>
                         </div>
                       </div>
                     </div>

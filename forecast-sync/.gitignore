@@ -1,0 +1,13 @@
+.env
+*firebase-adminsdk*.json
+service_account*.json
+state/*.json
+downloads/
+*.xls
+*.csv
+__pycache__/
+current_firestore.rules
+new_ruleset_name.txt
+dryrun_sample.json
+run_log.txt
+error_*.png

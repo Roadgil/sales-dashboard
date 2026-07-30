@@ -1,0 +1,6 @@
+selenium>=4.20
+pandas>=2.0
+lxml>=5.0
+openpyxl>=3.1
+firebase-admin>=6.5
+python-dotenv>=1.0
