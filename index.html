@@ -1674,7 +1674,7 @@ img,video{max-width:100%;height:auto}
                 </button>
               </div>
               <div className="mb-4">
-                <button onClick={() => { setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className="w-full bg-amber-600 text-white font-extrabold py-3 rounded-lg hover:bg-amber-700 transition flex items-center justify-center shadow-lg border border-amber-500">
+                <button onClick={() => { setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} style={{width:'100%', background:'#d97706', color:'#fff', fontWeight:800, padding:'12px', borderRadius:'8px', border:'1px solid #b45309', cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
                   📥 Salesforce 신규 후보{candidates.length > 0 ? ` (${candidates.length})` : ''}
                 </button>
               </div>
@@ -1699,12 +1699,12 @@ img,video{max-width:100%;height:auto}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
             {showCandidatesPage ? (
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({candidates.length}건)</h1>
-                  <button onClick={() => setShowCandidatesPage(false)} className="bg-slate-700 text-white font-bold px-4 py-2 rounded-lg hover:bg-slate-800 transition">← 대시보드로</button>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
+                  <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({candidates.length}건)</h1>
+                  <button onClick={() => setShowCandidatesPage(false)} style={{background:'#334155', color:'#fff', fontWeight:'bold', padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer'}}>← 대시보드로</button>
                 </div>
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
-                  <div className="flex flex-col md:flex-row gap-3 mb-4">
+                  <div style={{display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'16px'}}>
                     <select value={candidatesPageFilter.team} onChange={e => setCandidatesPageFilter(f => ({ ...f, team: e.target.value, member: '' }))} className="p-2 border border-gray-300 rounded text-sm font-semibold">
                       <option value="">전체 팀</option>
                       {Object.keys(teams).map(t => <option key={t} value={t}>{t}</option>)}
@@ -1714,10 +1714,11 @@ img,video{max-width:100%;height:auto}
                       {(candidatesPageFilter.team ? (teams[candidatesPageFilter.team] || []) : Object.values(teams).flat()).map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div style={{overflowX:'auto'}}>
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="text-left text-amber-700 border-b-2 border-amber-200 bg-amber-50">
+                        <tr style={{textAlign:'left', color:'#b45309', borderBottom:'2px solid #fde68a', background:'#fffbeb'}}>
+                          <th className="py-2 px-2"></th>
                           <th className="py-2 px-2">Team</th>
                           <th className="py-2 px-2">Member</th>
                           <th className="py-2 px-2">Account</th>
@@ -1725,7 +1726,6 @@ img,video{max-width:100%;height:auto}
                           <th className="py-2 px-2">Close Date</th>
                           <th className="py-2 px-2">제안 분기</th>
                           <th className="py-2 px-2 text-right">KRW</th>
-                          <th className="py-2 px-2"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1733,15 +1733,15 @@ img,video{max-width:100%;height:auto}
                           .filter(c => !candidatesPageFilter.team || c.suggestedTeam === candidatesPageFilter.team)
                           .filter(c => !candidatesPageFilter.member || c.suggestedMember === candidatesPageFilter.member)
                           .map(c => (
-                            <tr key={c.id} className="border-b border-gray-100 hover:bg-amber-50/50">
+                            <tr key={c.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                              <td className="py-2 px-2"><button onClick={() => handleUseCandidate(c)} style={{fontSize:'11px', fontWeight:'bold', padding:'4px 10px', borderRadius:'6px', background:'#d97706', color:'#fff', border:'none', cursor:'pointer', whiteSpace:'nowrap'}}>가져오기</button></td>
                               <td className="py-2 px-2">{c.suggestedTeam}</td>
                               <td className="py-2 px-2 font-bold">{c.suggestedMember}</td>
-                              <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" className="ml-1 text-red-600">⚠️중복의심</span>}</td>
+                              <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" style={{marginLeft:'4px', color:'#dc2626'}}>⚠️중복의심</span>}</td>
                               <td className="py-2 px-2">{c.so}</td>
                               <td className="py-2 px-2">{c.closeDate}</td>
                               <td className="py-2 px-2">{c.suggestedQuarter}</td>
                               <td className="py-2 px-2 text-right font-mono">₩ {(c.priceKRW || 0).toLocaleString()}</td>
-                              <td className="py-2 px-2"><button onClick={() => handleUseCandidate(c)} className="text-xs font-bold px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition">가져오기</button></td>
                             </tr>
                           ))}
                       </tbody>
@@ -2190,21 +2190,22 @@ img,video{max-width:100%;height:auto}
 
                   {/* [FIX #2] 입력 폼 — min="0" 추가, 저장 중 비활성화 */}
                   <form className="bg-slate-50 p-4 md:p-6 rounded-lg border border-gray-200 transition" data-region="account-entry-form">
-                    <div className="relative flex items-center justify-between mb-4">
+                    <div style={{position:'relative', display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
                       <h4 className="font-bold text-gray-700 text-sm md:text-base">📝 신규 계약 입력</h4>
-                      <button type="button" onClick={() => setShowMemberCandidateSearch(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition whitespace-nowrap">
+                      <button type="button" onClick={() => setShowMemberCandidateSearch(v => !v)} style={{fontSize:'12px', fontWeight:'bold', padding:'6px 12px', borderRadius:'6px', background:'#fef3c7', color:'#b45309', border:'1px solid #fcd34d', cursor:'pointer', whiteSpace:'nowrap'}}>
                         🔍 Salesforce에서 가져오기{candidates.filter(c => c.suggestedMember === selectedMember).length > 0 ? ` (${candidates.filter(c => c.suggestedMember === selectedMember).length})` : ''}
                       </button>
                       {showMemberCandidateSearch && (
-                        <div className="absolute top-full right-0 mt-2 w-full md:w-96 bg-white border border-gray-200 rounded-lg shadow-xl p-3 z-50">
+                        <div style={{position:'absolute', top:'100%', right:0, marginTop:'8px', width:'380px', maxWidth:'90vw', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'8px', boxShadow:'0 10px 30px rgba(0,0,0,0.25)', padding:'12px', zIndex:500}}>
                           <input
                             type="text"
                             placeholder="Account 또는 SO로 검색"
                             value={memberCandidateSearchQuery}
                             onChange={e => setMemberCandidateSearchQuery(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded mb-2 text-sm outline-none focus:ring-2 focus:ring-amber-400"
+                            className="w-full p-2 border border-gray-300 rounded text-sm"
+                            style={{marginBottom:'8px', outline:'none'}}
                           />
-                          <div className="max-h-64 overflow-y-auto">
+                          <div style={{maxHeight:'256px', overflowY:'auto'}}>
                             {candidates
                               .filter(c => c.suggestedMember === selectedMember)
                               .filter(c => !memberCandidateSearchQuery.trim() ||
@@ -2213,13 +2214,13 @@ img,video{max-width:100%;height:auto}
                               .map(c => (
                                 <div key={c.id}
                                   onClick={() => { handleUseCandidate(c); setShowMemberCandidateSearch(false); setMemberCandidateSearchQuery(''); }}
-                                  className="p-2 hover:bg-amber-50 rounded cursor-pointer border-b border-gray-100 text-xs">
-                                  <div className="font-bold text-gray-800">{c.account} {isCandidateLikelyDuplicate(c) && <span className="text-red-600">⚠️중복의심</span>}</div>
+                                  style={{padding:'8px', borderRadius:'6px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:'12px'}}>
+                                  <div className="font-bold text-gray-800">{c.account} {isCandidateLikelyDuplicate(c) && <span style={{color:'#dc2626'}}>⚠️중복의심</span>}</div>
                                   <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
                                 </div>
                               ))}
                             {candidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (
-                              <div className="text-gray-400 text-xs p-2">가져올 후보가 없습니다.</div>
+                              <div className="text-gray-400 text-xs" style={{padding:'8px'}}>가져올 후보가 없습니다.</div>
                             )}
                           </div>
                         </div>
