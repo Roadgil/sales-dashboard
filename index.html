@@ -1087,6 +1087,7 @@ img,video{max-width:100%;height:auto}
           setQuarters(nq);
           db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
         }
+        setShowCandidatesPage(false);
         setSelectedQuarter(c.suggestedQuarter);
         setSelectedTeam(c.suggestedTeam);
         setSelectedMember(c.suggestedMember);
@@ -1152,6 +1153,10 @@ img,video{max-width:100%;height:auto}
       };
 
       const [showCsvMenu, setShowCsvMenu] = useState(false);
+      const [showCandidatesPage, setShowCandidatesPage] = useState(false);
+      const [candidatesPageFilter, setCandidatesPageFilter] = useState({ member: '', team: '' });
+      const [showMemberCandidateSearch, setShowMemberCandidateSearch] = useState(false);
+      const [memberCandidateSearchQuery, setMemberCandidateSearchQuery] = useState('');
 
       const moveCard = (idx, dir) => { const next = [...cardOrder]; const to = idx + dir; if (to < 0 || to >= next.length) return; [next[idx], next[to]] = [next[to], next[idx]]; setCardOrder(next); safeLS.set('summaryCardOrder', JSON.stringify(next)); };
       const [dragOverIdx, setDragOverIdx] = useState(null);
@@ -1668,6 +1673,11 @@ img,video{max-width:100%;height:auto}
                   {lang==='ko' ? '🔐 Audit Log (변경 이력)' : '🔐 Audit Log'}
                 </button>
               </div>
+              <div className="mb-4">
+                <button onClick={() => { setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className="w-full bg-amber-600 text-white font-extrabold py-3 rounded-lg hover:bg-amber-700 transition flex items-center justify-center shadow-lg border border-amber-500">
+                  📥 Salesforce 신규 후보{candidates.length > 0 ? ` (${candidates.length})` : ''}
+                </button>
+              </div>
               {/* [FIX #8] CSV 내보내기 드롭다운 */}
               <div className="relative">
                 <button onClick={() => setShowCsvMenu(v => !v)} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center shadow-md">
@@ -1687,7 +1697,62 @@ img,video{max-width:100%;height:auto}
 
           {/* 메인 콘텐츠 */}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
-            {!selectedMember ? (
+            {showCandidatesPage ? (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({candidates.length}건)</h1>
+                  <button onClick={() => setShowCandidatesPage(false)} className="bg-slate-700 text-white font-bold px-4 py-2 rounded-lg hover:bg-slate-800 transition">← 대시보드로</button>
+                </div>
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
+                  <div className="flex flex-col md:flex-row gap-3 mb-4">
+                    <select value={candidatesPageFilter.team} onChange={e => setCandidatesPageFilter(f => ({ ...f, team: e.target.value, member: '' }))} className="p-2 border border-gray-300 rounded text-sm font-semibold">
+                      <option value="">전체 팀</option>
+                      {Object.keys(teams).map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={candidatesPageFilter.member} onChange={e => setCandidatesPageFilter(f => ({ ...f, member: e.target.value }))} className="p-2 border border-gray-300 rounded text-sm font-semibold">
+                      <option value="">전체 멤버</option>
+                      {(candidatesPageFilter.team ? (teams[candidatesPageFilter.team] || []) : Object.values(teams).flat()).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs md:text-sm">
+                      <thead>
+                        <tr className="text-left text-amber-700 border-b-2 border-amber-200 bg-amber-50">
+                          <th className="py-2 px-2">Team</th>
+                          <th className="py-2 px-2">Member</th>
+                          <th className="py-2 px-2">Stage</th>
+                          <th className="py-2 px-2">Account</th>
+                          <th className="py-2 px-2">SO</th>
+                          <th className="py-2 px-2">Close Date</th>
+                          <th className="py-2 px-2">제안 분기</th>
+                          <th className="py-2 px-2 text-right">KRW</th>
+                          <th className="py-2 px-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {candidates
+                          .filter(c => !candidatesPageFilter.team || c.suggestedTeam === candidatesPageFilter.team)
+                          .filter(c => !candidatesPageFilter.member || c.suggestedMember === candidatesPageFilter.member)
+                          .map(c => (
+                            <tr key={c.id} className="border-b border-gray-100 hover:bg-amber-50/50">
+                              <td className="py-2 px-2">{c.suggestedTeam}</td>
+                              <td className="py-2 px-2 font-bold">{c.suggestedMember}</td>
+                              <td className="py-2 px-2">{c.stage}</td>
+                              <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" className="ml-1 text-red-600">⚠️중복의심</span>}</td>
+                              <td className="py-2 px-2">{c.so}</td>
+                              <td className="py-2 px-2">{c.closeDate}</td>
+                              <td className="py-2 px-2">{c.suggestedQuarter}</td>
+                              <td className="py-2 px-2 text-right font-mono">₩ {(c.priceKRW || 0).toLocaleString()}</td>
+                              <td className="py-2 px-2"><button onClick={() => handleUseCandidate(c)} className="text-xs font-bold px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition">가져오기</button></td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    {candidates.length === 0 && <div className="text-gray-400 text-sm p-6 text-center">현재 후보가 없습니다.</div>}
+                  </div>
+                </div>
+              </div>
+            ) : !selectedMember ? (
               <div>
                 <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-gray-800">{selectedQuarter} Dashboard</h1>
 
@@ -2078,43 +2143,6 @@ img,video{max-width:100%;height:auto}
                     );
                   })()}
 
-                  {/* Salesforce 자동 수집 후보 목록 - 클릭하면 아래 입력 폼에 SO/Account/Product/가격이 미리 채워짐 */}
-                  {candidates.filter(c => c.suggestedMember === selectedMember).length > 0 && (
-                    <div className="mb-8 bg-amber-50 border border-amber-200 rounded-lg p-4 md:p-6">
-                      <h4 className="font-bold text-base md:text-lg text-amber-800 mb-3">
-                        📥 Salesforce 신규 후보 ({candidates.filter(c => c.suggestedMember === selectedMember).length}건)
-                      </h4>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs md:text-sm">
-                          <thead>
-                            <tr className="text-left text-amber-700 border-b border-amber-200">
-                              <th className="py-1 pr-3">Stage</th>
-                              <th className="py-1 pr-3">Account</th>
-                              <th className="py-1 pr-3">SO</th>
-                              <th className="py-1 pr-3">Close Date</th>
-                              <th className="py-1 pr-3">제안 분기</th>
-                              <th className="py-1 pr-3 text-right">KRW</th>
-                              <th className="py-1"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {candidates.filter(c => c.suggestedMember === selectedMember).map(c => (
-                              <tr key={c.id} className="border-b border-amber-100">
-                                <td className="py-1 pr-3">{c.stage}</td>
-                                <td className="py-1 pr-3">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" className="ml-1 text-red-600">⚠️중복의심</span>}</td>
-                                <td className="py-1 pr-3">{c.so}</td>
-                                <td className="py-1 pr-3">{c.closeDate}</td>
-                                <td className="py-1 pr-3">{c.suggestedQuarter}</td>
-                                <td className="py-1 pr-3 text-right font-mono">₩ {(c.priceKRW||0).toLocaleString()}</td>
-                                <td className="py-1"><button onClick={() => handleUseCandidate(c)} className="text-xs font-bold px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition">가져오기</button></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
                   {/* 수정 모달 */}
                   {showEditModal && (
                     <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
@@ -2164,6 +2192,41 @@ img,video{max-width:100%;height:auto}
 
                   {/* [FIX #2] 입력 폼 — min="0" 추가, 저장 중 비활성화 */}
                   <form className="bg-slate-50 p-4 md:p-6 rounded-lg border border-gray-200 transition" data-region="account-entry-form">
+                    <div className="relative flex items-center justify-between mb-4">
+                      <h4 className="font-bold text-gray-700 text-sm md:text-base">📝 신규 계약 입력</h4>
+                      <button type="button" onClick={() => setShowMemberCandidateSearch(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition whitespace-nowrap">
+                        🔍 Salesforce에서 가져오기{candidates.filter(c => c.suggestedMember === selectedMember).length > 0 ? ` (${candidates.filter(c => c.suggestedMember === selectedMember).length})` : ''}
+                      </button>
+                      {showMemberCandidateSearch && (
+                        <div className="absolute top-full right-0 mt-2 w-full md:w-96 bg-white border border-gray-200 rounded-lg shadow-xl p-3 z-50">
+                          <input
+                            type="text"
+                            placeholder="Account 또는 SO로 검색"
+                            value={memberCandidateSearchQuery}
+                            onChange={e => setMemberCandidateSearchQuery(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded mb-2 text-sm outline-none focus:ring-2 focus:ring-amber-400"
+                          />
+                          <div className="max-h-64 overflow-y-auto">
+                            {candidates
+                              .filter(c => c.suggestedMember === selectedMember)
+                              .filter(c => !memberCandidateSearchQuery.trim() ||
+                                (c.account || '').includes(memberCandidateSearchQuery.trim()) ||
+                                (c.so || '').includes(memberCandidateSearchQuery.trim()))
+                              .map(c => (
+                                <div key={c.id}
+                                  onClick={() => { handleUseCandidate(c); setShowMemberCandidateSearch(false); setMemberCandidateSearchQuery(''); }}
+                                  className="p-2 hover:bg-amber-50 rounded cursor-pointer border-b border-gray-100 text-xs">
+                                  <div className="font-bold text-gray-800">{c.account} {isCandidateLikelyDuplicate(c) && <span className="text-red-600">⚠️중복의심</span>}</div>
+                                  <div className="text-gray-500">{c.stage} · SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
+                                </div>
+                              ))}
+                            {candidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (
+                              <div className="text-gray-400 text-xs p-2">가져올 후보가 없습니다.</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
