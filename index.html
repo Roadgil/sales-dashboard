@@ -1179,7 +1179,9 @@ img,video{max-width:100%;height:auto}
 
       const [showCsvMenu, setShowCsvMenu] = useState(false);
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
-      const [candidatesPageFilter, setCandidatesPageFilter] = useState({ member: '', team: '' });
+      const [candidatesPageFilter, setCandidatesPageFilter] = useState({ member: '' });
+      const [showCandidatesMemberSearch, setShowCandidatesMemberSearch] = useState(false);
+      const [candidatesMemberSearchQuery, setCandidatesMemberSearchQuery] = useState('');
       const [showMemberCandidateSearch, setShowMemberCandidateSearch] = useState(false);
       const [memberCandidateSearchQuery, setMemberCandidateSearchQuery] = useState('');
       // 후보별로 "가져오기" 전에 담당자/분기를 직접 바꿀 수 있는 오버라이드 (기본값은 제안된 값)
@@ -1739,14 +1741,40 @@ img,video{max-width:100%;height:auto}
                 </div>
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
                   <div style={{display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'16px'}}>
-                    <select value={candidatesPageFilter.team} onChange={e => setCandidatesPageFilter(f => ({ ...f, team: e.target.value, member: '' }))} className="p-2 border border-gray-300 rounded text-sm font-semibold">
-                      <option value="">전체 팀</option>
-                      {Object.keys(teams).map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <select value={candidatesPageFilter.member} onChange={e => setCandidatesPageFilter(f => ({ ...f, member: e.target.value }))} className="p-2 border border-gray-300 rounded text-sm font-semibold">
-                      <option value="">전체 멤버</option>
-                      {(candidatesPageFilter.team ? (teams[candidatesPageFilter.team] || []) : Object.values(teams).flat()).map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    <div style={{position:'relative'}}>
+                      <button type="button" onClick={() => setShowCandidatesMemberSearch(v => !v)} className="p-2 border border-gray-300 rounded text-sm font-semibold" style={{minWidth:'160px', textAlign:'left', background:'#fff', cursor:'pointer'}}>
+                        {candidatesPageFilter.member || '전체 멤버'} ▾
+                      </button>
+                      {showCandidatesMemberSearch && (
+                        <div style={{position:'absolute', top:'100%', left:0, marginTop:'4px', width:'240px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'8px', boxShadow:'0 10px 30px rgba(0,0,0,0.25)', padding:'8px', zIndex:200}}>
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="멤버 검색"
+                            value={candidatesMemberSearchQuery}
+                            onChange={e => setCandidatesMemberSearchQuery(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded text-sm"
+                            style={{marginBottom:'8px', outline:'none'}}
+                          />
+                          <div style={{maxHeight:'240px', overflowY:'auto'}}>
+                            <div
+                              onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: '' })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
+                              style={{padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', fontWeight:'bold', color:'#6b7280'}}>
+                              전체 멤버
+                            </div>
+                            {[...new Set(Object.values(teams).flat())]
+                              .filter(m => !candidatesMemberSearchQuery.trim() || m.toLowerCase().includes(candidatesMemberSearchQuery.trim().toLowerCase()))
+                              .map(m => (
+                                <div key={m}
+                                  onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: m })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
+                                  style={{padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', fontWeight:'bold', color:'#1e293b', borderTop:'1px solid #f1f5f9'}}>
+                                  {m}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div style={{overflowX:'auto'}}>
                     <table className="w-full text-xs md:text-sm">
@@ -1765,7 +1793,6 @@ img,video{max-width:100%;height:auto}
                       </thead>
                       <tbody>
                         {candidates
-                          .filter(c => !candidatesPageFilter.team || c.suggestedTeam === candidatesPageFilter.team)
                           .filter(c => !candidatesPageFilter.member || c.suggestedMember === candidatesPageFilter.member)
                           .slice()
                           .sort((a, b) => {
