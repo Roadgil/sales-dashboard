@@ -1182,6 +1182,18 @@ img,video{max-width:100%;height:auto}
       const [candidatesPageFilter, setCandidatesPageFilter] = useState({ member: '' });
       const [showCandidatesMemberSearch, setShowCandidatesMemberSearch] = useState(false);
       const [candidatesMemberSearchQuery, setCandidatesMemberSearchQuery] = useState('');
+      const candidatesMemberBtnRef = useRef(null);
+      const [candidatesMemberPos, setCandidatesMemberPos] = useState(null);
+      useEffect(() => {
+        if (!showCandidatesMemberSearch || !candidatesMemberBtnRef.current) { setCandidatesMemberPos(null); return; }
+        const menuW = 220;
+        const r = candidatesMemberBtnRef.current.getBoundingClientRect();
+        const left = Math.max(8, Math.min(r.left, window.innerWidth - menuW - 8));
+        setCandidatesMemberPos({ top: r.bottom + 4, left });
+        const closeOnScroll = () => setShowCandidatesMemberSearch(false);
+        window.addEventListener('scroll', closeOnScroll, true);
+        return () => window.removeEventListener('scroll', closeOnScroll, true);
+      }, [showCandidatesMemberSearch]);
       const [showMemberCandidateSearch, setShowMemberCandidateSearch] = useState(false);
       const [memberCandidateSearchQuery, setMemberCandidateSearchQuery] = useState('');
       // 후보별로 "가져오기" 전에 담당자/분기를 직접 바꿀 수 있는 오버라이드 (기본값은 제안된 값)
@@ -1732,7 +1744,7 @@ img,video{max-width:100%;height:auto}
           </div>
 
           {/* 메인 콘텐츠 */}
-          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); }}>
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (showCandidatesMemberSearch) setShowCandidatesMemberSearch(false); }}>
             {showCandidatesPage ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
@@ -1740,49 +1752,53 @@ img,video{max-width:100%;height:auto}
                   <button onClick={() => setShowCandidatesPage(false)} style={{background:'#334155', color:'#fff', fontWeight:'bold', padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer'}}>← 대시보드로</button>
                 </div>
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
-                  <div style={{display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'16px'}}>
-                    <div style={{position:'relative'}}>
-                      <button type="button" onClick={() => setShowCandidatesMemberSearch(v => !v)} className="p-2 border border-gray-300 rounded text-sm font-semibold" style={{minWidth:'160px', textAlign:'left', background:'#fff', cursor:'pointer'}}>
-                        {candidatesPageFilter.member || '전체 멤버'} ▾
-                      </button>
-                      {showCandidatesMemberSearch && (
-                        <div style={{position:'absolute', top:'100%', left:0, marginTop:'4px', width:'240px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'8px', boxShadow:'0 10px 30px rgba(0,0,0,0.25)', padding:'8px', zIndex:200}}>
-                          <input
-                            type="text"
-                            autoFocus
-                            placeholder="멤버 검색"
-                            value={candidatesMemberSearchQuery}
-                            onChange={e => setCandidatesMemberSearchQuery(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded text-sm"
-                            style={{marginBottom:'8px', outline:'none'}}
-                          />
-                          <div style={{maxHeight:'240px', overflowY:'auto'}}>
-                            <div
-                              onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: '' })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
-                              style={{padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', fontWeight:'bold', color:'#6b7280'}}>
-                              전체 멤버
-                            </div>
-                            {[...new Set(Object.values(teams).flat())]
-                              .filter(m => !candidatesMemberSearchQuery.trim() || m.toLowerCase().includes(candidatesMemberSearchQuery.trim().toLowerCase()))
-                              .map(m => (
-                                <div key={m}
-                                  onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: m })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
-                                  style={{padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', fontWeight:'bold', color:'#1e293b', borderTop:'1px solid #f1f5f9'}}>
-                                  {m}
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                   <div style={{overflowX:'auto'}}>
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr style={{textAlign:'left', color:'#b45309', borderBottom:'2px solid #fde68a', background:'#fffbeb'}}>
                           <th className="py-2 px-2"></th>
                           <th className="py-2 px-2">Team</th>
-                          <th className="py-2 px-2">Member</th>
+                          <th className="py-2 px-2 relative" style={{userSelect:'none'}}>
+                            <div className="flex items-center gap-1">
+                              <span>Member</span>
+                              <button ref={candidatesMemberBtnRef} onClick={e => { e.stopPropagation(); setShowCandidatesMemberSearch(v => !v); }}
+                                style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:candidatesPageFilter.member?'#fbbf24':'rgba(180,83,9,0.15)',border:candidatesPageFilter.member?'1.5px solid #f59e0b':'1.5px solid rgba(180,83,9,0.3)',cursor:'pointer',fontSize:'8px',color:candidatesPageFilter.member?'#1e293b':'#b45309',fontWeight:'900',lineHeight:1}}
+                                title={candidatesPageFilter.member?`${candidatesPageFilter.member} 필터 적용됨`:'필터'}>{candidatesPageFilter.member?'✓':'▼'}</button>
+                            </div>
+                            {showCandidatesMemberSearch && candidatesMemberPos && ReactDOM.createPortal(
+                              <div onClick={e => e.stopPropagation()} style={{position:'fixed', top:candidatesMemberPos.top, left:candidatesMemberPos.left, zIndex:9999, width:'220px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px', boxShadow:'0 8px 28px rgba(0,0,0,0.22)', maxHeight:'340px', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+                                <div style={{padding:'8px'}}>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="멤버 검색"
+                                    value={candidatesMemberSearchQuery}
+                                    onChange={e => setCandidatesMemberSearchQuery(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded text-sm"
+                                    style={{outline:'none'}}
+                                  />
+                                </div>
+                                <div style={{overflowY:'auto', flex:1}}>
+                                  <div
+                                    onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: '' })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
+                                    style={{padding:'8px 10px', cursor:'pointer', fontSize:'12px', fontWeight:'700', color:'#6b7280', borderTop:'1px solid #f1f5f9'}}>
+                                    전체 멤버
+                                  </div>
+                                  {[...new Set(Object.values(teams).flat())]
+                                    .filter(m => !candidatesMemberSearchQuery.trim() || m.toLowerCase().includes(candidatesMemberSearchQuery.trim().toLowerCase()))
+                                    .map(m => (
+                                      <div key={m}
+                                        onClick={() => { setCandidatesPageFilter(f => ({ ...f, member: m })); setShowCandidatesMemberSearch(false); setCandidatesMemberSearchQuery(''); }}
+                                        style={{padding:'8px 10px', cursor:'pointer', fontSize:'12px', fontWeight: m===candidatesPageFilter.member?'700':'500', color:'#1e293b', borderTop:'1px solid #f1f5f9'}}
+                                        className="hover:bg-blue-50">
+                                        {m}
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>,
+                              document.body
+                            )}
+                          </th>
                           <th className="py-2 px-2">Product</th>
                           <th className="py-2 px-2">Account</th>
                           <th className="py-2 px-2">SO</th>
