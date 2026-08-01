@@ -545,8 +545,12 @@ img,video{max-width:100%;height:auto}
     };
 
     // Salesforce 신규 후보 테이블 전용 - 컬럼 헤더에 붙는 검색 가능한 단일선택 필터
-    const CandidatesFilterTh = ({ label, colKey, values, selected, onSelect, openKey, onToggleOpen, searchQuery, onSearchChange }) => {
+    const CandidatesFilterTh = ({ label, colKey, rows, get, filterArr, onToggleValue, onClear, openKey, onToggleOpen, searchQuery, onSearchChange }) => {
       const isOpen = openKey === colKey;
+      const active = (filterArr||[]).length > 0;
+      const uniq = (arr) => [...new Set(arr.filter(v => v !== undefined && v !== null && v !== ''))].sort();
+      const vals = uniq(rows.map(get));
+      const filteredVals = vals.filter(v => !searchQuery.trim() || v.toLowerCase().includes(searchQuery.trim().toLowerCase()));
       const btnRef = useRef(null);
       const [pos, setPos] = useState(null);
       useEffect(() => {
@@ -559,27 +563,35 @@ img,video{max-width:100%;height:auto}
         window.addEventListener('scroll', closeOnScroll, true);
         return () => window.removeEventListener('scroll', closeOnScroll, true);
       }, [isOpen]);
-      const filteredValues = values.filter(v => !searchQuery.trim() || v.toLowerCase().includes(searchQuery.trim().toLowerCase()));
       return (
         <th className="py-2 px-2 relative" style={{userSelect:'none'}}>
           <div className="flex items-center gap-1">
             <span>{label}</span>
             <button ref={btnRef} onClick={e => { e.stopPropagation(); onToggleOpen(colKey); }}
-              style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:selected?'#fbbf24':'rgba(180,83,9,0.15)',border:selected?'1.5px solid #f59e0b':'1.5px solid rgba(180,83,9,0.3)',cursor:'pointer',fontSize:'8px',color:selected?'#1e293b':'#b45309',fontWeight:'900',lineHeight:1}}
-              title={selected ? `${selected} 필터 적용됨` : '필터'}>{selected ? '✓' : '▼'}</button>
+              style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(180,83,9,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(180,83,9,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'#b45309',fontWeight:'900',lineHeight:1}}
+              title={active ? `${filterArr.length}개 필터 적용됨` : '필터'}>{active ? '✓' : '▼'}</button>
           </div>
           {isOpen && pos && ReactDOM.createPortal(
-            <div onClick={e => e.stopPropagation()} style={{position:'fixed', top:pos.top, left:pos.left, zIndex:9999, width:'220px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px', boxShadow:'0 8px 28px rgba(0,0,0,0.22)', maxHeight:'340px', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+            <div onClick={e => e.stopPropagation()} style={{position:'fixed', top:pos.top, left:pos.left, zIndex:9999, width:'220px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px', boxShadow:'0 8px 28px rgba(0,0,0,0.22)', maxHeight:'380px', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+              <div style={{padding:'6px 10px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <span style={{fontSize:'10px', fontWeight:'700', color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px'}}>필터 ({vals.length})</span>
+                <button onClick={onClear} style={{fontSize:'10px', color:'#ef4444', fontWeight:'700', background:'none', border:'none', cursor:'pointer', padding:'0'}}>초기화</button>
+              </div>
               <div style={{padding:'8px'}}>
                 <input type="text" autoFocus placeholder={`${label} 검색`} value={searchQuery} onChange={e => onSearchChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded text-sm" style={{outline:'none'}}/>
               </div>
               <div style={{overflowY:'auto', flex:1}}>
-                <div onClick={() => onSelect('')} style={{padding:'8px 10px', cursor:'pointer', fontSize:'12px', fontWeight:'700', color:'#6b7280', borderTop:'1px solid #f1f5f9'}}>전체</div>
-                {filteredValues.map(v => (
-                  <div key={v} onClick={() => onSelect(v)}
-                    style={{padding:'8px 10px', cursor:'pointer', fontSize:'12px', fontWeight: v===selected?'700':'500', color:'#1e293b', borderTop:'1px solid #f1f5f9'}}
-                    className="hover:bg-blue-50">{v}</div>
-                ))}
+                {filteredVals.length===0 ? <div style={{padding:'10px', fontSize:'11px', color:'#94a3b8', textAlign:'center'}}>값 없음</div> : filteredVals.map(val => {
+                  const checked = (filterArr||[]).includes(val);
+                  const count = rows.filter(r => get(r)===val).length;
+                  return (
+                    <label key={val} style={{display:'flex', alignItems:'center', gap:'8px', padding:'5px 10px', cursor:'pointer', fontSize:'11px', color:'#334155', borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
+                      <input type="checkbox" checked={checked} onChange={() => onToggleValue(val)} style={{width:'13px', height:'13px', cursor:'pointer', accentColor:'#2563eb'}}/>
+                      <span style={{flex:1, fontWeight:checked?'700':'500'}}>{val}</span>
+                      <span style={{fontSize:'10px', color:'#94a3b8', fontWeight:'600'}}>{count}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>,
             document.body
@@ -1223,10 +1235,11 @@ img,video{max-width:100%;height:auto}
 
       const [showCsvMenu, setShowCsvMenu] = useState(false);
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
-      const [candidatesFilters, setCandidatesFilters] = useState({ team: '', member: '', product: '', quarter: '' });
+      const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
-      const setCandidatesFilter = (col, val) => { setCandidatesFilters(f => ({ ...f, [col]: val })); setCandidatesFilterOpen(null); setCandidatesFilterSearchQuery(''); };
+      const toggleCandidatesFilterValue = (col, val) => setCandidatesFilters(f => { const arr = f[col]||[]; return { ...f, [col]: arr.includes(val) ? arr.filter(v=>v!==val) : [...arr, val] }; });
+      const clearCandidatesFilter = (col) => setCandidatesFilters(f => ({ ...f, [col]: [] }));
       const toggleCandidatesFilterOpen = (col) => { setCandidatesFilterOpen(k => k === col ? null : col); setCandidatesFilterSearchQuery(''); };
       const [showMemberCandidateSearch, setShowMemberCandidateSearch] = useState(false);
       const [memberCandidateSearchQuery, setMemberCandidateSearchQuery] = useState('');
@@ -1792,22 +1805,26 @@ img,video{max-width:100%;height:auto}
                         <tr style={{textAlign:'left', color:'#b45309', borderBottom:'2px solid #fde68a', background:'#fffbeb'}}>
                           <th className="py-2 px-2"></th>
                           <CandidatesFilterTh label="Team" colKey="team"
-                            values={Object.keys(teams)} selected={candidatesFilters.team} onSelect={v => setCandidatesFilter('team', v)}
+                            rows={candidates} get={c => c.suggestedTeam} filterArr={candidatesFilters.team}
+                            onToggleValue={v => toggleCandidatesFilterValue('team', v)} onClear={() => clearCandidatesFilter('team')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <CandidatesFilterTh label="Member" colKey="member"
-                            values={[...new Set(Object.values(teams).flat())]} selected={candidatesFilters.member} onSelect={v => setCandidatesFilter('member', v)}
+                            rows={candidates} get={c => c.suggestedMember} filterArr={candidatesFilters.member}
+                            onToggleValue={v => toggleCandidatesFilterValue('member', v)} onClear={() => clearCandidatesFilter('member')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <CandidatesFilterTh label="Product" colKey="product"
-                            values={[...new Set(candidates.map(c => c.product))].sort()} selected={candidatesFilters.product} onSelect={v => setCandidatesFilter('product', v)}
+                            rows={candidates} get={c => c.product} filterArr={candidatesFilters.product}
+                            onToggleValue={v => toggleCandidatesFilterValue('product', v)} onClear={() => clearCandidatesFilter('product')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <th className="py-2 px-2">Account</th>
                           <th className="py-2 px-2">SO</th>
                           <th className="py-2 px-2">Close Date</th>
                           <CandidatesFilterTh label="제안 분기" colKey="quarter"
-                            values={[...new Set(candidates.map(c => c.suggestedQuarter))].sort()} selected={candidatesFilters.quarter} onSelect={v => setCandidatesFilter('quarter', v)}
+                            rows={candidates} get={c => c.suggestedQuarter} filterArr={candidatesFilters.quarter}
+                            onToggleValue={v => toggleCandidatesFilterValue('quarter', v)} onClear={() => clearCandidatesFilter('quarter')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <th className="py-2 px-2 text-right">KRW</th>
@@ -1815,10 +1832,10 @@ img,video{max-width:100%;height:auto}
                       </thead>
                       <tbody>
                         {candidates
-                          .filter(c => !candidatesFilters.team || c.suggestedTeam === candidatesFilters.team)
-                          .filter(c => !candidatesFilters.member || c.suggestedMember === candidatesFilters.member)
-                          .filter(c => !candidatesFilters.product || c.product === candidatesFilters.product)
-                          .filter(c => !candidatesFilters.quarter || c.suggestedQuarter === candidatesFilters.quarter)
+                          .filter(c => candidatesFilters.team.length===0 || candidatesFilters.team.includes(c.suggestedTeam))
+                          .filter(c => candidatesFilters.member.length===0 || candidatesFilters.member.includes(c.suggestedMember))
+                          .filter(c => candidatesFilters.product.length===0 || candidatesFilters.product.includes(c.product))
+                          .filter(c => candidatesFilters.quarter.length===0 || candidatesFilters.quarter.includes(c.suggestedQuarter))
                           .slice()
                           .sort((a, b) => {
                             const opp = (a.opportunityName || '').localeCompare(b.opportunityName || '');
