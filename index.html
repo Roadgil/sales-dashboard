@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>영업 납품처 FCST Dashboard</title>
+  <title>영업 납품처 Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f172a'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%2360a5fa' font-family='system-ui,sans-serif' font-weight='800'%3ES%3C/text%3E%3C/svg%3E">
 
   <!-- Pretendard Variable — self-hosted subsets (see .omd/type-proof.md). Two subsets so the
@@ -1736,13 +1736,13 @@ img,video{max-width:100%;height:auto}
           {/* paddingTop cleared below the fixed top-right identity/ER/lang pill row (LangBtn, top:16px)
               so the mobile brand title and hamburger never sit underneath it. */}
           <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-20" style={{paddingTop:'56px'}}>
-            <h2 className="text-lg font-bold text-blue-400">📊 FCST Dashboard</h2>
+            <h2 className="text-lg font-bold text-blue-400">📊 Sales Dashboard</h2>
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
           </div>
 
           {/* 사이드바 */}
           <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
-            <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 FCST</h2>
+            <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 Dashboard</h2>
             <div className="flex-1">
               {Object.entries(groupedQuarters).sort().map(([year, qList]) => (
                 <div key={year} className="mb-6">
@@ -1829,6 +1829,7 @@ img,video{max-width:100%;height:auto}
                             onToggleValue={v => toggleCandidatesFilterValue('quarter', v)} onClear={() => clearCandidatesFilter('quarter')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
+                          <th className="py-2 px-2">Acc Type</th>
                           <th className="py-2 px-2 text-right">KRW</th>
                         </tr>
                       </thead>
@@ -1869,6 +1870,7 @@ img,video{max-width:100%;height:auto}
                                   {[...quarters].sort().map(q => <option key={q} value={q}>{q}</option>)}
                                 </select>
                               </td>
+                              <td className="py-2 px-2 text-gray-500">{c.accType || '-'}</td>
                               <td className="py-2 px-2 text-right font-mono">₩ {(c.priceKRW || 0).toLocaleString()}</td>
                             </tr>
                           ))}
