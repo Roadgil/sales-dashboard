@@ -15,8 +15,11 @@ MAIN_PRODUCT_CODES = {
 }
 
 # GMPP 옵션킷 Product Code -> Acc Type 라벨. 한 Opportunity 안에 이 코드들이 몇 종류
-# 섞여 들어왔는지 세어서 Acc Type을 만든다: "<종류 수>" 또는 (AIO가 섞여있으면) "<종류 수>, AIO(...)".
-# 예) Small+Medium+AIO(DCD) 3종 -> "3, AIO(DCD)" / Small+Medium+Large(DCD) 3종 -> "3"
+# 섞여 들어왔는지 세어서 Acc Type을 만든다.
+# - 1종류뿐이면 그 종류가 뭐든(AIO 포함) 그냥 "1"
+# - 2종류 이상이면 "<종류 수>", AIO가 섞여있으면 뒤에 "<종류 수>, AIO(DCD)" / "AIO(ACC)" / 둘 다 있으면
+#   "<종류 수>, AIO(DCD), AIO(ACC)"
+# 예) Small+Medium+AIO(DCD) 3종 -> "3, AIO(DCD)" / Small+Medium+Large(DCD) 3종 -> "3" / AIO(DCD) 1종 -> "1"
 ACC_TYPE_CODES = {
     "7123-CE-0650": "Small",
     "FIN103337": "Medium",
@@ -33,10 +36,11 @@ def compute_acc_type(group):
     if not labels:
         return ""
     count = len(labels)
-    if "AIO(DCD)" in labels:
-        return f"{count}, AIO(DCD)"
-    if "AIO(ACC)" in labels:
-        return f"{count}, AIO(ACC)"
+    if count == 1:
+        return "1"
+    aio_labels = [l for l in ("AIO(DCD)", "AIO(ACC)") if l in labels]
+    if aio_labels:
+        return f"{count}, " + ", ".join(aio_labels)
     return str(count)
 
 # GMPP 오퍼튜니티 안에 같이 딸려오는, GMPP와는 별개의 시스템 상품 - Product Name이 이 정규식과
