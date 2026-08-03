@@ -746,8 +746,15 @@ img,video{max-width:100%;height:auto}
         gapStatusBehind:   lang==='ko' ? '목표 미달'  : 'Behind Target',
       };
 
-      const [quarters, setQuarters] = useState(['2026 Q1', '2026 Q2']);
-      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const getCurrentQuarter = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth() + 1;
+        const q = m <= 3 ? 1 : m <= 6 ? 2 : m <= 9 ? 3 : 4;
+        return `${y} Q${q}`;
+      };
+      const [quarters, setQuarters] = useState([...new Set(['2026 Q1', '2026 Q2', getCurrentQuarter()])].sort());
+      const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
       const quartersRef = useRef(quarters);
       useEffect(() => { quartersRef.current = quarters; }, [quarters]);
       const [teams, setTeams] = useState({ 'Team 1': ['Kim SH', 'Oh SG'], 'Team 2': ['Baek SC', 'Lee GR'], 'Team 3': ['YC lim'] });

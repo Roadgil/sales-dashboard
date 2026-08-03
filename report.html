@@ -580,8 +580,15 @@ img,video{max-width:100%;height:auto}
           : 'ℹ Revenue basis: Status = Ship Confirm only (vs Target) — aligned with index.html',
       };
 
-      const [quarters, setQuarters]             = useState(['2026 Q1', '2026 Q2']);
-      const [selectedQuarter, setSelectedQuarter] = useState('2026 Q2');
+      const getCurrentQuarter = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth() + 1;
+        const q = m <= 3 ? 1 : m <= 6 ? 2 : m <= 9 ? 3 : 4;
+        return `${y} Q${q}`;
+      };
+      const [quarters, setQuarters]             = useState([...new Set(['2026 Q1', '2026 Q2', getCurrentQuarter()])].sort());
+      const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
       const [salesData, setSalesData]           = useState([]);
       const [quarterTargets, setQuarterTargets] = useState({});
       const [memberTargets, setMemberTargets]   = useState({});
