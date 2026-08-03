@@ -1176,6 +1176,8 @@ img,video{max-width:100%;height:auto}
           so: c.so || '',
           account: c.account || '',
           product: c.product || 'GMPP',
+          accType: c.accType || '',
+          contractType: (c.salesType || '').toLowerCase().includes('try') ? 'Try & Buy' : '일반',
           priceKRW: c.priceKRW ? String(c.priceKRW) : '',
           priceUSD: c.priceUSD ? String(c.priceUSD) : '',
         });

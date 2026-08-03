@@ -5,11 +5,39 @@ import pandas as pd
 
 from member_map import OWNER_TO_MEMBER, OWNER_TO_TEAM
 
-# 메인 시스템 라인의 Product Code -> 참고용 DCD/ACC 힌트 (최종 Acc type 필드 포맷과는 다름 - 수기 확정 필요)
+# 메인 시스템 라인의 Product Code -> 참고용 DCD/ACC 힌트.
+# PTO103577(DCD)/PTO103576(ACC)는 과거에 혼용되던 코드로, 현재는 PTO103576을 쓰지 않도록
+# 권장되고 있으나 미수정된 과거 데이터가 남아있을 수 있어 분석 시 둘 다 GMPP로 인식한다
+# (DCD/ACC 구분은 이 코드가 아니라 아래 ACC_TYPE_CODES 옵션킷 조합으로 판단).
 MAIN_PRODUCT_CODES = {
     "PTO103577": "DCD",
     "PTO103576": "ACC",
 }
+
+# GMPP 옵션킷 Product Code -> Acc Type 라벨. 한 Opportunity 안에 이 코드들이 몇 종류
+# 섞여 들어왔는지 세어서 Acc Type을 만든다: "<종류 수>" 또는 (AIO가 섞여있으면) "<종류 수>, AIO(...)".
+# 예) Small+Medium+AIO(DCD) 3종 -> "3, AIO(DCD)" / Small+Medium+Large(DCD) 3종 -> "3"
+ACC_TYPE_CODES = {
+    "7123-CE-0650": "Small",
+    "FIN103337": "Medium",
+    "7123-CE-0652": "Large(DCD)",
+    "7123-CE-0653": "Large(ACC)",
+    "FIN101958": "AIO(DCD)",
+    "FIN101959": "AIO(ACC)",
+}
+
+
+def compute_acc_type(group):
+    codes_present = set(group["Product Code"].astype(str)) & set(ACC_TYPE_CODES.keys())
+    labels = {ACC_TYPE_CODES[c] for c in codes_present}
+    if not labels:
+        return ""
+    count = len(labels)
+    if "AIO(DCD)" in labels:
+        return f"{count}, AIO(DCD)"
+    if "AIO(ACC)" in labels:
+        return f"{count}, AIO(ACC)"
+    return str(count)
 
 # GMPP 오퍼튜니티 안에 같이 딸려오는, GMPP와는 별개의 시스템 상품 - Product Name이 이 정규식과
 # 매치되면 GMPP 합계에서 빼서 별도의 후보(같은 Account/SO, 다른 product)로 분리한다.
@@ -43,7 +71,8 @@ def make_doc_id(owner, opportunity_name, product_code):
 
 
 def _build_candidate(opp_name, owner, member, team, account, so_str, product, line_type_hint,
-                      stage, sales_type, close_date, price_krw, price_usd, now_iso, id_key):
+                      stage, sales_type, close_date, price_krw, price_usd, now_iso, id_key,
+                      acc_type=""):
     return {
         "id": make_doc_id(owner, opp_name, id_key),
         "used": False,
@@ -55,6 +84,7 @@ def _build_candidate(opp_name, owner, member, team, account, so_str, product, li
         "account": account,
         "product": product,
         "lineTypeHint": line_type_hint,
+        "accType": acc_type,
         "priceKRW": price_krw,
         "priceUSD": price_usd,
         "salesType": sales_type,
@@ -130,10 +160,12 @@ def build_candidates(df, prev_to, new_to, from_fixed):
         gmpp_rows = group[~companion_mask]
         price_krw = round(float(gmpp_rows["Total Price"].fillna(0).sum()))
         price_usd = round(float(gmpp_rows["Total Price (converted)"].fillna(0).sum()), 2)
+        acc_type = compute_acc_type(gmpp_rows)
 
         candidates.append(_build_candidate(
             opp_name, owner, member, team, account, so_str, "GMPP", line_type_hint,
             stage, sales_type, close_date, price_krw, price_usd, now_iso, product_code,
+            acc_type=acc_type,
         ))
         candidates.extend(companion_candidates)
 
