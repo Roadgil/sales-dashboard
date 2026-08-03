@@ -1,11 +1,12 @@
 """
-2주에 한 번 실행하는 진입점.
+매달 1회(Windows 작업 스케줄러 "Forecast_Sync", 매달 1일 16:00) 실행하는 진입점.
 1) state.py로 이번 실행의 Time Frame 상한(new_to) 계산 - 처음 2028-12-31, 이후 +30일씩
 2) Selenium으로 Salesforce 리포트 Time Frame을 From=고정, To=new_to 로 설정 후 export
 3) 다운로드된 파일을 파싱해서 PTO103577/PTO103576 라인이 있는 Opportunity만, Close Date가
    From 고정값 ~ new_to 사이인 것 전부(Stage 무관) 후보로 만듦 - 매번 전체 구간을 다시 훑는다
    (이미 있는 후보/이미 sales로 넘어간 건은 아래 4)/5)에서 각각 안전하게 처리되므로 괜찮음)
-4) Firestore sf_candidates 컬렉션에 신규 후보만 생성 (기존 후보는 건드리지 않음)
+4) Firestore sf_candidates 컬렉션에 반영 - 신규 후보는 생성, 아직 안 쓴(used=false) 기존
+   후보는 최신 Salesforce 값으로 덮어씀, 이미 사용된(used=true) 후보는 건드리지 않음
 5) 이미 sales로 넘어간 건(같은 id의 sales 문서 존재)의 Salesforce 금액이 바뀌었으면
    priceKRW/priceUSD만 자동 갱신 (수기 입력 필드는 그대로 둠)
 6) state에 new_to 저장

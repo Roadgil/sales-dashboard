@@ -102,8 +102,9 @@ def export_xls(driver):
     from selenium.webdriver.support.ui import WebDriverWait
 
     try:
-        # 첫 클릭이 씹히는 경우가 관측돼(새 프로필 첫 상호작용 특성 추정), enc select가
-        # 뜰 때까지 기다리되 안 뜨면 한 번 더 클릭해서 재시도한다.
+        # 좌표 기반 네이티브 클릭(.click())이 이 버튼에서만 씹히는 게 실측 확인돼
+        # JS 이벤트 디스패치로 바꿔서 해결함(전용 프로필 특성으로 추정, 확실한 원인은
+        # 못 찾음). 그래도 혹시 한 번 더 씹힐 경우를 대비해 재시도 루프는 남겨둔다.
         for attempt in range(2):
             btn = driver.find_element(By.XPATH, "//input[@value='Export Details']")
             driver.execute_script("arguments[0].click();", btn)
