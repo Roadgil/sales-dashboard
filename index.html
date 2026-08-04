@@ -1757,7 +1757,7 @@ img,video{max-width:100%;height:auto}
                   <div className="space-y-1">
                     {qList.sort().map(q => {
                       const fullQ = `${year} ${q}`;
-                      return <button key={fullQ} onClick={() => { setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter===fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
+                      return <button key={fullQ} onClick={() => { setShowCandidatesPage(false); setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter===fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
                     })}
                   </div>
                 </div>
