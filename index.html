@@ -1249,6 +1249,9 @@ img,video{max-width:100%;height:auto}
 
       const [showCsvMenu, setShowCsvMenu] = useState(false);
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
+      const [showTeamOnly, setShowTeamOnly] = useState(false);
+      const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
+      const [expandedYear, setExpandedYear] = useState(null);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
@@ -1525,6 +1528,212 @@ img,video{max-width:100%;height:auto}
         );
       };
 
+      // ── 팀 탭 + 팀 목표/멤버 리스트 + 전체 리스트 (사이드바 "TEAM n" 단독 진입 시에도 재사용) ──
+      const renderTeamSection = () => (
+        <>
+          {/* 팀 탭 */}
+          <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar" data-region="team-tabs">
+            {Object.keys(teams).sort().map(team => (
+              <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam===team?'bg-blue-600 text-white shadow-md':'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
+            ))}
+            <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-6 mb-10">
+            {/* 팀 달성률 + 멤버 카드 */}
+            <div className="lg:w-80 flex-shrink-0">
+              {(() => {
+                const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
+                const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
+                const teamPer    = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
+                // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
+                const teamZone   = teamPer>=120?3:teamPer>=100?2:1;
+                const perColor   = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
+                const fillColor  = teamZone===3?'#10b981':teamZone===2?'#3b82f6':'#94a3b8';
+                const scaleMax   = teamTarget>0 ? Math.max(teamTarget*1.5, teamActKRW*1.05) : 0;
+                const fillPct    = scaleMax>0 ? Math.min((teamActKRW/scaleMax)*100,100) : 0;
+                const zone1W     = scaleMax>0 ? (teamTarget/scaleMax)*100 : 0;
+                const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
+                const zone3W     = 100 - zone1W - zone2W;
+                return (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" data-region="team-progress-bar">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
+                      <span className="font-extrabold text-lg" style={{color:perColor}}>{teamTarget>0?`${teamPer.toFixed(1)}%`:'-'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 mb-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                      <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🎯 팀 목표</span>
+                      <span className="text-slate-400 font-bold text-xs mx-1">₩</span>
+                      <input type="number" min="0" value={teamTargets[selectedTeam]?.[selectedQuarter]||''} onChange={e=>handleTeamTargetChange(selectedTeam,selectedQuarter,e.target.value)} placeholder="목표 금액 입력" className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0" style={{borderBottom:'1.5px solid #cbd5e1'}}/>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+                      <span>{lang==='ko'?'누적 달성 (Ship Confirm 기준)':'Cumulative (Ship Confirm)'}</span>
+                      <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
+                    </div>
+                    {teamTarget>0 && (
+                      <>
+                        <div className="relative" style={{height:'13px'}}>
+                          <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W}%`,color:'#475569'}}>100%</div>
+                          <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W+zone2W}%`,color:'#1d4ed8'}}>120%</div>
+                        </div>
+                        <div className="relative w-full rounded-full overflow-hidden shadow-inner border border-gray-200" style={{height:'10px'}}>
+                          <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
+                            <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
+                            <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
+                            <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
+                          </div>
+                          <div className="h-full rounded-full transition-all duration-700 relative" style={{width:`${fillPct}%`,background:fillColor}}/>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span style={{color:'#94a3b8'}}>{lang==='ko'?'목표':'Target'} ₩ {teamTarget.toLocaleString()}</span></div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-base font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
+                <button onClick={addMember} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                {teams[selectedTeam].length===0 ? (
+                  <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
+                ) : (
+                  teams[selectedTeam].map(member => {
+                    const mActKRW = memberStats[member]?.sumKRW || 0;
+                    const mTarget = currentMemberTargets[member] || 0;
+                    const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
+                    // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
+                    const mZone      = mPer>=120?3:mPer>=100?2:1;
+                    const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
+                    const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
+                    const mCount  = memberStats[member]?.count || 0;
+                    return (
+                      <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
+                        <div className="flex justify-between items-start mb-2">
+                          <div><div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div><div className="text-[10px] text-gray-400 mt-0.5">{mCount}{T.cases} · {T.memberSubtitle}</div></div>
+                          <div className="flex gap-1" onClick={e=>e.stopPropagation()}>
+                            <button onClick={e=>editMemberName(member,e)} className="text-[10px] text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-1.5 py-1 rounded border transition">{T.rename}</button>
+                            <button onClick={e=>deleteMember(member,e)} className="text-[10px] text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-1 rounded border border-red-200 transition">{T.delete}</button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-end mb-1.5">
+                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
+                          <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
+                        </div>
+                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
+                        {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* All List */}
+            {(() => {
+              const baseRows = salesData.filter(d => d.quarter===selectedQuarter);
+              const STATUS_ORDER = { 'Ship Confirm':0, 'ACT':1, 'Pending':2, 'Back up':3 };
+              const STATUS_COLOR = { 'Ship Confirm':{ row:'bg-blue-900/10', badge:'bg-blue-900 text-white' }, 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
+              const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+              const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
+              const f = allListFilters;
+              const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
+              const hasAnyFilter = Object.values(f).some(v=>v.length>0);
+              const ColHeader = ({ col, label }) => {
+                const isOpen = allListFilterOpen===col;
+                const active = f[col].length > 0;
+                const vals   = colVals[col] || [];
+                return (
+                  <th className="px-3 py-0 font-bold relative" style={{userSelect:'none'}}>
+                    <div className="flex items-center gap-1 py-2">
+                      <span>{label}</span>
+                      <button onClick={e=>{e.stopPropagation();setAllListFilterOpen(isOpen?null:col);}} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}} title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
+                    </div>
+                    {isOpen && (
+                      <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',left:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                        <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
+                          <button onClick={()=>clearAllListFilter(col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
+                        </div>
+                        <div style={{overflowY:'auto',flex:1}}>
+                          {vals.map(val=>{
+                            const checked = f[col].includes(val);
+                            const count   = baseRows.filter(d=>{const dv=col==='team'?(d.team||'-'):col==='dealer'?(d.dealerName||'-'):col==='salesType'?d.salesType:d[col];return dv===val;}).length;
+                            return (
+                              <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
+                                <input type="checkbox" checked={checked} onChange={()=>toggleAllListFilter(col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
+                                <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
+                                <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </th>
+                );
+              };
+              return (
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2">📋 {lang==='ko'?'전체 리스트':'All List'}<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
+                    <div className="flex items-center gap-2">
+                      {hasAnyFilter && <button onClick={clearAllListFilters} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                      <span className="text-xs text-gray-400 font-semibold bg-gray-100 px-3 py-1 rounded-full">{filteredRows.length}{hasAnyFilter?` / ${baseRows.length}`:''}{lang==='ko'?'건':' items'}</span>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto hide-scrollbar">
+                      <table className="min-w-full text-xs text-left whitespace-nowrap">
+                        <thead>
+                          <tr className="bg-slate-700 text-white">
+                            <ColHeader col="team"      label="Team"/>
+                            <ColHeader col="member"    label={lang==='ko'?'멤버':'Member'}/>
+                            <ColHeader col="status"    label="Status"/>
+                            <ColHeader col="account"   label="Account"/>
+                            <ColHeader col="product"   label="Product"/>
+                            <ColHeader col="dealer"    label="Dealer"/>
+                            <th className="px-3 py-2 font-bold">SO</th>
+                            <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
+                            filteredRows.map((row,i) => {
+                              const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
+                              return (
+                                <tr key={row.id||i} className={`border-b ${sc.row} hover:brightness-95 transition cursor-pointer`} onClick={()=>{ setSelectedTeam(row.team||selectedTeam); setSelectedMember(row.member); }}>
+                                  <td className="px-3 py-2 font-semibold text-slate-600">{row.team||'-'}</td>
+                                  <td className="px-3 py-2 font-bold text-gray-800">{row.member}</td>
+                                  <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sc.badge}`}>{row.status}</span></td>
+                                  <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
+                                  <td className="px-3 py-2 text-gray-600">{row.product}</td>
+                                  <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
+                                  <td className="px-3 py-2 font-mono text-gray-600">{row.so||'-'}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                        {filteredRows.length>0 && (
+                          <tfoot>
+                            <tr className="bg-slate-50 border-t-2 border-slate-200">
+                              <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
+                              <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      );
+
       // ── 공통 테이블 행 렌더러 ──────────────────────────────────────────────
       const renderTableRow = (row, status, colorCls, editCls, requirePwd=false) => (
         <tr key={row.id}
@@ -1756,18 +1965,46 @@ img,video{max-width:100%;height:auto}
           <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
             <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 Dashboard</h2>
             <div className="flex-1">
-              {Object.entries(groupedQuarters).sort().map(([year, qList]) => (
-                <div key={year} className="mb-6">
-                  <h4 className="text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1">{year}{T.yearSuffix}</h4>
-                  <div className="space-y-1">
-                    {qList.sort().map(q => {
-                      const fullQ = `${year} ${q}`;
-                      return <button key={fullQ} onClick={() => { setShowCandidatesPage(false); setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${selectedQuarter===fullQ ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
-                    })}
-                  </div>
+              {(() => {
+                const years = Object.keys(groupedQuarters).sort();
+                const currentYear = (selectedQuarter || '').split(' ')[0];
+                const activeYear = expandedYear || (years.includes(currentYear) ? currentYear : years[years.length - 1]);
+                return years.map(year => {
+                  const isOpen = activeYear === year;
+                  return (
+                    <div key={year} className="mb-3">
+                      <button onClick={() => setExpandedYear(isOpen ? null : year)} className="w-full flex justify-between items-center text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1 hover:text-white transition">
+                        <span>{year}{T.yearSuffix}</span>
+                        <span className="text-xs">{isOpen ? '▾' : '▸'}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="space-y-1 mb-3">
+                          {groupedQuarters[year].sort().map(q => {
+                            const fullQ = `${year} ${q}`;
+                            const isActive = !showTeamOnly && !showAllTeamsCombined && !showCandidatesPage && selectedQuarter===fullQ;
+                            return <button key={fullQ} onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${isActive ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+              <button onClick={addQuarter} className="w-full mt-2 mb-4 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
+
+              {/* 팀별 바로가기 */}
+              <div className="pt-3 border-t border-slate-600">
+                <h4 className="text-slate-400 font-extrabold mb-2 text-sm">TEAM</h4>
+                <div className="space-y-1">
+                  {Object.keys(teams).sort().map(team => {
+                    const isActive = showTeamOnly && selectedTeam === team;
+                    return (
+                      <button key={team} onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowTeamOnly(true); setSelectedTeam(team); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${isActive ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{team}</button>
+                    );
+                  })}
+                  <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>전체 (통합)</button>
                 </div>
-              ))}
-              <button onClick={addQuarter} className="w-full mt-2 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
+              </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
               <div className="mb-4">
@@ -1891,6 +2128,52 @@ img,video{max-width:100%;height:auto}
                     {visibleCandidates.length === 0 && <div className="text-gray-400 text-sm p-6 text-center">현재 후보가 없습니다.</div>}
                   </div>
                 </div>
+              </div>
+            ) : showAllTeamsCombined && !selectedMember ? (
+              <div>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">{selectedQuarter} 전체 팀 통합 보기</h1>
+                {Object.keys(teams).sort().map(team => (
+                  <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-3">{team}</h3>
+                    <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
+                      {(teams[team]||[]).length === 0 ? (
+                        <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
+                      ) : (teams[team]||[]).map(member => {
+                        const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
+                        const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                        return (
+                          <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
+                            <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
+                              {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({rows.length}건)</span>
+                            </div>
+                            <table style={{width:'100%', fontSize:'11px'}}>
+                              <tbody>
+                                {rows.map(r => (
+                                  <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                    <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                    <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                    <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                                {rows.length === 0 && (
+                                  <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                            <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
+                              합계: ₩{sumKRW.toLocaleString()}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : showTeamOnly && !selectedMember ? (
+              <div>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">{selectedTeam} <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                {renderTeamSection()}
               </div>
             ) : !selectedMember ? (
               <div>
@@ -2048,206 +2331,6 @@ img,video{max-width:100%;height:auto}
                   </div>
                 </div>
 
-                {/* 팀 탭 */}
-                <div className="flex overflow-x-auto mb-4 border-b pb-[1px] hide-scrollbar" data-region="team-tabs">
-                  {Object.keys(teams).sort().map(team => (
-                    <button key={team} onClick={() => { setSelectedTeam(team); setSelectedMember(null); setEditingId(null); setForm(initialForm); }} className={`whitespace-nowrap px-6 md:px-8 py-3 font-bold rounded-t-lg transition ${selectedTeam===team?'bg-blue-600 text-white shadow-md':'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'}`}>{team}</button>
-                  ))}
-                  <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
-                </div>
-
-                <div className="flex flex-col lg:flex-row gap-6 mb-10">
-                  {/* 팀 달성률 + 멤버 카드 */}
-                  <div className="lg:w-80 flex-shrink-0">
-                    {(() => {
-                      const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
-                      const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
-                      const teamPer    = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
-                      // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
-                      const teamZone   = teamPer>=120?3:teamPer>=100?2:1;
-                      const perColor   = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
-                      const fillColor  = teamZone===3?'#10b981':teamZone===2?'#3b82f6':'#94a3b8';
-                      const scaleMax   = teamTarget>0 ? Math.max(teamTarget*1.5, teamActKRW*1.05) : 0;
-                      const fillPct    = scaleMax>0 ? Math.min((teamActKRW/scaleMax)*100,100) : 0;
-                      const zone1W     = scaleMax>0 ? (teamTarget/scaleMax)*100 : 0;
-                      const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
-                      const zone3W     = 100 - zone1W - zone2W;
-                      return (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" data-region="team-progress-bar">
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
-                            <span className="font-extrabold text-lg" style={{color:perColor}}>{teamTarget>0?`${teamPer.toFixed(1)}%`:'-'}</span>
-                          </div>
-                          <div className="flex items-center gap-1 mb-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
-                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🎯 팀 목표</span>
-                            <span className="text-slate-400 font-bold text-xs mx-1">₩</span>
-                            <input type="number" min="0" value={teamTargets[selectedTeam]?.[selectedQuarter]||''} onChange={e=>handleTeamTargetChange(selectedTeam,selectedQuarter,e.target.value)} placeholder="목표 금액 입력" className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0" style={{borderBottom:'1.5px solid #cbd5e1'}}/>
-                          </div>
-                          <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
-                            <span>{lang==='ko'?'누적 달성 (Ship Confirm 기준)':'Cumulative (Ship Confirm)'}</span>
-                            <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
-                          </div>
-                          {teamTarget>0 && (
-                            <>
-                              <div className="relative" style={{height:'13px'}}>
-                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W}%`,color:'#475569'}}>100%</div>
-                                <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W+zone2W}%`,color:'#1d4ed8'}}>120%</div>
-                              </div>
-                              <div className="relative w-full rounded-full overflow-hidden shadow-inner border border-gray-200" style={{height:'10px'}}>
-                                <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
-                                  <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
-                                  <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
-                                  <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
-                                </div>
-                                <div className="h-full rounded-full transition-all duration-700 relative" style={{width:`${fillPct}%`,background:fillColor}}/>
-                              </div>
-                              <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span style={{color:'#94a3b8'}}>{lang==='ko'?'목표':'Target'} ₩ {teamTarget.toLocaleString()}</span></div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-base font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
-                      <button onClick={addMember} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      {teams[selectedTeam].length===0 ? (
-                        <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
-                      ) : (
-                        teams[selectedTeam].map(member => {
-                          const mActKRW = memberStats[member]?.sumKRW || 0;
-                          const mTarget = currentMemberTargets[member] || 0;
-                          const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
-                          // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
-                          const mZone      = mPer>=120?3:mPer>=100?2:1;
-                          const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
-                          const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
-                          const mCount  = memberStats[member]?.count || 0;
-                          return (
-                            <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
-                              <div className="flex justify-between items-start mb-2">
-                                <div><div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div><div className="text-[10px] text-gray-400 mt-0.5">{mCount}{T.cases} · {T.memberSubtitle}</div></div>
-                                <div className="flex gap-1" onClick={e=>e.stopPropagation()}>
-                                  <button onClick={e=>editMemberName(member,e)} className="text-[10px] text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-1.5 py-1 rounded border transition">{T.rename}</button>
-                                  <button onClick={e=>deleteMember(member,e)} className="text-[10px] text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-1 rounded border border-red-200 transition">{T.delete}</button>
-                                </div>
-                              </div>
-                              <div className="flex justify-between items-end mb-1.5">
-                                <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
-                                <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
-                              </div>
-                              {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
-                              {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* All List */}
-                  {(() => {
-                    const baseRows = salesData.filter(d => d.quarter===selectedQuarter);
-                    const STATUS_ORDER = { 'Ship Confirm':0, 'ACT':1, 'Pending':2, 'Back up':3 };
-                    const STATUS_COLOR = { 'Ship Confirm':{ row:'bg-blue-900/10', badge:'bg-blue-900 text-white' }, 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
-                    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
-                    const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
-                    const f = allListFilters;
-                    const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
-                    const hasAnyFilter = Object.values(f).some(v=>v.length>0);
-                    const ColHeader = ({ col, label }) => {
-                      const isOpen = allListFilterOpen===col;
-                      const active = f[col].length > 0;
-                      const vals   = colVals[col] || [];
-                      return (
-                        <th className="px-3 py-0 font-bold relative" style={{userSelect:'none'}}>
-                          <div className="flex items-center gap-1 py-2">
-                            <span>{label}</span>
-                            <button onClick={e=>{e.stopPropagation();setAllListFilterOpen(isOpen?null:col);}} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}} title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
-                          </div>
-                          {isOpen && (
-                            <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',left:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                              <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
-                                <button onClick={()=>clearAllListFilter(col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
-                              </div>
-                              <div style={{overflowY:'auto',flex:1}}>
-                                {vals.map(val=>{
-                                  const checked = f[col].includes(val);
-                                  const count   = baseRows.filter(d=>{const dv=col==='team'?(d.team||'-'):col==='dealer'?(d.dealerName||'-'):col==='salesType'?d.salesType:d[col];return dv===val;}).length;
-                                  return (
-                                    <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
-                                      <input type="checkbox" checked={checked} onChange={()=>toggleAllListFilter(col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
-                                      <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
-                                      <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </th>
-                      );
-                    };
-                    return (
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2">📋 {lang==='ko'?'전체 리스트':'All List'}<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
-                          <div className="flex items-center gap-2">
-                            {hasAnyFilter && <button onClick={clearAllListFilters} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                            <span className="text-xs text-gray-400 font-semibold bg-gray-100 px-3 py-1 rounded-full">{filteredRows.length}{hasAnyFilter?` / ${baseRows.length}`:''}{lang==='ko'?'건':' items'}</span>
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                          <div className="overflow-x-auto hide-scrollbar">
-                            <table className="min-w-full text-xs text-left whitespace-nowrap">
-                              <thead>
-                                <tr className="bg-slate-700 text-white">
-                                  <ColHeader col="team"      label="Team"/>
-                                  <ColHeader col="member"    label={lang==='ko'?'멤버':'Member'}/>
-                                  <ColHeader col="status"    label="Status"/>
-                                  <ColHeader col="account"   label="Account"/>
-                                  <ColHeader col="product"   label="Product"/>
-                                  <ColHeader col="dealer"    label="Dealer"/>
-                                  <th className="px-3 py-2 font-bold">SO</th>
-                                  <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
-                                  filteredRows.map((row,i) => {
-                                    const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
-                                    return (
-                                      <tr key={row.id||i} className={`border-b ${sc.row} hover:brightness-95 transition cursor-pointer`} onClick={()=>{ setSelectedTeam(row.team||selectedTeam); setSelectedMember(row.member); }}>
-                                        <td className="px-3 py-2 font-semibold text-slate-600">{row.team||'-'}</td>
-                                        <td className="px-3 py-2 font-bold text-gray-800">{row.member}</td>
-                                        <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sc.badge}`}>{row.status}</span></td>
-                                        <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
-                                        <td className="px-3 py-2 text-gray-600">{row.product}</td>
-                                        <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
-                                        <td className="px-3 py-2 font-mono text-gray-600">{row.so||'-'}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                              {filteredRows.length>0 && (
-                                <tfoot>
-                                  <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                    <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
-                                    <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
-                                  </tr>
-                                </tfoot>
-                              )}
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
               </div>
             ) : (
               // ── 멤버 상세 뷰 ────────────────────────────────────────────────
