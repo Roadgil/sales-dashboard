@@ -2093,7 +2093,7 @@ img,video{max-width:100%;height:auto}
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>전체 (통합)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2222,7 +2222,7 @@ img,video{max-width:100%;height:auto}
             ) : showAllTeamsCombined && !selectedMember ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 전체 통합 보기</h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터</h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2247,6 +2247,9 @@ img,video{max-width:100%;height:auto}
                             <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
                               {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({rows.length}건)</span>
                             </div>
+                            <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                              합계: ₩{sumKRW.toLocaleString()}
+                            </div>
                             <table style={{width:'100%', fontSize:'11px'}}>
                               <tbody>
                                 {rows.map(r => (
@@ -2261,9 +2264,6 @@ img,video{max-width:100%;height:auto}
                                 )}
                               </tbody>
                             </table>
-                            <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
-                              합계: ₩{sumKRW.toLocaleString()}
-                            </div>
                           </div>
                         );
                       })}
@@ -2292,6 +2292,9 @@ img,video{max-width:100%;height:auto}
                           return (
                             <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
                               <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRows.length}건)</span></div>
+                              <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                                합계: ₩{sumKRW.toLocaleString()}
+                              </div>
                               <table style={{width:'100%', fontSize:'11px'}}>
                                 <tbody>
                                   {dRows.map(r => (
@@ -2304,9 +2307,6 @@ img,video{max-width:100%;height:auto}
                                   ))}
                                 </tbody>
                               </table>
-                              <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
-                                합계: ₩{sumKRW.toLocaleString()}
-                              </div>
                             </div>
                           );
                         })}
@@ -2345,6 +2345,9 @@ img,video{max-width:100%;height:auto}
                           return (
                             <div key={q} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
                               <div style={{fontWeight:'bold', marginBottom:'6px'}}>{q} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({rows.length}건)</span></div>
+                              <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                                합계: ₩{sumKRW.toLocaleString()}
+                              </div>
                               <table style={{width:'100%', fontSize:'11px'}}>
                                 <tbody>
                                   {rows.map(r => (
@@ -2359,9 +2362,6 @@ img,video{max-width:100%;height:auto}
                                   )}
                                 </tbody>
                               </table>
-                              <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
-                                합계: ₩{sumKRW.toLocaleString()}
-                              </div>
                               <button onClick={() => { setSelectedTeam(memberTeam || selectedTeam); setSelectedQuarter(q); setSelectedMember(memberPickerValue); }}
                                 style={{marginTop:'8px', width:'100%', fontSize:'11px', fontWeight:'bold', padding:'4px 0', borderRadius:'6px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', cursor:'pointer'}}>
                                 상세보기 →
