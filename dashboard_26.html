@@ -524,6 +524,7 @@ function render(salesData,memberTargets,qTargets){
       excessW=Math.max(pct-100,0)/excessScaleMax*(100-BASE_FRAC);
       baseColor=pct>=100?'#3b82f6':'#94a3b8';
     } else { baseW=(val/maxMV*100); excessW=0; baseColor=col; }
+    const baseRadius=excessW>0?'3px 0 0 3px':'3px';
     return `<div class="srow">
       <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
       <div class="sinfo">
@@ -531,9 +532,9 @@ function render(salesData,memberTargets,qTargets){
           <span class="sname">${name}</span>
           ${sldBadge(pct)}
         </div>
-        <div class="sbw" style="display:flex">
-          <div class="sbf" style="width:${baseW.toFixed(1)}%;background:${baseColor};border-radius:0"></div>
-          ${excessW>0?`<div class="sbf" style="width:${excessW.toFixed(1)}%;background:#059669;border-radius:0"></div>`:''}
+        <div class="sbw" style="display:flex;background:transparent">
+          <div class="sbf" style="width:${baseW.toFixed(1)}%;background:${baseColor};border-radius:${baseRadius}"></div>
+          ${excessW>0?`<div class="sbf" style="width:${excessW.toFixed(1)}%;background:#059669;border-radius:0 3px 3px 0"></div>`:''}
         </div>
         ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:600;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
       </div>
