@@ -793,6 +793,12 @@ img,video{max-width:100%;height:auto}
       const [authReady, setAuthReady] = useState(false);
       useEffect(() => auth.onAuthStateChanged(u => { setCurrentUser(u); setAuthReady(true); }), []);
       const requireAuth = () => { if (auth.currentUser) return true; setShowLoginModal(true); return false; };
+
+      // ── 업데이트 안내 (로그인한 사람에게 한 번만) ──────────────────────────
+      const WHATS_NEW_KEY = 'whatsNewSeen_2026_08_sf_candidates';
+      const [showWhatsNew, setShowWhatsNew] = useState(false);
+      useEffect(() => { if (currentUser && !safeLS.get(WHATS_NEW_KEY)) setShowWhatsNew(true); }, [currentUser]);
+      const dismissWhatsNew = () => { safeLS.set(WHATS_NEW_KEY, '1'); setShowWhatsNew(false); };
       // ── 관리자 권한 ──
       // 환율(ER) · 분기 목표 관리자
       const TARGET_ADMIN_EMAILS = ['limyc@candelamedical.com','yunap@candelamedical.com','miaej@candelamedical.com','yoongil.chae@candelamedical.com','bohyunk@candelamedical.com'];
@@ -1779,7 +1785,17 @@ img,video{max-width:100%;height:auto}
           <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType||'일반'}</td>
           <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName||'-'}</td>
           <td className="p-2 md:p-3 font-mono text-gray-500">{row.so||'-'}</td>
-          <td className="p-2 md:p-3 font-bold text-gray-800">{row.account}</td>
+          <td className="p-2 md:p-3 font-bold text-gray-800">
+            {row.account}
+            {row._sfQuarterMismatch && (
+              <div
+                onClick={e => { e.stopPropagation(); handleQuarterMoveOpen(row); setQuarterMoveTarget(row._sfQuarterMismatch); }}
+                title="Salesforce에서 분기가 바뀐 것으로 감지됨 - 클릭해서 확인/이동"
+                style={{marginTop:'2px', fontSize:'10px', fontWeight:'bold', color:'#b45309', background:'#fef3c7', border:'1px solid #fcd34d', borderRadius:'6px', padding:'1px 6px', display:'inline-block', cursor:'pointer'}}>
+                ⚠️ SF 분기 변경: {row._sfQuarterMismatch}
+              </div>
+            )}
+          </td>
           <td className="p-2 md:p-3">{row.product}</td>
           <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
           <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>{'₩ ' + (row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>{'$ ' + (row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
@@ -1846,6 +1862,27 @@ img,video{max-width:100%;height:auto}
             onLogoutClick={() => { if (window.confirm(lang==='ko' ? '로그아웃 하시겠습니까?' : 'Sign out?')) handleLogout(); }} />
           {/* [FIX #10] 토스트 */}
           {toast && <Toast msg={toast.msg} type={toast.type} />}
+
+          {/* 업데이트 안내 모달 (한 번만) */}
+          {showWhatsNew && (
+            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',width:'100%',maxWidth:'440px'}}>
+                <div style={{fontSize:'32px',textAlign:'center',marginBottom:'8px'}}>🎉</div>
+                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>업데이트 안내</h3>
+                <div style={{background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:'10px', padding:'14px', marginBottom:'14px'}}>
+                  <div style={{fontWeight:'800', color:'#b45309', fontSize:'14px', marginBottom:'4px'}}>📥 Salesforce 신규 후보 (신규 기능)</div>
+                  <div style={{fontSize:'13px', color:'#78350f', lineHeight:'1.6'}}>Salesforce에서 자동으로 가져온 계약 후보를 사이드바 "Salesforce 신규 후보"에서 확인하고, 담당자/분기를 지정해서 클릭 한 번으로 바로 등록할 수 있어요. 같은 계약의 Cryo7 등 동반 시스템도 같이 딸려옵니다.</div>
+                </div>
+                <ul style={{fontSize:'13px', color:'#334155', paddingLeft:'18px', marginBottom:'20px', lineHeight:'1.8'}}>
+                  <li>사이드바가 연도/분기 드롭다운 + 대시보드 / 팀별 / 전체(통합) 메뉴로 정리됐어요</li>
+                  <li>전체(통합) 화면에서 팀별 · 개인별 · 딜러별로 한눈에 볼 수 있어요</li>
+                  <li>각 데이터에 "📅 분기 이동" 버튼으로 다른 분기로 옮길 수 있어요</li>
+                  <li>Salesforce 금액이 바뀌면 이미 등록된 데이터도 자동으로 최신화돼요</li>
+                </ul>
+                <button onClick={dismissWhatsNew} style={{width:'100%',padding:'12px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>확인했어요</button>
+              </div>
+            </div>
+          )}
 
           {/* Firebase 로그인 모달 */}
           {showLoginModal && (
@@ -2181,7 +2218,7 @@ img,video{max-width:100%;height:auto}
               </div>
             ) : showAllTeamsCombined && !selectedMember ? (
               <div>
-                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 전체 통합 보기</h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['member','개인별'],['dealer','딜러별']].map(([key,label]) => (
@@ -2234,7 +2271,7 @@ img,video{max-width:100%;height:auto}
                 {allTeamsViewMode === 'member' && (() => {
                   const memberToTeam = {};
                   Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
-                  const allMembers = Object.values(teams).flat();
+                  const allMembers = Object.keys(teams).sort().flatMap(team => teams[team]||[]);
                   return (
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
                       <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
