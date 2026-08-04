@@ -508,11 +508,15 @@ function render(salesData,memberTargets,qTargets){
   const pE=Object.entries(pSum).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   mkChart('prodChart',{type:'doughnut',data:{labels:pE.map(([k])=>k),datasets:[{data:pE.map(([,v])=>totalKRW?parseFloat((v/totalKRW*100).toFixed(1)):0),backgroundColor:COLORS,borderColor:'#fff',borderWidth:3,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8a8fa8',usePointStyle:true,pointStyle:'circle',padding:10}},tooltip:{...TT,callbacks:{label:c=>` ${c.label}: ${c.raw}%`}}}}});
 
-  // ④ 담당자 달성률 리스트
+  // ④ 담당자 달성률 리스트 (최고 실적자 상대값이 아니라 개인 목표 100% 기준으로 바 길이 계산)
   const maxMV=sortedM[0]?.[1]||1;
+  const memberPcts=sortedM.map(([name,val])=>{const tgt=getMemberTarget(name);return tgt?(val/tgt*100):null;});
+  const validPcts=memberPcts.filter(p=>p!==null);
+  const scaleMax=validPcts.length?Math.max(150,...validPcts.map(p=>p*1.05)):150;
+  const mark100=(100/scaleMax*100).toFixed(1);
   document.getElementById('memberList').innerHTML=sortedM.map(([name,val],i)=>{
-    const col=MC[i%MC.length],tgt=getMemberTarget(name),pct=tgt?(val/tgt*100):null;
-    const bw=(val/maxMV*100).toFixed(0);
+    const col=MC[i%MC.length],tgt=getMemberTarget(name),pct=memberPcts[i];
+    const bw=pct!==null?(Math.min(pct,scaleMax)/scaleMax*100):(val/maxMV*100);
     return `<div class="srow">
       <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
       <div class="sinfo">
@@ -520,7 +524,10 @@ function render(salesData,memberTargets,qTargets){
           <span class="sname">${name}</span>
           ${sldBadge(pct)}
         </div>
-        <div class="sbw"><div class="sbf" style="width:${bw}%;background:${pct!==null?zoneColor(pct):col}"></div></div>
+        <div class="sbw" style="position:relative">
+          <div class="sbf" style="width:${bw.toFixed(0)}%;background:${pct!==null?zoneColor(pct):col}"></div>
+          ${pct!==null?`<div style="position:absolute;top:-1px;left:${mark100}%;width:1px;height:7px;background:#94a3b8" title="100%"></div>`:''}
+        </div>
         ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:600;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
       </div>
       <div class="samt"><div style="color:${col};font-weight:700">${fmtA(val)}</div><div class="spct">${totalKRW?(val/totalKRW*100).toFixed(1):0}%</div></div>
