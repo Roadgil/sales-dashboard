@@ -1286,7 +1286,9 @@ img,video{max-width:100%;height:auto}
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
       const [showTeamOnly, setShowTeamOnly] = useState(false);
       const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
-      const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'member' | 'dealer'
+      const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'dealer'
+      const [showMemberPicker, setShowMemberPicker] = useState(false);
+      const [memberPickerValue, setMemberPickerValue] = useState('');
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
@@ -2088,9 +2090,10 @@ img,video{max-width:100%;height:auto}
 
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>📊 대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>👥 팀별</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>🧩 전체 (통합)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>📊 대시보드</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>👥 팀별</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>🧩 전체 (통합)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>🧑 개인별</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2221,7 +2224,7 @@ img,video{max-width:100%;height:auto}
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 전체 통합 보기</h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
-                    {[['team','팀별'],['member','개인별'],['dealer','딜러별']].map(([key,label]) => (
+                    {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
                     ))}
                     <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
@@ -2268,53 +2271,16 @@ img,video{max-width:100%;height:auto}
                   </div>
                 ))}
 
-                {allTeamsViewMode === 'member' && (() => {
-                  const memberToTeam = {};
-                  Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
-                  const allMembers = Object.keys(teams).sort().flatMap(team => teams[team]||[]);
-                  return (
-                    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                      <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
-                        {allMembers.length === 0 ? (
-                          <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
-                        ) : allMembers.map(member => {
-                          const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
-                          const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
-                          return (
-                            <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(memberToTeam[member]); setSelectedMember(member); }}>
-                                {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({memberToTeam[member]} · {rows.length}건)</span>
-                              </div>
-                              <table style={{width:'100%', fontSize:'11px'}}>
-                                <tbody>
-                                  {rows.map(r => (
-                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                    </tr>
-                                  ))}
-                                  {rows.length === 0 && (
-                                    <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
-                                  )}
-                                </tbody>
-                              </table>
-                              <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
-                                합계: ₩{sumKRW.toLocaleString()}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
                 {allTeamsViewMode === 'dealer' && (() => {
                   const memberToTeam = {};
                   Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
                   const rows = salesData.filter(d => d.quarter===selectedQuarter);
-                  const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort();
+                  const DEALER_ORDER = ['병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
+                  const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
+                    const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
+                    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                    return a.localeCompare(b);
+                  });
                   return (
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
                       <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
@@ -2348,6 +2314,36 @@ img,video{max-width:100%;height:auto}
                     </div>
                   );
                 })()}
+              </div>
+            ) : showMemberPicker && !selectedMember ? (
+              <div>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                  <h1 className="text-2xl font-extrabold text-gray-800">개인별</h1>
+                  <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
+                    {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => <option key={fq} value={fq}>{fq}</option>)}
+                  </select>
+                </div>
+                <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6" style={{maxWidth:'420px'}}>
+                  <label className="text-sm font-bold text-gray-700 block mb-2">담당자 선택</label>
+                  <select
+                    value={memberPickerValue}
+                    onChange={e => {
+                      const m = e.target.value;
+                      setMemberPickerValue(m);
+                      if (!m) return;
+                      const team = Object.keys(teams).find(t => (teams[t]||[]).includes(m));
+                      setSelectedTeam(team || selectedTeam);
+                      setSelectedMember(m);
+                    }}
+                    className="w-full p-3 border-2 border-blue-300 rounded-lg font-bold text-base">
+                    <option value="">선택해주세요</option>
+                    {Object.keys(teams).sort().map(team => (
+                      <optgroup key={team} label={team}>
+                        {(teams[team]||[]).map(m => <option key={m} value={m}>{m}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
               </div>
             ) : showTeamOnly && !selectedMember ? (
               <div>
