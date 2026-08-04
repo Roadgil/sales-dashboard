@@ -901,6 +901,35 @@ img,video{max-width:100%;height:auto}
           })
           .catch(e => showToast((lang==='ko' ? '변경 실패: ' : 'Transfer failed: ') + e.message, 'error'));
       };
+      // ── 분기 이동 (Quarter Move) ──────────────────────────────────────
+      const [showQuarterMoveModal, setShowQuarterMoveModal] = useState(false);
+      const [quarterMoveRow, setQuarterMoveRow]             = useState(null);
+      const [quarterMoveTarget, setQuarterMoveTarget]       = useState('');
+      const handleQuarterMoveOpen = (row) => {
+        if (row.status === 'Ship Confirm' ? !requireScAdmin() : !requireAuth()) return;
+        setQuarterMoveRow(row); setQuarterMoveTarget(row.quarter); setShowQuarterMoveModal(true);
+      };
+      const handleQuarterMoveConfirm = () => {
+        if (!quarterMoveRow || !quarterMoveTarget) return;
+        if (quarterMoveTarget === quarterMoveRow.quarter) { setShowQuarterMoveModal(false); setQuarterMoveRow(null); return; }
+        const before = quarterMoveRow;
+        if (!quarters.includes(quarterMoveTarget)) {
+          const nq = [...quarters, quarterMoveTarget].sort();
+          setQuarters(nq);
+          db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
+        }
+        db.collection("sales").doc(String(before.id)).update({ quarter: quarterMoveTarget })
+          .then(() => {
+            db.collection("audit_logs").add({
+              action: 'edit', actor: (auth.currentUser?.email || ''), timestamp: new Date().toISOString(),
+              member: before.member, team: before.team, quarter: quarterMoveTarget, account: before.account,
+              before: before, after: { ...before, quarter: quarterMoveTarget },
+            }).catch(e => showToast((lang==='ko' ? '⚠️ 감사 로그 기록 실패: ' : '⚠️ Audit log failed: ') + e.message, 'error'));
+            showToast(lang==='ko' ? `분기 이동 완료: ${before.quarter} → ${quarterMoveTarget} ✓` : `Moved: ${before.quarter} → ${quarterMoveTarget} ✓`);
+            setShowQuarterMoveModal(false); setQuarterMoveRow(null);
+          })
+          .catch(e => showToast((lang==='ko' ? '이동 실패: ' : 'Move failed: ') + e.message, 'error'));
+      };
       const requestScAction = (type, data) => {
         if (!requireScAdmin()) return;
         if (type === 'edit')   handleEdit(data);
@@ -1251,7 +1280,7 @@ img,video{max-width:100%;height:auto}
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
       const [showTeamOnly, setShowTeamOnly] = useState(false);
       const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
-      const [expandedYear, setExpandedYear] = useState(null);
+      const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'member' | 'dealer'
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
@@ -1539,9 +1568,9 @@ img,video{max-width:100%;height:auto}
             <button onClick={addTeam} className="whitespace-nowrap px-4 md:px-6 py-3 font-bold rounded-t-lg text-blue-600 bg-blue-50 border border-blue-200 border-b-0 hover:bg-blue-100 transition">{T.addTab}</button>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-6 mb-10">
+          <div className="flex flex-col gap-6 mb-10">
             {/* 팀 달성률 + 멤버 카드 */}
-            <div className="lg:w-80 flex-shrink-0">
+            <div className="w-full">
               {(() => {
                 const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
                 const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
@@ -1556,7 +1585,7 @@ img,video{max-width:100%;height:auto}
                 const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
                 const zone3W     = 100 - zone1W - zone2W;
                 return (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" data-region="team-progress-bar">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" style={{maxWidth:'420px'}} data-region="team-progress-bar">
                     <div className="flex justify-between items-center mb-3">
                       <span className="font-extrabold text-gray-800 text-base">{selectedTeam}</span>
                       <span className="font-extrabold text-lg" style={{color:perColor}}>{teamTarget>0?`${teamPer.toFixed(1)}%`:'-'}</span>
@@ -1594,7 +1623,7 @@ img,video{max-width:100%;height:auto}
                 <h3 className="text-base font-bold text-gray-700">{selectedTeam} {T.memberList}</h3>
                 <button onClick={addMember} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">{T.addMember}</button>
               </div>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {teams[selectedTeam].length===0 ? (
                   <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
                 ) : (
@@ -1758,10 +1787,12 @@ img,video{max-width:100%;height:auto}
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
                   <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
+                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button>
+                  <button onClick={() => handleQuarterMoveOpen(row)} className="text-[10px] md:text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 px-2 py-1 rounded font-bold transition" title="분기 이동">📅</button></>
               : <><button onClick={() => handleEdit(row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>{T.editBtn}</button>
                   <button onClick={() => deleteSalesData(row.id)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">{T.deleteBtn}</button>
-                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button></>
+                  <button onClick={() => handleTransferOpen(row)} className="text-[10px] md:text-xs bg-violet-100 hover:bg-violet-200 text-violet-800 px-2 py-1 rounded font-bold transition" title={lang==='ko'?'담당자 변경':'Transfer'}>🔄</button>
+                  <button onClick={() => handleQuarterMoveOpen(row)} className="text-[10px] md:text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 px-2 py-1 rounded font-bold transition" title="분기 이동">📅</button></>
             }
           </td>
         </tr>
@@ -1877,6 +1908,36 @@ img,video{max-width:100%;height:auto}
             </div>
           )}
 
+          {/* 분기 이동 모달 */}
+          {showQuarterMoveModal && quarterMoveRow && (
+            <div style={{position:'fixed',inset:0,zIndex:9400,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
+              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
+              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowQuarterMoveModal(false); setQuarterMoveRow(null); } }}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',width:'100%',maxWidth:'360px'}}>
+                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>📅</div>
+                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>분기 이동</h3>
+                <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
+                  <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{quarterMoveRow.account}</div>
+                  <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{quarterMoveRow.product} · {'₩' + (quarterMoveRow.priceKRW||0).toLocaleString()}</div>
+                </div>
+                <div style={{marginBottom:'6px',fontSize:'12px',color:'#64748b'}}>현재 분기: <span style={{fontWeight:'800',color:'#0369a1'}}>{quarterMoveRow.quarter}</span></div>
+                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>이동할 분기 선택</div>
+                <select value={quarterMoveTarget} onChange={e => setQuarterMoveTarget(e.target.value)}
+                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #7dd3fc',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
+                  {[...new Set([...Object.keys(groupedQuarters), (quarterMoveRow.quarter||'').split(' ')[0]])].filter(Boolean).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => (
+                    <option key={fq} value={fq}>{fq}{fq===quarterMoveRow.quarter ? ' (현재)' : ''}</option>
+                  ))}
+                </select>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <button onClick={() => { setShowQuarterMoveModal(false); setQuarterMoveRow(null); }}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>취소</button>
+                  <button onClick={handleQuarterMoveConfirm} disabled={!quarterMoveTarget || quarterMoveTarget===quarterMoveRow.quarter}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:(!quarterMoveTarget||quarterMoveTarget===quarterMoveRow.quarter)?'#bae6fd':'#0369a1',color:'white',fontWeight:'800',cursor:(!quarterMoveTarget||quarterMoveTarget===quarterMoveRow.quarter)?'default':'pointer',fontSize:'14px'}}>이동</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ER 환율 편집 모달 */}
           {showErModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
@@ -1967,43 +2028,32 @@ img,video{max-width:100%;height:auto}
             <div className="flex-1">
               {(() => {
                 const years = Object.keys(groupedQuarters).sort();
-                const currentYear = (selectedQuarter || '').split(' ')[0];
-                const activeYear = expandedYear || (years.includes(currentYear) ? currentYear : years[years.length - 1]);
-                return years.map(year => {
-                  const isOpen = activeYear === year;
-                  return (
-                    <div key={year} className="mb-3">
-                      <button onClick={() => setExpandedYear(isOpen ? null : year)} className="w-full flex justify-between items-center text-slate-400 font-extrabold mb-2 text-sm border-b border-slate-600 pb-1 hover:text-white transition">
-                        <span>{year}{T.yearSuffix}</span>
-                        <span className="text-xs">{isOpen ? '▾' : '▸'}</span>
-                      </button>
-                      {isOpen && (
-                        <div className="space-y-1 mb-3">
-                          {groupedQuarters[year].sort().map(q => {
-                            const fullQ = `${year} ${q}`;
-                            const isActive = !showTeamOnly && !showAllTeamsCombined && !showCandidatesPage && selectedQuarter===fullQ;
-                            return <button key={fullQ} onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setSelectedQuarter(fullQ); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${isActive ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{q}</button>;
-                          })}
-                        </div>
-                      )}
+                const currentYear = (selectedQuarter || '').split(' ')[0] || years[years.length - 1];
+                const currentQ = (selectedQuarter || '').split(' ')[1] || 'Q1';
+                return (
+                  <>
+                    <div className="mb-3">
+                      <label className="text-slate-400 font-extrabold mb-1 text-sm block">연도</label>
+                      <select value={currentYear} onChange={e => { setSelectedQuarter(`${e.target.value} ${currentQ}`); }} className="w-full p-2 rounded bg-slate-700 text-white font-bold border border-slate-600">
+                        {years.map(y => <option key={y} value={y}>{y}{T.yearSuffix}</option>)}
+                      </select>
                     </div>
-                  );
-                });
+                    <div className="mb-4">
+                      <label className="text-slate-400 font-extrabold mb-1 text-sm block">분기</label>
+                      <select value={currentQ} onChange={e => { setSelectedQuarter(`${currentYear} ${e.target.value}`); }} className="w-full p-2 rounded bg-slate-700 text-white font-bold border border-slate-600">
+                        {['Q1','Q2','Q3','Q4'].map(q => <option key={q} value={q}>{q}</option>)}
+                      </select>
+                    </div>
+                  </>
+                );
               })()}
-              <button onClick={addQuarter} className="w-full mt-2 mb-4 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
+              <button onClick={addQuarter} className="w-full mb-4 border border-dashed border-slate-500 text-slate-300 py-2 rounded hover:bg-slate-700 hover:text-white transition text-sm">{T.addQuarterBtn}</button>
 
-              {/* 팀별 바로가기 */}
-              <div className="pt-3 border-t border-slate-600">
-                <h4 className="text-slate-400 font-extrabold mb-2 text-sm">TEAM</h4>
-                <div className="space-y-1">
-                  {Object.keys(teams).sort().map(team => {
-                    const isActive = showTeamOnly && selectedTeam === team;
-                    return (
-                      <button key={team} onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowTeamOnly(true); setSelectedTeam(team); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${isActive ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>{team}</button>
-                    );
-                  })}
-                  <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>전체 (통합)</button>
-                </div>
+              {/* 화면 전환 */}
+              <div className="pt-3 border-t border-slate-600 space-y-1">
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>📊 대시보드</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>👥 팀별</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>🧩 전체 (통합)</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2131,8 +2181,19 @@ img,video{max-width:100%;height:auto}
               </div>
             ) : showAllTeamsCombined && !selectedMember ? (
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">{selectedQuarter} 전체 팀 통합 보기</h1>
-                {Object.keys(teams).sort().map(team => (
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 전체 통합 보기</h1>
+                  <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
+                    {[['team','팀별'],['member','개인별'],['dealer','딜러별']].map(([key,label]) => (
+                      <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
+                    ))}
+                    <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
+                      {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => <option key={fq} value={fq}>{fq}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => (
                   <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
                     <h3 className="text-lg font-bold text-gray-800 mb-3">{team}</h3>
                     <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
@@ -2169,10 +2230,96 @@ img,video{max-width:100%;height:auto}
                     </div>
                   </div>
                 ))}
+
+                {allTeamsViewMode === 'member' && (() => {
+                  const memberToTeam = {};
+                  Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
+                  const allMembers = Object.values(teams).flat();
+                  return (
+                    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
+                      <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
+                        {allMembers.length === 0 ? (
+                          <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
+                        ) : allMembers.map(member => {
+                          const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
+                          const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                          return (
+                            <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
+                              <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(memberToTeam[member]); setSelectedMember(member); }}>
+                                {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({memberToTeam[member]} · {rows.length}건)</span>
+                              </div>
+                              <table style={{width:'100%', fontSize:'11px'}}>
+                                <tbody>
+                                  {rows.map(r => (
+                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                  {rows.length === 0 && (
+                                    <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
+                              <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
+                                합계: ₩{sumKRW.toLocaleString()}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {allTeamsViewMode === 'dealer' && (() => {
+                  const memberToTeam = {};
+                  Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
+                  const rows = salesData.filter(d => d.quarter===selectedQuarter);
+                  const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort();
+                  return (
+                    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
+                      <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
+                        {dealers.length === 0 ? (
+                          <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
+                        ) : dealers.map(dealer => {
+                          const dRows = rows.filter(d => (d.dealerName||'미지정')===dealer);
+                          const sumKRW = dRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                          return (
+                            <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
+                              <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRows.length}건)</span></div>
+                              <table style={{width:'100%', fontSize:'11px'}}>
+                                <tbody>
+                                  {dRows.map(r => (
+                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(memberToTeam[r.member] || selectedTeam); setSelectedMember(r.member); }}>
+                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                      <td style={{padding:'2px 4px'}}>{r.member}</td>
+                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div style={{textAlign:'right', fontWeight:'bold', marginTop:'6px', borderTop:'1px solid #e5e7eb', paddingTop:'4px'}}>
+                                합계: ₩{sumKRW.toLocaleString()}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : showTeamOnly && !selectedMember ? (
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">{selectedTeam} <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedTeam} <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                  <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
+                    {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => <option key={fq} value={fq}>{fq}</option>)}
+                  </select>
+                </div>
                 {renderTeamSection()}
               </div>
             ) : !selectedMember ? (
