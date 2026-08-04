@@ -1149,19 +1149,24 @@ img,video{max-width:100%;height:auto}
       const [showEditModal, setShowEditModal] = useState(false);
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
 
-      // 같은 SO 또는 같은 Account로 이미 등록된 sales 데이터가 있는지 (중복 의심) 체크
-      const isCandidateLikelyDuplicate = (c) => salesData.some(d =>
+      // 같은 SO 또는 같은 Account로 이미 등록된 sales 데이터가 있는지 확인 - 있으면 그 데이터(분기 포함) 반환
+      const findExistingSalesMatch = (c) => salesData.find(d =>
         (c.so && d.so === c.so) || (d.account === c.account)
       );
+      const isCandidateLikelyDuplicate = (c) => !!findExistingSalesMatch(c);
+      // SO가 완전히 같으면 이미 등록된 게 확실하므로 후보 목록 자체에서 제외한다 (Account만 겹치는 건 확실치 않아 경고만)
+      const isAlreadyRegisteredBySO = (c) => !!(c.so && salesData.some(d => d.so === c.so));
+      const visibleCandidates = candidates.filter(c => !isAlreadyRegisteredBySO(c));
 
       // Salesforce 후보를 선택하면: 분기/팀/멤버를 후보 기준으로 맞추고, 폼에 SO/Account/Product/가격을
       // 미리 채운 뒤 편집 모달을 새 항목 작성 모드(editingId=null)로 연다. 상태/계약일/납품예정일/
       // Dealer/Acc type은 비워둬서 사람이 직접 채우도록 한다.
       const handleUseCandidate = (c) => {
         if (!requireAuth()) return;
-        if (isCandidateLikelyDuplicate(c)) {
+        const existingMatch = findExistingSalesMatch(c);
+        if (existingMatch) {
           const proceed = window.confirm(
-            `⚠️ "${c.account}" (SO: ${c.so || '-'})와 같은 SO 또는 Account를 가진 데이터가 이미 등록되어 있습니다.\n` +
+            `⚠️ "${c.account}" (SO: ${c.so || '-'})는 이미 ${existingMatch.quarter} · ${existingMatch.member}에 등록되어 있습니다.\n` +
             `중복으로 저장될 수 있습니다. 계속 진행할까요?`
           );
           if (!proceed) return;
@@ -1190,7 +1195,7 @@ img,video{max-width:100%;height:auto}
         });
         setEditingId(null);
         setConvertingCandidateId(c.id);
-        setCompanionCandidates(candidates.filter(x => x.id !== c.id && x.opportunityName === c.opportunityName));
+        setCompanionCandidates(visibleCandidates.filter(x => x.id !== c.id && x.opportunityName === c.opportunityName));
         setShowEditModal(true);
       };
 
@@ -1779,7 +1784,7 @@ img,video{max-width:100%;height:auto}
               </div>
               <div className="mb-4">
                 <button onClick={() => { setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} style={{width:'100%', background:'#d97706', color:'#fff', fontWeight:800, padding:'12px', borderRadius:'8px', border:'1px solid #b45309', cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
-                  📥 Salesforce 신규 후보{candidates.length > 0 ? ` (${candidates.length})` : ''}
+                  📥 Salesforce 신규 후보{visibleCandidates.length > 0 ? ` (${visibleCandidates.length})` : ''}
                 </button>
               </div>
               {/* [FIX #8] CSV 내보내기 드롭다운 */}
@@ -1804,7 +1809,7 @@ img,video{max-width:100%;height:auto}
             {showCandidatesPage ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({candidates.length}건)</h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({visibleCandidates.length}건)</h1>
                   <button onClick={() => setShowCandidatesPage(false)} style={{background:'#334155', color:'#fff', fontWeight:'bold', padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer'}}>← 대시보드로</button>
                 </div>
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
@@ -1814,17 +1819,17 @@ img,video{max-width:100%;height:auto}
                         <tr style={{textAlign:'left', color:'#b45309', borderBottom:'2px solid #fde68a', background:'#fffbeb'}}>
                           <th className="py-2 px-2"></th>
                           <CandidatesFilterTh label="Team" colKey="team"
-                            rows={candidates} get={c => c.suggestedTeam} filterArr={candidatesFilters.team}
+                            rows={visibleCandidates} get={c => c.suggestedTeam} filterArr={candidatesFilters.team}
                             onToggleValue={v => toggleCandidatesFilterValue('team', v)} onClear={() => clearCandidatesFilter('team')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <CandidatesFilterTh label="Member" colKey="member"
-                            rows={candidates} get={c => c.suggestedMember} filterArr={candidatesFilters.member}
+                            rows={visibleCandidates} get={c => c.suggestedMember} filterArr={candidatesFilters.member}
                             onToggleValue={v => toggleCandidatesFilterValue('member', v)} onClear={() => clearCandidatesFilter('member')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
                           <CandidatesFilterTh label="Product" colKey="product"
-                            rows={candidates} get={c => c.product} filterArr={candidatesFilters.product}
+                            rows={visibleCandidates} get={c => c.product} filterArr={candidatesFilters.product}
                             onToggleValue={v => toggleCandidatesFilterValue('product', v)} onClear={() => clearCandidatesFilter('product')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
@@ -1832,7 +1837,7 @@ img,video{max-width:100%;height:auto}
                           <th className="py-2 px-2">SO</th>
                           <th className="py-2 px-2">Close Date</th>
                           <CandidatesFilterTh label="제안 분기" colKey="quarter"
-                            rows={candidates} get={c => c.suggestedQuarter} filterArr={candidatesFilters.quarter}
+                            rows={visibleCandidates} get={c => c.suggestedQuarter} filterArr={candidatesFilters.quarter}
                             onToggleValue={v => toggleCandidatesFilterValue('quarter', v)} onClear={() => clearCandidatesFilter('quarter')}
                             openKey={candidatesFilterOpen} onToggleOpen={toggleCandidatesFilterOpen}
                             searchQuery={candidatesFilterSearchQuery} onSearchChange={setCandidatesFilterSearchQuery}/>
@@ -1841,7 +1846,7 @@ img,video{max-width:100%;height:auto}
                         </tr>
                       </thead>
                       <tbody>
-                        {candidates
+                        {visibleCandidates
                           .filter(c => candidatesFilters.team.length===0 || candidatesFilters.team.includes(c.suggestedTeam))
                           .filter(c => candidatesFilters.member.length===0 || candidatesFilters.member.includes(c.suggestedMember))
                           .filter(c => candidatesFilters.product.length===0 || candidatesFilters.product.includes(c.product))
@@ -1868,7 +1873,7 @@ img,video{max-width:100%;height:auto}
                                   color: c.product === 'GMPP' ? '#1d4ed8' : '#6d28d9',
                                 }}>{c.product}{c.product !== 'GMPP' ? ' (동반)' : ''}</span>
                               </td>
-                              <td className="py-2 px-2">{c.account}{isCandidateLikelyDuplicate(c) && <span title="이미 등록된 SO/Account와 겹칠 수 있음" style={{marginLeft:'4px', color:'#dc2626'}}>⚠️중복의심</span>}</td>
+                              <td className="py-2 px-2">{c.account}{(() => { const m = findExistingSalesMatch(c); return m && <span title="이미 등록된 SO/Account와 겹침" style={{marginLeft:'4px', color:'#dc2626', fontWeight:'bold'}}>⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}</td>
                               <td className="py-2 px-2">{c.so}</td>
                               <td className="py-2 px-2">{c.closeDate}</td>
                               <td className="py-2 px-2">
@@ -1883,7 +1888,7 @@ img,video{max-width:100%;height:auto}
                           ))}
                       </tbody>
                     </table>
-                    {candidates.length === 0 && <div className="text-gray-400 text-sm p-6 text-center">현재 후보가 없습니다.</div>}
+                    {visibleCandidates.length === 0 && <div className="text-gray-400 text-sm p-6 text-center">현재 후보가 없습니다.</div>}
                   </div>
                 </div>
               </div>
@@ -2335,7 +2340,7 @@ img,video{max-width:100%;height:auto}
                     <div style={{position:'relative', display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
                       <h4 className="font-bold text-gray-700 text-sm md:text-base">📝 신규 계약 입력</h4>
                       <button type="button" onClick={() => setShowMemberCandidateSearch(v => !v)} style={{fontSize:'12px', fontWeight:'bold', padding:'6px 12px', borderRadius:'6px', background:'#fef3c7', color:'#b45309', border:'1px solid #fcd34d', cursor:'pointer', whiteSpace:'nowrap'}}>
-                        🔍 Salesforce에서 가져오기{candidates.filter(c => c.suggestedMember === selectedMember).length > 0 ? ` (${candidates.filter(c => c.suggestedMember === selectedMember).length})` : ''}
+                        🔍 Salesforce에서 가져오기{visibleCandidates.filter(c => c.suggestedMember === selectedMember).length > 0 ? ` (${visibleCandidates.filter(c => c.suggestedMember === selectedMember).length})` : ''}
                       </button>
                       {showMemberCandidateSearch && (
                         <div style={{position:'absolute', top:'100%', right:0, marginTop:'8px', width:'380px', maxWidth:'90vw', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'8px', boxShadow:'0 10px 30px rgba(0,0,0,0.25)', padding:'12px', zIndex:500}}>
@@ -2348,7 +2353,7 @@ img,video{max-width:100%;height:auto}
                             style={{marginBottom:'8px', outline:'none'}}
                           />
                           <div style={{maxHeight:'256px', overflowY:'auto'}}>
-                            {candidates
+                            {visibleCandidates
                               .filter(c => c.suggestedMember === selectedMember)
                               .filter(c => !memberCandidateSearchQuery.trim() ||
                                 (c.account || '').includes(memberCandidateSearchQuery.trim()) ||
@@ -2364,12 +2369,12 @@ img,video{max-width:100%;height:auto}
                                       background: c.product === 'GMPP' ? '#dbeafe' : '#ede9fe',
                                       color: c.product === 'GMPP' ? '#1d4ed8' : '#6d28d9',
                                     }}>{c.product}</span>
-                                    {isCandidateLikelyDuplicate(c) && <span style={{color:'#dc2626'}}> ⚠️중복의심</span>}
+                                    {(() => { const m = findExistingSalesMatch(c); return m && <span style={{color:'#dc2626', fontWeight:'bold'}}> ⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}
                                   </div>
                                   <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
                                 </div>
                               ))}
-                            {candidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (
+                            {visibleCandidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (
                               <div className="text-gray-400 text-xs" style={{padding:'8px'}}>가져올 후보가 없습니다.</div>
                             )}
                           </div>

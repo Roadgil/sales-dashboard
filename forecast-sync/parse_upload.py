@@ -178,17 +178,33 @@ def build_candidates(df, prev_to, new_to, from_fixed):
 
 def upload_candidates(candidates, db):
     """새 후보는 생성하고, 아직 안 쓴(used=false) 기존 후보는 최신 Salesforce 값으로 덮어쓴다.
-    이미 사용(used=true, 즉 sales로 이미 넘어간) 후보는 건드리지 않는다."""
+    이미 사용(used=true, 즉 sales로 이미 넘어간) 후보는 건드리지 않는다.
+
+    같은 Opportunity의 다른 후보(예: GMPP)가 이미 sales로 넘어갔는데 이 후보(예: 나중에
+    나타난 Cryo7)는 아직이면, 자동으로 합치지 않고 relatedToRegisteredDeal=True로 표시만
+    해서 대시보드에서 사람이 보고 판단하게 한다 (자동 병합은 검토 없이 매출이 생기는
+    위험이 있어 배제함)."""
     ref = db.collection("sf_candidates")
+    snapshots = {c["id"]: ref.document(c["id"]).get() for c in candidates}
+
+    used_by_opp = {}
+    for c in candidates:
+        snap = snapshots[c["id"]]
+        is_used = snap.exists and snap.to_dict().get("used", False)
+        used_by_opp.setdefault(c["opportunityName"], []).append(is_used)
+
     created, updated, skipped_used = 0, 0, 0
     for c in candidates:
+        snap = snapshots[c["id"]]
+        already_used = snap.exists and snap.to_dict().get("used", False)
+        c["relatedToRegisteredDeal"] = (not already_used) and any(used_by_opp.get(c["opportunityName"], []))
+
         doc_ref = ref.document(c["id"])
-        snap = doc_ref.get()
         if not snap.exists:
             doc_ref.set(c)
             created += 1
             continue
-        if snap.to_dict().get("used"):
+        if already_used:
             skipped_used += 1
             continue
         doc_ref.set(c)
@@ -197,8 +213,14 @@ def upload_candidates(candidates, db):
 
 
 def sync_price_updates(candidates, db):
-    """이미 sales로 넘어간 건(같은 id의 sales 문서가 존재)의 Salesforce 금액이 바뀌었으면
-    priceKRW/priceUSD만 갱신한다. status/계약일/납품예정일/Dealer 등 수기 입력 필드는 그대로 둔다."""
+    """이미 sales로 넘어간 건(같은 id의 sales 문서가 존재)에 대해:
+    - Salesforce 금액이 바뀌었으면 priceKRW/priceUSD를 자동 갱신
+    - Salesforce가 제안하는 분기가 현재 등록된 분기와 달라졌으면, 분기를 직접 바꾸지는 않고
+      _sfQuarterMismatch 필드에 새 제안 분기를 남겨 대시보드에서 확인 후 사람이 판단하게 함
+      (다시 일치하면 _sfQuarterMismatch 제거)
+    status/계약일/납품예정일/Dealer 등 수기 입력 필드는 그대로 둔다."""
+    from firebase_admin import firestore
+
     sales_ref = db.collection("sales")
     updated = 0
     now_iso = datetime.utcnow().isoformat()
@@ -208,13 +230,21 @@ def sync_price_updates(candidates, db):
         if not snap.exists:
             continue
         existing = snap.to_dict()
-        if existing.get("priceKRW") == c["priceKRW"]:
-            continue
-        doc_ref.update({
-            "priceKRW": c["priceKRW"],
-            "priceUSD": c["priceUSD"],
-            "_sfPriceUpdatedAt": now_iso,
-            "_sfPriceUpdatedFrom": existing.get("priceKRW"),
-        })
-        updated += 1
+        patch = {}
+
+        if existing.get("priceKRW") != c["priceKRW"]:
+            patch["priceKRW"] = c["priceKRW"]
+            patch["priceUSD"] = c["priceUSD"]
+            patch["_sfPriceUpdatedAt"] = now_iso
+            patch["_sfPriceUpdatedFrom"] = existing.get("priceKRW")
+
+        if existing.get("quarter") != c["suggestedQuarter"]:
+            if existing.get("_sfQuarterMismatch") != c["suggestedQuarter"]:
+                patch["_sfQuarterMismatch"] = c["suggestedQuarter"]
+        elif existing.get("_sfQuarterMismatch"):
+            patch["_sfQuarterMismatch"] = firestore.DELETE_FIELD
+
+        if patch:
+            doc_ref.update(patch)
+            updated += 1
     return updated
