@@ -508,15 +508,22 @@ function render(salesData,memberTargets,qTargets){
   const pE=Object.entries(pSum).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   mkChart('prodChart',{type:'doughnut',data:{labels:pE.map(([k])=>k),datasets:[{data:pE.map(([,v])=>totalKRW?parseFloat((v/totalKRW*100).toFixed(1)):0),backgroundColor:COLORS,borderColor:'#fff',borderWidth:3,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8a8fa8',usePointStyle:true,pointStyle:'circle',padding:10}},tooltip:{...TT,callbacks:{label:c=>` ${c.label}: ${c.raw}%`}}}}});
 
-  // ④ 담당자 달성률 리스트 (최고 실적자 상대값이 아니라 개인 목표 100% 기준으로 바 길이 계산)
+  // ④ 담당자 달성률 리스트 (0~100% 구간은 파랑, 100% 초과분은 초록으로 색을 나누고
+  // 초과분 길이는 그룹 내 최대 초과폭 기준으로 스케일링해서 사람마다 초과폭 차이가 실제로 보이게 함
   const maxMV=sortedM[0]?.[1]||1;
   const memberPcts=sortedM.map(([name,val])=>{const tgt=getMemberTarget(name);return tgt?(val/tgt*100):null;});
   const validPcts=memberPcts.filter(p=>p!==null);
-  const scaleMax=validPcts.length?Math.max(150,...validPcts.map(p=>p*1.05)):150;
-  const mark100=(100/scaleMax*100).toFixed(1);
+  const maxExcess=Math.max(0,...validPcts.map(p=>Math.max(p-100,0)));
+  const excessScaleMax=Math.max(50,maxExcess*1.05);
+  const BASE_FRAC=40; // 바 너비 중 0~100% 구간이 차지하는 비율(%), 나머지가 초과분 구간
   document.getElementById('memberList').innerHTML=sortedM.map(([name,val],i)=>{
     const col=MC[i%MC.length],tgt=getMemberTarget(name),pct=memberPcts[i];
-    const bw=pct!==null?(Math.min(pct,scaleMax)/scaleMax*100):(val/maxMV*100);
+    let baseW,excessW,baseColor;
+    if(pct!==null){
+      baseW=Math.min(pct,100)/100*BASE_FRAC;
+      excessW=Math.max(pct-100,0)/excessScaleMax*(100-BASE_FRAC);
+      baseColor=pct>=100?'#3b82f6':'#94a3b8';
+    } else { baseW=(val/maxMV*100); excessW=0; baseColor=col; }
     return `<div class="srow">
       <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
       <div class="sinfo">
@@ -524,9 +531,9 @@ function render(salesData,memberTargets,qTargets){
           <span class="sname">${name}</span>
           ${sldBadge(pct)}
         </div>
-        <div class="sbw" style="position:relative">
-          <div class="sbf" style="width:${bw.toFixed(0)}%;background:${pct!==null?zoneColor(pct):col}"></div>
-          ${pct!==null?`<div style="position:absolute;top:-1px;left:${mark100}%;width:1px;height:7px;background:#94a3b8" title="100%"></div>`:''}
+        <div class="sbw" style="display:flex">
+          <div class="sbf" style="width:${baseW.toFixed(1)}%;background:${baseColor};border-radius:0"></div>
+          ${excessW>0?`<div class="sbf" style="width:${excessW.toFixed(1)}%;background:#059669;border-radius:0"></div>`:''}
         </div>
         ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:600;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
       </div>
