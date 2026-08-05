@@ -2267,15 +2267,28 @@ img,video{max-width:100%;height:auto}
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}
                             </div>
-                            <div style={{fontSize:'12px'}}>
+                            <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st);
                                 if (stRows.length===0) return null;
                                 const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                                 return (
-                                  <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
-                                    <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
-                                    <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                  <div key={st} style={{marginBottom:'6px'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
+                                      <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
+                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                    </div>
+                                    <table style={{width:'100%'}}>
+                                      <tbody>
+                                        {stRows.map(r => (
+                                          <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                            <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                            <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                            <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 );
                               })}
@@ -2313,15 +2326,29 @@ img,video{max-width:100%;height:auto}
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                               </div>
-                              <div style={{fontSize:'12px'}}>
+                              <div style={{fontSize:'11px'}}>
                                 {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                   const stRows = dRows.filter(d=>d.status===st);
                                   if (stRows.length===0) return null;
                                   const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                                   return (
-                                    <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
-                                      <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
-                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                    <div key={st} style={{marginBottom:'6px'}}>
+                                      <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
+                                        <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
+                                        <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                      </div>
+                                      <table style={{width:'100%'}}>
+                                        <tbody>
+                                          {stRows.map(r => (
+                                            <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
+                                              <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                              <td style={{padding:'2px 4px'}}>{r.member}</td>
+                                              <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                              <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
                                     </div>
                                   );
                                 })}
@@ -2370,15 +2397,28 @@ img,video{max-width:100%;height:auto}
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                               </div>
-                              <div style={{fontSize:'12px'}}>
+                              <div style={{fontSize:'11px'}}>
                                 {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                   const stRows = rows.filter(d=>d.status===st);
                                   if (stRows.length===0) return null;
                                   const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                                   return (
-                                    <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
-                                      <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
-                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                    <div key={st} style={{marginBottom:'6px'}}>
+                                      <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
+                                        <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
+                                        <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                      </div>
+                                      <table style={{width:'100%'}}>
+                                        <tbody>
+                                          {stRows.map(r => (
+                                            <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                              <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                              <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                              <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
                                     </div>
                                   );
                                 })}
