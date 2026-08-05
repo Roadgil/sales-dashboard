@@ -428,6 +428,8 @@ img,video{max-width:100%;height:auto}
     function isRevenue(d) { return REVENUE_STATUSES.includes(d.status); }
     function isACT(d)     { return d.status === 'ACT'; }
     function isShipConfirm(d) { return d.status === 'Ship Confirm'; }
+    // 개인별/통합데이터 카드용 상태별 묶음 순서·라벨 - Back up은 여기 포함 안 시켜서 카드에서 항상 제외됨
+    const STATUS_BREAKDOWN_ORDER = [['Ship Confirm','Ship Confirm'], ['ACT','ACT (납품완료)'], ['Pending','Pending (납품예정)']];
   </script>
 </head>
 <body className="bg-gray-100">
@@ -2239,14 +2241,23 @@ img,video{max-width:100%;height:auto}
                   </div>
                 </div>
 
-                {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => (
+                {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => {
+                  const teamMembers = teams[team]||[];
+                  const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member) && d.status!=='Back up');
+                  const teamSumKRW = teamRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                  return (
                   <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-3">{team}</h3>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', flexWrap:'wrap', gap:'8px'}}>
+                      <h3 className="text-lg font-bold text-gray-800">{team}</h3>
+                      <div style={{fontWeight:'bold', padding:'6px 12px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                        합계: ₩{teamSumKRW.toLocaleString()}
+                      </div>
+                    </div>
                     <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
                       {(teams[team]||[]).length === 0 ? (
                         <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
                       ) : (teams[team]||[]).map(member => {
-                        const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
+                        const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member && d.status!=='Back up');
                         const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
                         return (
                           <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
@@ -2256,31 +2267,32 @@ img,video{max-width:100%;height:auto}
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}
                             </div>
-                            <table style={{width:'100%', fontSize:'11px'}}>
-                              <tbody>
-                                {rows.map(r => (
-                                  <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                                    <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                    <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                    <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                  </tr>
-                                ))}
-                                {rows.length === 0 && (
-                                  <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
-                                )}
-                              </tbody>
-                            </table>
+                            <div style={{fontSize:'12px'}}>
+                              {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
+                                const stRows = rows.filter(d=>d.status===st);
+                                if (stRows.length===0) return null;
+                                const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                                return (
+                                  <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
+                                    <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
+                                    <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                  </div>
+                                );
+                              })}
+                              {rows.length === 0 && (
+                                <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {allTeamsViewMode === 'dealer' && (() => {
-                  const memberToTeam = {};
-                  Object.entries(teams).forEach(([team, members]) => (members||[]).forEach(m => { memberToTeam[m] = team; }));
-                  const rows = salesData.filter(d => d.quarter===selectedQuarter);
+                  const rows = salesData.filter(d => d.quarter===selectedQuarter && d.status!=='Back up');
                   const DEALER_ORDER = ['병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
                   const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
                     const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
@@ -2301,18 +2313,22 @@ img,video{max-width:100%;height:auto}
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                               </div>
-                              <table style={{width:'100%', fontSize:'11px'}}>
-                                <tbody>
-                                  {dRows.map(r => (
-                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(memberToTeam[r.member] || selectedTeam); setSelectedMember(r.member); }}>
-                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                      <td style={{padding:'2px 4px'}}>{r.member}</td>
-                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                              <div style={{fontSize:'12px'}}>
+                                {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
+                                  const stRows = dRows.filter(d=>d.status===st);
+                                  if (stRows.length===0) return null;
+                                  const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                                  return (
+                                    <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
+                                      <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
+                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                    </div>
+                                  );
+                                })}
+                                {dRows.length === 0 && (
+                                  <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -2346,7 +2362,7 @@ img,video{max-width:100%;height:auto}
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
                       <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
                         {quartersList.map(q => {
-                          const rows = salesData.filter(d => d.quarter===q && d.member===memberPickerValue);
+                          const rows = salesData.filter(d => d.quarter===q && d.member===memberPickerValue && d.status!=='Back up');
                           const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
                           return (
                             <div key={q} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
@@ -2354,20 +2370,22 @@ img,video{max-width:100%;height:auto}
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                               </div>
-                              <table style={{width:'100%', fontSize:'11px'}}>
-                                <tbody>
-                                  {rows.map(r => (
-                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                    </tr>
-                                  ))}
-                                  {rows.length === 0 && (
-                                    <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
-                                  )}
-                                </tbody>
-                              </table>
+                              <div style={{fontSize:'12px'}}>
+                                {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
+                                  const stRows = rows.filter(d=>d.status===st);
+                                  if (stRows.length===0) return null;
+                                  const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                                  return (
+                                    <div key={st} style={{display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #f1f5f9'}}>
+                                      <span style={{color:'#475569'}}>{label} <span style={{color:'#94a3b8'}}>({stRows.length}건)</span></span>
+                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                    </div>
+                                  );
+                                })}
+                                {rows.length === 0 && (
+                                  <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
+                                )}
+                              </div>
                               <button onClick={() => { setSelectedTeam(memberTeam || selectedTeam); setSelectedQuarter(q); setSelectedMember(memberPickerValue); }}
                                 style={{marginTop:'8px', width:'100%', fontSize:'11px', fontWeight:'bold', padding:'4px 0', borderRadius:'6px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', cursor:'pointer'}}>
                                 상세보기 →
