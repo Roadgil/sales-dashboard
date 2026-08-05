@@ -1369,7 +1369,13 @@ img,video{max-width:100%;height:auto}
         if (!fromId || fromId===toId) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
         const key = `${selectedQuarter}__${selectedMember}__${status}`;
         const rawOrder = rowOrders[status]?.[key];
-        const currentOrder = (Array.isArray(rawOrder) ? rawOrder : null) || rawRows.map(r => String(r.id));
+        // 저장된 순서를 현재 행 목록과 맞춰준다. 순서를 저장한 뒤에 새로 추가된 행은
+        // 저장값에 없어서 화면 맨 아래에 붙는데, 예전에는 그 행들의 indexOf가 -1이라
+        // 드래그가 조용히 무시됐다(맨 아래 행만 순서가 안 바뀌던 원인).
+        // 삭제된 행의 id도 여기서 같이 걸러진다.
+        const ids   = rawRows.map(r => String(r.id));
+        const saved = (Array.isArray(rawOrder) ? rawOrder : []).filter(id => ids.includes(id));
+        const currentOrder = [...saved, ...ids.filter(id => !saved.includes(id))];
         const fi = currentOrder.indexOf(fromId); const ti = currentOrder.indexOf(toId);
         if (fi===-1 || ti===-1) { setRowDragState({ type:null, fromId:null, overId:null }); return; }
         const next = [...currentOrder]; next.splice(fi, 1); next.splice(ti, 0, fromId);
