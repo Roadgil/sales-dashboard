@@ -1342,7 +1342,7 @@ img,video{max-width:100%;height:auto}
         );
       };
 
-      const [rowOrders, setRowOrders]   = useState({ ACT:{}, Pending:{}, Backup:{}, Minal:{} });
+      const [rowOrders, setRowOrders]   = useState({ ShipConfirm:{}, ACT:{}, Pending:{}, Backup:{}, Minal:{} });
       const [rowDragState, setRowDragState] = useState({ type:null, fromId:null, overId:null });
 
       useEffect(() => {
@@ -1453,9 +1453,11 @@ img,video{max-width:100%;height:auto}
       });
 
       const allMembers = Object.values(teams).flat();
-      const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0 });
-      // 달성률 집계: Ship Confirm 기준
+      const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0, actCount:0, actKRW:0 });
+      // 달성률 집계: sumKRW = Ship Confirm 기준(기존), actKRW = ACT 기준.
+      // 합계 달성률(SC+ACT vs Target)은 두 값을 더해서 계산한다.
       scData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].count += 1; memberStats[mem].sumKRW += (cur.priceKRW||0); }});
+      actData.forEach(cur => { const mem = cur.member; if (memberStats[mem]) { memberStats[mem].actCount += 1; memberStats[mem].actKRW += (cur.priceKRW||0); }});
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
       const renderProgressBar = (scAmt, actAmt, tgtKRW, er) => {
@@ -1543,23 +1545,49 @@ img,video{max-width:100%;height:auto}
         );
       };
 
-      const renderMemberChart = (dataObj, targetsObj, colorClass) => {
-        const dataArr = Object.entries(dataObj).sort((a,b) => b[1].sumKRW - a[1].sumKRW);
+      // 담당자별 달성률: SC(파랑) 위에 ACT(초록)를 쌓아 "SC 달성률"과 "SC+ACT 합계 달성률"을
+      // 한 막대에서 같이 읽게 한다. 스케일은 개인 목표(100%) 기준이고, 합계가 목표를 넘으면
+      // 초과분이 보이도록 스케일을 자동으로 늘리고 100% 지점에 점선을 세운다.
+      const renderMemberChart = (dataObj, targetsObj) => {
+        const grand   = (s) => (s.sumKRW || 0) + (s.actKRW || 0);
+        const dataArr = Object.entries(dataObj).sort((a,b) => grand(b[1]) - grand(a[1]));
         return (
           <div className="space-y-5">
             {dataArr.map(([key, stat]) => {
-              const target = targetsObj[key] || 0;
-              const per    = target === 0 ? 0 : (stat.sumKRW / target) * 100;
+              const target   = targetsObj[key] || 0;
+              const scKRW    = stat.sumKRW || 0;
+              const mActKRW  = stat.actKRW || 0;
+              const totalKRW = scKRW + mActKRW;
+              const scPer    = target === 0 ? 0 : (scKRW / target) * 100;
+              const mActPer  = target === 0 ? 0 : (mActKRW / target) * 100;
+              const totalPer = scPer + mActPer;
+              const scaleMax = target > 0 ? Math.max(target, totalKRW) : 0;
+              const scW      = scaleMax > 0 ? (scKRW / scaleMax) * 100 : 0;
+              const actW     = scaleMax > 0 ? (mActKRW / scaleMax) * 100 : 0;
+              const targetW  = scaleMax > 0 ? (target / scaleMax) * 100 : 0;
+              // 헤더/팀 막대와 같은 3단계 상승형 색 체계
+              const totalColor = totalPer >= 120 ? '#047857' : totalPer >= 100 ? '#1d4ed8' : '#475569';
               return (
                 <div key={key} className="flex flex-col">
                   <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
-                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">({stat.count}{T.cases})</span></span>
+                    <span className="font-bold text-gray-800">{key} <span className="text-gray-400 font-normal ml-1">(SC {stat.count}{T.cases} · ACT {stat.actCount||0}{T.cases})</span></span>
                     <div className="text-right flex flex-col">
-                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()} {target > 0 && <span className={`${per >= 100 ? 'text-green-600' : 'text-emerald-600'} text-[10px] md:text-[12px] ml-1`}>({per.toFixed(1)}%)</span>}</span>
+                      <span className="font-mono font-bold text-gray-800 text-[13px] md:text-[15px]">₩ {totalKRW.toLocaleString()} {target > 0 && <span className="text-[10px] md:text-[12px] ml-1 font-extrabold" style={{color:totalColor}}>({totalPer.toFixed(1)}%)</span>}</span>
                       {target > 0 && <span className="font-mono text-gray-400 text-[9px] md:text-[10px]">Target: ₩ {target.toLocaleString()}</span>}
                     </div>
                   </div>
-                  <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${colorClass} h-full rounded-full transition-all duration-1000`} style={{ width:`${per > 100 ? 100 : per}%` }}></div></div>
+                  <div className="relative w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex">
+                    <div className="h-full transition-all duration-1000" style={{ width:`${scW}%`, background:'#3b82f6' }}></div>
+                    <div className="h-full transition-all duration-1000" style={{ width:`${actW}%`, background:'#10b981' }}></div>
+                    {target > 0 && totalKRW > target && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${targetW}%`, borderColor:'#94a3b8' }}></div>}
+                  </div>
+                  {target > 0 && (
+                    <div className="flex items-center gap-3 mt-1 text-[10px] md:text-[11px] font-semibold">
+                      <span className="flex items-center gap-1" style={{color:'#1d4ed8'}}><span style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'2px',background:'#3b82f6'}}></span>SC {scPer.toFixed(1)}%</span>
+                      <span className="flex items-center gap-1" style={{color:'#047857'}}><span style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'2px',background:'#10b981'}}></span>ACT {mActPer.toFixed(1)}%</span>
+                      <span className="ml-auto font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계':'Total'} {totalPer.toFixed(1)}%</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1638,29 +1666,47 @@ img,video{max-width:100%;height:auto}
                   <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">{T.noMembers}</div>
                 ) : (
                   teams[selectedTeam].map(member => {
-                    const mActKRW = memberStats[member]?.sumKRW || 0;
+                    const mScKRW    = memberStats[member]?.sumKRW || 0;   // Ship Confirm 누적
+                    const mActKRW   = memberStats[member]?.actKRW || 0;   // ACT 누적
+                    const mTotalKRW = mScKRW + mActKRW;
                     const mTarget = currentMemberTargets[member] || 0;
-                    const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
+                    const mPer      = mTarget > 0 ? (mScKRW/mTarget)*100 : 0;   // SC 대비 타겟 달성률
+                    const mActPer   = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
+                    const mTotalPer = mPer + mActPer;                           // SC+ACT 합계 달성률
                     // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
-                    const mZone      = mPer>=120?3:mPer>=100?2:1;
-                    const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
+                    const mZone      = mTotalPer>=120?3:mTotalPer>=100?2:1;
                     const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
+                    // 막대는 목표(100%)까지를 폭 100%로 두고 SC → ACT 순으로 쌓는다(초과분은 잘림)
+                    const mScW  = Math.min(mPer, 100);
+                    const mActW = Math.max(Math.min(mTotalPer, 100) - mScW, 0);
                     const mCount  = memberStats[member]?.count || 0;
+                    const mActCount = memberStats[member]?.actCount || 0;
                     return (
                       <div key={member} onClick={() => setSelectedMember(member)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group relative">
                         <div className="flex justify-between items-start mb-2">
-                          <div><div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div><div className="text-[10px] text-gray-400 mt-0.5">{mCount}{T.cases} · {T.memberSubtitle}</div></div>
+                          <div><div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div><div className="text-[10px] text-gray-400 mt-0.5">SC {mCount}{T.cases} · ACT {mActCount}{T.cases}</div></div>
                           <div className="flex gap-1" onClick={e=>e.stopPropagation()}>
                             <button onClick={e=>editMemberName(member,e)} className="text-[10px] text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-1.5 py-1 rounded border transition">{T.rename}</button>
                             <button onClick={e=>deleteMember(member,e)} className="text-[10px] text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-1 rounded border border-red-200 transition">{T.delete}</button>
                           </div>
                         </div>
                         <div className="flex justify-between items-end mb-1.5">
-                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
-                          <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
+                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mTotalKRW.toLocaleString()}</span>
+                          <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mTotalPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
-                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
-                        {mTarget>0 && <div className="text-[9px] text-gray-400 mt-0.5 text-right font-mono">Target ₩ {mTarget.toLocaleString()}</div>}
+                        {mTarget>0 && (
+                          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner flex">
+                            <div className="h-full transition-all duration-700" style={{width:`${mScW}%`,background:'#3b82f6'}}/>
+                            <div className="h-full transition-all duration-700" style={{width:`${mActW}%`,background:'#10b981'}}/>
+                          </div>
+                        )}
+                        {mTarget>0 && (
+                          <div className="flex items-center gap-2 mt-1 text-[9px] font-bold">
+                            <span style={{color:'#1d4ed8'}}>SC {mPer.toFixed(1)}%</span>
+                            <span style={{color:'#047857'}}>ACT {mActPer.toFixed(1)}%</span>
+                            <span className="ml-auto text-gray-400 font-mono font-normal">Target ₩ {mTarget.toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -2269,6 +2315,38 @@ img,video{max-width:100%;height:auto}
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}
                             </div>
+                            {(() => {
+                              // 담당자별 타겟 달성률: SC 단독 / SC+ACT 합계 두 가지를 개인 목표 대비로 보여준다.
+                              // (Pending·Back up은 달성으로 안 잡음 - 위 "합계"와 기준이 다르다)
+                              const scKRW    = rows.filter(d=>d.status==='Ship Confirm').reduce((s,d)=>s+(d.priceKRW||0),0);
+                              const mActKRW  = rows.filter(d=>d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
+                              const mTarget  = currentMemberTargets[member] || 0;
+                              if (mTarget <= 0) return <div style={{marginBottom:'10px', fontSize:'10px', color:'#94a3b8', textAlign:'right'}}>개인 목표 미설정</div>;
+                              const scPer    = (scKRW/mTarget)*100;
+                              const mActPer  = (mActKRW/mTarget)*100;
+                              const totalPer = scPer + mActPer;
+                              const scW      = Math.min(scPer, 100);
+                              const actW     = Math.max(Math.min(totalPer, 100) - scW, 0);
+                              // 헤더/팀 막대와 같은 3단계 상승형 색 체계
+                              const totalColor = totalPer>=120?'#047857':totalPer>=100?'#1d4ed8':'#475569';
+                              return (
+                                <div style={{marginBottom:'10px', padding:'8px', border:'1px solid #e5e7eb', borderRadius:'6px', background:'#f8fafc'}}>
+                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'6px', marginBottom:'5px'}}>
+                                    <span style={{fontSize:'10px', fontWeight:'bold', color:'#475569'}}>SC+ACT 달성률</span>
+                                    <span style={{fontSize:'15px', fontWeight:'800', color:totalColor}}>{totalPer.toFixed(1)}%</span>
+                                  </div>
+                                  <div style={{display:'flex', height:'8px', borderRadius:'999px', overflow:'hidden', background:'#e2e8f0'}}>
+                                    <div style={{width:`${scW}%`, background:'#3b82f6', transition:'width 0.7s'}}></div>
+                                    <div style={{width:`${actW}%`, background:'#10b981', transition:'width 0.7s'}}></div>
+                                  </div>
+                                  <div style={{display:'flex', flexWrap:'wrap', gap:'4px 10px', marginTop:'5px', fontSize:'10px', fontWeight:'bold'}}>
+                                    <span style={{color:'#1d4ed8'}}>SC {scPer.toFixed(1)}% <span style={{color:'#94a3b8', fontWeight:'normal'}}>₩{scKRW.toLocaleString()}</span></span>
+                                    <span style={{color:'#047857'}}>ACT {mActPer.toFixed(1)}% <span style={{color:'#94a3b8', fontWeight:'normal'}}>₩{mActKRW.toLocaleString()}</span></span>
+                                  </div>
+                                  <div style={{marginTop:'4px', fontSize:'10px', color:'#64748b'}}>Target ₩{mTarget.toLocaleString()} · SC+ACT ₩{(scKRW+mActKRW).toLocaleString()}</div>
+                                </div>
+                              );
+                            })()}
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st);
@@ -2598,7 +2676,7 @@ img,video{max-width:100%;height:auto}
                   <div className="p-4 md:p-8">
                     {activeStatTab==='product' && renderBarChart(productStats, 'bg-blue-500')}
                     {activeStatTab==='dealer'  && renderBarChart(dealerStats,  'bg-purple-500')}
-                    {activeStatTab==='member'  && renderMemberChart(memberStats, currentMemberTargets, 'bg-emerald-500')}
+                    {activeStatTab==='member'  && renderMemberChart(memberStats, currentMemberTargets)}
                   </div>
                 </div>
 
@@ -2788,7 +2866,7 @@ img,video{max-width:100%;height:auto}
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                             <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ShipConfirm')}/></thead>
                             <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : filteredRows.map(r=>renderTableRow(r,'ACT','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
+                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : getOrderedRows('ShipConfirm',filteredRows).map(r=>renderTableRow(r,'ShipConfirm','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
                             </tbody>
                           </table>
                         </div>
