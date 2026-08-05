@@ -2227,10 +2227,12 @@ img,video{max-width:100%;height:auto}
                   </div>
                 </div>
               </div>
-            ) : showAllTeamsCombined && !selectedMember ? (
+            ) : showAllTeamsCombined && !selectedMember ? (() => {
+              const combinedGrandTotalKRW = salesData.filter(d => d.quarter===selectedQuarter && d.status!=='Back up').reduce((s,d)=>s+(d.priceKRW||0),0);
+              return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터</h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span></h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2364,7 +2366,8 @@ img,video{max-width:100%;height:auto}
                   );
                 })()}
               </div>
-            ) : showMemberPicker && !selectedMember ? (
+              );
+            })() : showMemberPicker && !selectedMember ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'flex-start', marginBottom:'16px', flexWrap:'wrap', gap:'12px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">개인별 {memberPickerValue && <span className="text-lg text-gray-500 font-medium">({memberPickerValue})</span>}</h1>
