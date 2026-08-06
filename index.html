@@ -1551,6 +1551,7 @@ img,video{max-width:100%;height:auto}
               <span className="text-[11px] font-bold text-gray-500">목표 ₩{tgtKRW.toLocaleString()}</span>
               <span className="text-[11px] font-extrabold" style={{color:totalColor}}>현재 ₩{totalAmt.toLocaleString()} ({totalPer.toFixed(1)}%)</span>
             </div>
+            {tgtKRW<scale && <div className="relative w-full" style={{height:'14px'}}><span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${tgtKRW/scale*100}%`, color:'#1e293b'}}>Target</span></div>}
             <div className="relative w-full rounded-full overflow-hidden bg-gray-100" style={{height:'18px', display:'flex'}}>
               <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${scW}%`, background:'#3b82f6', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{scW>12 && `${scPer.toFixed(1)}%`}</div>
               <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${actW}%`, background:'#10b981', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{actW>12 && `${actPer.toFixed(1)}%`}</div>
@@ -1768,7 +1769,7 @@ img,video{max-width:100%;height:auto}
                       <span className="text-sm font-bold text-gray-600">목표 ₩ {teamTargetKRW.toLocaleString()}</span>
                       <span className="text-sm font-bold text-gray-600">현재 ₩ {teamActKRW.toLocaleString()} <span className="text-blue-600">({teamPct.toFixed(1)}%)</span></span>
                     </div>
-                    {teamTargetKRW>0 ? renderProgressBar(scAmt, actAmt, teamTargetKRW) : <div className="text-xs text-gray-400 mt-2">목표 미설정</div>}
+                    {teamTargetKRW>0 ? renderSimpleProgressBar(scAmt, actAmt, teamTargetKRW) : <div className="text-xs text-gray-400 mt-2">목표 미설정</div>}
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
                     <h4 className="text-sm font-bold text-gray-600 mb-3">장비별 대수 <span className="text-xs text-gray-400 font-semibold">(SC+ACT 기준)</span></h4>
@@ -2425,6 +2426,9 @@ img,video{max-width:100%;height:auto}
                     const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
                     const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
                     const mCount  = memberStats[member]?.count || 0;
+                    const mScale = Math.max(mTarget, mTotalKRW, 1);
+                    const mScW = scAmt/mScale*100;
+                    const mActW = actAmt/mScale*100;
                     return (
                       <div key={member} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group">
                         <div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div>
@@ -2433,7 +2437,11 @@ img,video{max-width:100%;height:auto}
                           <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mTotalKRW.toLocaleString()}</span>
                           <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
-                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
+                        {mTarget>0 && <div className="relative w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2" style={{display:'flex'}}>
+                          <div className="h-full transition-all duration-700" style={{width:`${mScW}%`,background:'#3b82f6'}}/>
+                          <div className="h-full transition-all duration-700" style={{width:`${mActW}%`,background:'#10b981'}}/>
+                          <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${Math.min(mTarget/mScale*100,100)}%`, borderColor:'#1e293b'}}></div>
+                        </div>}
                         <div className="flex gap-2 mb-1">
                           <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
                           <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
