@@ -699,7 +699,7 @@ img,video{max-width:100%;height:auto}
         rename:            lang==='ko' ? '✏️ 이름 수정'                : '✏️ Rename',
         delete:            lang==='ko' ? '🗑️ 삭제'                    : '🗑️ Delete',
         backBtn:           lang==='ko' ? '뒤로가기 (팀 목록)'           : 'Back (Team List)',
-        cumulative:        lang==='ko' ? '🎯 누적 달성 현황 (Ship Confirm 기준)' : '🎯 Cumulative Achievement (Ship Confirm)',
+        cumulative:        lang==='ko' ? '🎯 누적 달성 현황 (SC+ACT 기준)' : '🎯 Cumulative Achievement (SC+ACT)',
         target100label:    lang==='ko' ? '100% Target (KRW) ✏️ 직접기입' : '100% Target (KRW) ✏️ Manual',
         targetPlaceholder2:lang==='ko'? '목표금액'                     : 'Target Amount',
         editMode:          lang==='ko' ? '✨ 데이터 수정 모드 진행 중...' : '✨ Edit mode in progress...',
@@ -1554,6 +1554,7 @@ img,video{max-width:100%;height:auto}
             <div className="relative w-full rounded-full overflow-hidden bg-gray-100" style={{height:'18px', display:'flex'}}>
               <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${scW}%`, background:'#3b82f6', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{scW>12 && `${scPer.toFixed(1)}%`}</div>
               <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${actW}%`, background:'#10b981', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{actW>12 && `${actPer.toFixed(1)}%`}</div>
+              {tgtKRW<scale && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${tgtKRW/scale*100}%`, borderColor:'#1e293b'}} title={`목표 ₩${tgtKRW.toLocaleString()}`}></div>}
             </div>
           </div>
         );
@@ -1647,7 +1648,7 @@ img,video{max-width:100%;height:auto}
             {/* 팀 달성률 + 멤버 카드 */}
             <div className="w-full">
               {(() => {
-                const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
+                const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0) + (memberStats[m]?.actKRW||0), 0);
                 const teamTarget = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
                 const teamPer    = teamTarget > 0 ? (teamActKRW / teamTarget) * 100 : 0;
                 // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
@@ -1671,7 +1672,7 @@ img,video{max-width:100%;height:auto}
                       <input type="number" min="0" value={teamTargets[selectedTeam]?.[selectedQuarter]||''} onChange={e=>handleTeamTargetChange(selectedTeam,selectedQuarter,e.target.value)} placeholder="목표 금액 입력" className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0" style={{borderBottom:'1.5px solid #cbd5e1'}}/>
                     </div>
                     <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
-                      <span>{lang==='ko'?'누적 달성 (Ship Confirm 기준)':'Cumulative (Ship Confirm)'}</span>
+                      <span>{lang==='ko'?'누적 달성 (SC+ACT 기준)':'Cumulative (SC+ACT)'}</span>
                       <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
                     </div>
                     {teamTarget>0 && (
@@ -2415,21 +2416,21 @@ img,video{max-width:100%;height:auto}
                 <h1 className="text-2xl font-extrabold text-gray-800 mb-4">개인별(데이터 입력란) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
                   {roster.map(({team, member}) => {
-                    const mActKRW = memberStats[member]?.sumKRW || 0;
+                    const scAmt = memberStats[member]?.sumKRW || 0;
+                    const actAmt = salesData.filter(d=>d.quarter===selectedQuarter && d.member===member && d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
+                    const mTotalKRW = scAmt + actAmt;
                     const mTarget = currentMemberTargets[member] || 0;
-                    const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
+                    const mPer    = mTarget > 0 ? (mTotalKRW/mTarget)*100 : 0;
                     const mZone      = mPer>=120?3:mPer>=100?2:1;
                     const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
                     const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
                     const mCount  = memberStats[member]?.count || 0;
-                    const scAmt = mActKRW;
-                    const actAmt = salesData.filter(d=>d.quarter===selectedQuarter && d.member===member && d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
                     return (
                       <div key={member} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group">
                         <div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div>
                         <div className="text-[10px] text-gray-400 mt-0.5 mb-2">{team} · {mCount}건</div>
                         <div className="flex justify-between items-end mb-1.5">
-                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
+                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mTotalKRW.toLocaleString()}</span>
                           <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
                         {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
