@@ -428,8 +428,14 @@ img,video{max-width:100%;height:auto}
     function isRevenue(d) { return REVENUE_STATUSES.includes(d.status); }
     function isACT(d)     { return d.status === 'ACT'; }
     function isShipConfirm(d) { return d.status === 'Ship Confirm'; }
-    // 개인별/통합데이터 카드용 상태별 묶음 순서·라벨 - Back up은 여기 포함 안 시켜서 카드에서 항상 제외됨
-    const STATUS_BREAKDOWN_ORDER = [['Ship Confirm','Ship Confirm'], ['ACT','ACT (납품완료)'], ['Pending','Pending (납품예정)']];
+    // 통합데이터 카드용 상태별 묶음 순서·라벨 - Back up도 목록엔 보이지만 카드 상단 합계(SC+ACT+Pending)에는 안 들어감
+    const STATUS_BREAKDOWN_ORDER = [['Ship Confirm','Ship Confirm'], ['ACT','ACT (납품완료)'], ['Pending','Pending (납품예정)'], ['Back up','Back up']];
+    const STATUS_PILL_STYLE = {
+      'Ship Confirm': { bg:'#1e3a8a', text:'#ffffff' },
+      'ACT':          { bg:'#dcfce7', text:'#15803d' },
+      'Pending':      { bg:'#dbeafe', text:'#1d4ed8' },
+      'Back up':      { bg:'#ffedd5', text:'#c2410c' },
+    };
   </script>
 </head>
 <body className="bg-gray-100">
@@ -1290,7 +1296,6 @@ img,video{max-width:100%;height:auto}
       const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
       const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'dealer'
       const [showMemberPicker, setShowMemberPicker] = useState(false);
-      const [memberPickerValue, setMemberPickerValue] = useState('');
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
@@ -1315,12 +1320,6 @@ img,video{max-width:100%;height:auto}
       const handleDragOver  = (e, idx) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverIdx(idx); };
       const handleDrop      = (e, toIdx) => { e.preventDefault(); const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10); if (fromIdx === toIdx) { setDragOverIdx(null); return; } const next = [...cardOrder]; const [moved] = next.splice(fromIdx, 1); next.splice(toIdx, 0, moved); setCardOrder(next); safeLS.set('summaryCardOrder', JSON.stringify(next)); setDragOverIdx(null); };
       const handleDragEnd   = () => setDragOverIdx(null);
-
-      const [allListFilters, setAllListFilters] = useState({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
-      const [allListFilterOpen, setAllListFilterOpen] = useState(null);
-      const toggleAllListFilter = (col, val) => setAllListFilters(prev => { const cur = prev[col]; return { ...prev, [col]: cur.includes(val) ? cur.filter(v => v!==val) : [...cur, val] }; });
-      const clearAllListFilter  = (col) => setAllListFilters(prev => ({ ...prev, [col]: [] }));
-      const clearAllListFilters = () => setAllListFilters({ team:[], member:[], status:[], account:[], product:[], dealer:[] });
 
       // ── 멤버 상세 테이블(Ship Confirm/ACT/Pending/Backup) 열 필터 (Excel 자동 필터 방식) ──
       const [memberTableFilters, setMemberTableFilters] = useState({});
@@ -1732,103 +1731,39 @@ img,video{max-width:100%;height:auto}
               </div>
             </div>
 
-            {/* All List */}
+            {/* 팀 대시보드: 목표 대비 현재 + 장비별 대수 */}
             {(() => {
-              const baseRows = salesData.filter(d => d.quarter===selectedQuarter);
-              const STATUS_ORDER = { 'Ship Confirm':0, 'ACT':1, 'Pending':2, 'Back up':3 };
-              const STATUS_COLOR = { 'Ship Confirm':{ row:'bg-blue-900/10', badge:'bg-blue-900 text-white' }, 'ACT':{ row:'bg-green-50', badge:'bg-green-100 text-green-700' }, 'Pending':{ row:'bg-blue-50', badge:'bg-blue-100 text-blue-700' }, 'Back up':{ row:'bg-orange-50', badge:'bg-orange-100 text-orange-700' } };
-              const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
-              const colVals = { team: uniq(baseRows.map(d=>d.team||'-')), member: uniq(baseRows.map(d=>d.member)), status: ['Ship Confirm','ACT','Pending','Back up'].filter(s=>baseRows.some(d=>d.status===s)), account: uniq(baseRows.map(d=>d.account)), product: uniq(baseRows.map(d=>d.product)), dealer: uniq(baseRows.map(d=>d.dealerName||'-')) };
-              const f = allListFilters;
-              const filteredRows = [...baseRows].filter(d => (f.team.length===0||f.team.includes(d.team||'-'))&&(f.member.length===0||f.member.includes(d.member))&&(f.status.length===0||f.status.includes(d.status))&&(f.account.length===0||f.account.includes(d.account))&&(f.product.length===0||f.product.includes(d.product))&&(f.dealer.length===0||f.dealer.includes(d.dealerName||'-'))).sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
-              const hasAnyFilter = Object.values(f).some(v=>v.length>0);
-              const ColHeader = ({ col, label }) => {
-                const isOpen = allListFilterOpen===col;
-                const active = f[col].length > 0;
-                const vals   = colVals[col] || [];
-                return (
-                  <th className="px-3 py-0 font-bold relative" style={{userSelect:'none'}}>
-                    <div className="flex items-center gap-1 py-2">
-                      <span>{label}</span>
-                      <button onClick={e=>{e.stopPropagation();setAllListFilterOpen(isOpen?null:col);}} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,background:active?'#fbbf24':'rgba(255,255,255,0.15)',border:active?'1.5px solid #f59e0b':'1.5px solid rgba(255,255,255,0.3)',cursor:'pointer',fontSize:'8px',color:active?'#1e293b':'white',fontWeight:'900',lineHeight:1}} title={active?`${f[col].length}개 필터 적용됨`:'필터'}>{active?'✓':'▼'}</button>
-                    </div>
-                    {isOpen && (
-                      <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'100%',left:0,zIndex:200,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',minWidth:'160px',maxHeight:'240px',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                        <div style={{padding:'6px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                          <span style={{fontSize:'10px',fontWeight:'700',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px'}}>필터</span>
-                          <button onClick={()=>clearAllListFilter(col)} style={{fontSize:'10px',color:'#ef4444',fontWeight:'700',background:'none',border:'none',cursor:'pointer',padding:'0'}}>초기화</button>
-                        </div>
-                        <div style={{overflowY:'auto',flex:1}}>
-                          {vals.map(val=>{
-                            const checked = f[col].includes(val);
-                            const count   = baseRows.filter(d=>{const dv=col==='team'?(d.team||'-'):col==='dealer'?(d.dealerName||'-'):col==='salesType'?d.salesType:d[col];return dv===val;}).length;
-                            return (
-                              <label key={val} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px',cursor:'pointer',fontSize:'11px',color:'#334155',borderBottom:'1px solid #f8fafc'}} className="hover:bg-blue-50">
-                                <input type="checkbox" checked={checked} onChange={()=>toggleAllListFilter(col,val)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#2563eb'}}/>
-                                <span style={{flex:1,fontWeight:checked?'700':'500'}}>{val}</span>
-                                <span style={{fontSize:'10px',color:'#94a3b8',fontWeight:'600'}}>{count}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </th>
-                );
-              };
+              const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
+              const teamTargetKRW = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
+              const teamPct = teamTargetKRW > 0 ? (teamActKRW/teamTargetKRW)*100 : 0;
+              const teamQRows = salesData.filter(d => d.quarter===selectedQuarter && d.team===selectedTeam && d.status!=='Back up');
+              const byProduct = {};
+              teamQRows.forEach(d => { byProduct[d.product] = (byProduct[d.product]||0) + 1; });
+              const products = Object.keys(byProduct).sort();
               return (
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2">📋 {lang==='ko'?'전체 리스트':'All List'}<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
-                    <div className="flex items-center gap-2">
-                      {hasAnyFilter && <button onClick={clearAllListFilters} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
-                      <span className="text-xs text-gray-400 font-semibold bg-gray-100 px-3 py-1 rounded-full">{filteredRows.length}{hasAnyFilter?` / ${baseRows.length}`:''}{lang==='ko'?'건':' items'}</span>
+                  <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2 mb-4">📊 {selectedTeam} 대시보드<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-4">
+                    <div className="flex flex-wrap justify-between items-end gap-2 mb-2">
+                      <span className="text-sm font-bold text-gray-600">목표 ₩ {teamTargetKRW.toLocaleString()}</span>
+                      <span className="text-sm font-bold text-gray-600">현재 ₩ {teamActKRW.toLocaleString()} <span className="text-blue-600">({teamPct.toFixed(1)}%)</span></span>
                     </div>
+                    {teamTargetKRW>0 && <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(teamPct,100)}%`, background: teamPct>=100?'#10b981':'#3b82f6'}}/></div>}
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto hide-scrollbar">
-                      <table className="min-w-full text-xs text-left whitespace-nowrap">
-                        <thead>
-                          <tr className="bg-slate-700 text-white">
-                            <ColHeader col="team"      label="Team"/>
-                            <ColHeader col="member"    label={lang==='ko'?'멤버':'Member'}/>
-                            <ColHeader col="status"    label="Status"/>
-                            <ColHeader col="account"   label="Account"/>
-                            <ColHeader col="product"   label="Product"/>
-                            <ColHeader col="dealer"    label="Dealer"/>
-                            <th className="px-3 py-2 font-bold">SO</th>
-                            <th className="px-3 py-2 font-bold text-right">Price (KRW)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredRows.length===0 ? <tr><td colSpan="8" className="px-3 py-8 text-center text-gray-400">{lang==='ko'?'조건에 맞는 데이터가 없습니다.':'No matching data.'}</td></tr> : (
-                            filteredRows.map((row,i) => {
-                              const sc = STATUS_COLOR[row.status]||{ row:'', badge:'bg-gray-100 text-gray-600' };
-                              return (
-                                <tr key={row.id||i} className={`border-b ${sc.row} hover:brightness-95 transition cursor-pointer`} onClick={()=>{ setSelectedTeam(row.team||selectedTeam); setSelectedMember(row.member); }}>
-                                  <td className="px-3 py-2 font-semibold text-slate-600">{row.team||'-'}</td>
-                                  <td className="px-3 py-2 font-bold text-gray-800">{row.member}</td>
-                                  <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sc.badge}`}>{row.status}</span></td>
-                                  <td className="px-3 py-2 font-semibold text-gray-700 max-w-[140px] truncate" title={row.account}>{row.account}</td>
-                                  <td className="px-3 py-2 text-gray-600">{row.product}</td>
-                                  <td className="px-3 py-2 text-purple-700 font-semibold">{row.dealerName||'-'}</td>
-                                  <td className="px-3 py-2 font-mono text-gray-600">{row.so||'-'}</td>
-                                  <td className="px-3 py-2 text-right font-mono text-gray-700">₩ {(row.priceKRW||0).toLocaleString()}</td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                        {filteredRows.length>0 && (
-                          <tfoot>
-                            <tr className="bg-slate-50 border-t-2 border-slate-200">
-                              <td colSpan="7" className="px-3 py-2 font-bold text-slate-600 text-xs">{lang==='ko'?'합계':'Total'} ({filteredRows.length}{lang==='ko'?'건':' items'})</td>
-                              <td className="px-3 py-2 text-right font-mono font-extrabold text-slate-800">₩ {filteredRows.reduce((s,d)=>s+(d.priceKRW||0),0).toLocaleString()}</td>
-                            </tr>
-                          </tfoot>
-                        )}
-                      </table>
-                    </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+                    <h4 className="text-sm font-bold text-gray-600 mb-3">장비별 대수 <span className="text-xs text-gray-400 font-semibold">(SC+ACT+Pending 기준)</span></h4>
+                    {products.length === 0 ? (
+                      <div className="text-gray-400 text-sm">데이터 없음</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        {products.map(p => (
+                          <div key={p} style={{minWidth:'110px', flex:'1 1 110px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px', textAlign:'center'}}>
+                            <div style={{fontSize:'12px', fontWeight:'bold', color:'#475569', marginBottom:'4px'}}>{p}</div>
+                            <div style={{fontSize:'18px', fontWeight:'bold', color:'#1d4ed8'}}>{byProduct[p]}대</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2157,8 +2092,8 @@ img,video{max-width:100%;height:auto}
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>데이터 입력 (개인별)</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
               </div>
             </div>
@@ -2204,7 +2139,7 @@ img,video{max-width:100%;height:auto}
           </div>
 
           {/* 메인 콘텐츠 */}
-          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (allListFilterOpen) setAllListFilterOpen(null); if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
             {showCandidatesPage ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
@@ -2323,12 +2258,13 @@ img,video{max-width:100%;height:auto}
                       {(teams[team]||[]).length === 0 ? (
                         <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
                       ) : (teams[team]||[]).map(member => {
-                        const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member && d.status!=='Back up');
-                        const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                        const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
+                        const revenueRows = rows.filter(d => d.status!=='Back up');
+                        const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                         return (
                           <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
                             <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
-                              {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({rows.length}건)</span>
+                              {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({revenueRows.length}건)</span>
                             </div>
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}
@@ -2376,11 +2312,12 @@ img,video{max-width:100%;height:auto}
                                 const stRows = rows.filter(d=>d.status===st);
                                 if (stRows.length===0) return null;
                                 const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                                const pill = STATUS_PILL_STYLE[st];
                                 return (
-                                  <div key={st} style={{marginBottom:'6px'}}>
-                                    <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
-                                      <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
-                                      <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
+                                  <div key={st} style={{marginBottom:'8px'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0'}}>
+                                      <span style={{background:pill.bg, color:pill.text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>{label} ({stRows.length}건{st==='Back up'?', 합계 미포함':''})</span>
+                                      <span style={{fontWeight:'800', fontSize:'13px', color: st==='Back up'?'#c2410c':'#1e293b'}}>₩{stSum.toLocaleString()}</span>
                                     </div>
                                     <table style={{width:'100%'}}>
                                       <tbody>
@@ -2409,7 +2346,7 @@ img,video{max-width:100%;height:auto}
                 })}
 
                 {allTeamsViewMode === 'dealer' && (() => {
-                  const rows = salesData.filter(d => d.quarter===selectedQuarter && d.status!=='Back up');
+                  const rows = salesData.filter(d => d.quarter===selectedQuarter);
                   const DEALER_ORDER = ['병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
                   const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
                     const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
@@ -2418,48 +2355,33 @@ img,video{max-width:100%;height:auto}
                   });
                   return (
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                      <div style={{display:'flex', gap:'16px', overflowX:'auto', flexWrap:'wrap'}}>
+                      <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
                         {dealers.length === 0 ? (
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealers.map(dealer => {
-                          const dRows = rows.filter(d => (d.dealerName||'미지정')===dealer);
-                          const sumKRW = dRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && d.status!=='Back up');
+                          const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                           return (
                             <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRows.length}건)</span></div>
+                              <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                               </div>
-                              <div style={{fontSize:'11px'}}>
-                                {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
-                                  const stRows = dRows.filter(d=>d.status===st);
-                                  if (stRows.length===0) return null;
-                                  const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
-                                  return (
-                                    <div key={st} style={{marginBottom:'6px'}}>
-                                      <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
-                                        <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
-                                        <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
-                                      </div>
-                                      <table style={{width:'100%'}}>
-                                        <tbody>
-                                          {stRows.map(r => (
-                                            <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
-                                              <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                              <td style={{padding:'2px 4px'}}>{r.member}</td>
-                                              <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                              <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  );
-                                })}
-                                {dRows.length === 0 && (
-                                  <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
-                                )}
-                              </div>
+                              <table style={{width:'100%', fontSize:'11px'}}>
+                                <tbody>
+                                  {dRevenueRows.map(r => (
+                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
+                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
+                                      <td style={{padding:'2px 4px'}}>{r.member}</td>
+                                      <td style={{padding:'2px 4px'}}>{r.product}</td>
+                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                  {dRevenueRows.length === 0 && (
+                                    <tr><td colSpan="4" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
                             </div>
                           );
                         })}
@@ -2469,81 +2391,72 @@ img,video{max-width:100%;height:auto}
                 })()}
               </div>
               );
-            })() : showMemberPicker && !selectedMember ? (
+            })() : showMemberPicker && !selectedMember ? (() => {
+              const roster = Object.keys(teams).sort().flatMap(team => (teams[team]||[]).map(member => ({ team, member })));
+              const ranked = [...roster].map(({team, member}) => ({ team, member, sumKRW: memberStats[member]?.sumKRW || 0 })).sort((a,b) => b.sumKRW - a.sumKRW);
+              return (
               <div>
-                <div style={{display:'flex', alignItems:'center', justifyContent:'flex-start', marginBottom:'16px', flexWrap:'wrap', gap:'12px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">개인별 {memberPickerValue && <span className="text-lg text-gray-500 font-medium">({memberPickerValue})</span>}</h1>
-                  <select
-                    value={memberPickerValue}
-                    onChange={e => setMemberPickerValue(e.target.value)}
-                    className="p-2 border-2 border-blue-300 rounded-lg font-bold text-sm bg-white">
-                    <option value="">담당자 선택</option>
-                    {Object.keys(teams).sort().map(team => (
-                      <optgroup key={team} label={team}>
-                        {(teams[team]||[]).map(m => <option key={m} value={m}>{m}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-                {!memberPickerValue ? (
-                  <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 text-gray-400 text-sm text-center">위에서 담당자를 선택하면 분기별 실적이 보여요.</div>
-                ) : (() => {
-                  const memberTeam = Object.keys(teams).find(t => (teams[t]||[]).includes(memberPickerValue));
-                  const quartersList = Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`));
-                  return (
-                    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
-                      <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
-                        {quartersList.map(q => {
-                          const rows = salesData.filter(d => d.quarter===q && d.member===memberPickerValue && d.status!=='Back up');
-                          const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
-                          return (
-                            <div key={q} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px'}}>{q} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({rows.length}건)</span></div>
-                              <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
-                                합계: ₩{sumKRW.toLocaleString()}
-                              </div>
-                              <div style={{fontSize:'11px'}}>
-                                {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
-                                  const stRows = rows.filter(d=>d.status===st);
-                                  if (stRows.length===0) return null;
-                                  const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
-                                  return (
-                                    <div key={st} style={{marginBottom:'6px'}}>
-                                      <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:'12px'}}>
-                                        <span style={{color:'#475569', fontWeight:'bold'}}>{label} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({stRows.length}건)</span></span>
-                                        <span style={{fontWeight:'bold'}}>₩{stSum.toLocaleString()}</span>
-                                      </div>
-                                      <table style={{width:'100%'}}>
-                                        <tbody>
-                                          {stRows.map(r => (
-                                            <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                                              <td style={{padding:'2px 4px 2px 0'}} className="truncate">{r.account}</td>
-                                              <td style={{padding:'2px 4px'}}>{r.product}</td>
-                                              <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW||0).toLocaleString()}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  );
-                                })}
-                                {rows.length === 0 && (
-                                  <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
-                                )}
-                              </div>
-                              <button onClick={() => { setSelectedTeam(memberTeam || selectedTeam); setSelectedQuarter(q); setSelectedMember(memberPickerValue); }}
-                                style={{marginTop:'8px', width:'100%', fontSize:'11px', fontWeight:'bold', padding:'4px 0', borderRadius:'6px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', cursor:'pointer'}}>
-                                상세보기 →
-                              </button>
-                            </div>
-                          );
-                        })}
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">데이터 입력 (개인별) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
+                  {roster.map(({team, member}) => {
+                    const mActKRW = memberStats[member]?.sumKRW || 0;
+                    const mTarget = currentMemberTargets[member] || 0;
+                    const mPer    = mTarget > 0 ? (mActKRW/mTarget)*100 : 0;
+                    const mZone      = mPer>=120?3:mPer>=100?2:1;
+                    const mFillColor = mZone===3?'#10b981':mZone===2?'#3b82f6':'#94a3b8';
+                    const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
+                    const mCount  = memberStats[member]?.count || 0;
+                    const scAmt = mActKRW;
+                    const actAmt = salesData.filter(d=>d.quarter===selectedQuarter && d.member===member && d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
+                    const barTotal = (scAmt+actAmt) || 1;
+                    return (
+                      <div key={member} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group">
+                        <div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5 mb-2">{team} · {mCount}건</div>
+                        <div className="flex justify-between items-end mb-1.5">
+                          <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
+                          <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
+                        </div>
+                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
+                        <div className="flex gap-2 mb-1">
+                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
+                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
+                        </div>
+                        <div style={{display:'flex', width:'100%', height:'6px', borderRadius:'3px', overflow:'hidden', background:'#f1f5f9'}}>
+                          <div style={{width:`${scAmt/barTotal*100}%`, background:'#3b82f6'}}></div>
+                          <div style={{width:`${actAmt/barTotal*100}%`, background:'#10b981'}}></div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })}
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+                  <h3 className="text-base font-bold text-gray-700 mb-3">담당자별 매출 순위</h3>
+                  <table className="min-w-full text-sm text-left">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                        <th className="py-2 px-2">순위</th>
+                        <th className="py-2 px-2">담당자</th>
+                        <th className="py-2 px-2">팀</th>
+                        <th className="py-2 px-2 text-right">매출 (KRW)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ranked.map((r, i) => (
+                        <tr key={r.member} onClick={() => { setSelectedTeam(r.team); setSelectedMember(r.member); }} className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer">
+                          <td className="py-2 px-2 font-bold text-gray-500">{i+1}</td>
+                          <td className="py-2 px-2 font-bold text-gray-800">{r.member}</td>
+                          <td className="py-2 px-2 text-gray-500">{r.team}</td>
+                          <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">₩ {r.sumKRW.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            ) : showTeamOnly && !selectedMember ? (
+              );
+            })() : showTeamOnly && !selectedMember ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'flex-start', marginBottom:'16px', flexWrap:'wrap', gap:'12px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">{selectedTeam} <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
@@ -2967,9 +2880,51 @@ img,video{max-width:100%;height:auto}
                     );
                   })()}
 
-
-
                 </div>
+
+                {/* 장비별 대수 (이번 분기) */}
+                {(() => {
+                  const memberQData = salesData.filter(d => d.quarter===selectedQuarter && d.member===selectedMember && d.status!=='Back up');
+                  const byProduct = {};
+                  memberQData.forEach(d => { byProduct[d.product] = (byProduct[d.product]||0) + 1; });
+                  const products = Object.keys(byProduct).sort();
+                  return (
+                    <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100 mb-8">
+                      <h4 className="text-base md:text-lg font-bold text-gray-700 mb-4">장비별 대수 <span className="text-xs md:text-sm text-gray-400 font-semibold ml-1">({selectedQuarter}, SC+ACT+Pending 기준)</span></h4>
+                      {products.length === 0 ? (
+                        <div className="text-gray-400 text-sm">데이터 없음</div>
+                      ) : (
+                        <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                          {products.map(p => (
+                            <div key={p} style={{minWidth:'110px', flex:'1 1 110px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px', textAlign:'center'}}>
+                              <div style={{fontSize:'12px', fontWeight:'bold', color:'#475569', marginBottom:'4px'}}>{p}</div>
+                              <div style={{fontSize:'18px', fontWeight:'bold', color:'#1d4ed8'}}>{byProduct[p]}대</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* 연도별 매출 (분기별) */}
+                <div className="bg-white p-3 md:p-4 rounded-xl shadow-md border border-gray-100">
+                  <h4 className="text-base md:text-lg font-bold text-gray-700 mb-3 px-1">연도별 매출</h4>
+                  <div style={{display:'flex', gap:'10px', overflowX:'auto'}}>
+                    {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(q => {
+                      const rows = salesData.filter(d => d.quarter===q && d.member===selectedMember && d.status!=='Back up');
+                      const sumKRW = rows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                      const isCurrent = q === selectedQuarter;
+                      return (
+                        <div key={q} onClick={() => setSelectedQuarter(q)} style={{minWidth:'130px', flex:'1 1 130px', border: isCurrent ? '2px solid #2563eb' : '1px solid #e5e7eb', borderRadius:'8px', padding:'8px 10px', cursor:'pointer', background: isCurrent ? '#eff6ff' : '#fff'}}>
+                          <div style={{fontWeight:'bold', fontSize:'12px', marginBottom:'4px', color: isCurrent ? '#1d4ed8' : '#334155'}}>{q} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({rows.length}건)</span></div>
+                          <div style={{fontWeight:'bold', fontSize:'13px', color:'#1d4ed8'}}>₩{sumKRW.toLocaleString()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
@@ -3073,7 +3028,7 @@ img,video{max-width:100%;height:auto}
     @media (min-width: 768px) {
       .toss-threshold-row { flex-direction: row; gap: 12px; }
     }
-    .toss-threshold-card { flex: 1; display: flex; align-items: center; gap: 8px; background: #ffffff; border: 1px solid var(--toss-grey200); border-radius: 12px; padding: 12px 16px; min-width: 0; }
+    .toss-threshold-card { flex: 1; display: flex; align-items: center; gap: 8px; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 12px 16px; min-width: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .toss-threshold-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .toss-threshold-label { font-size: 12px; font-weight: 700; color: var(--toss-grey700); white-space: nowrap; }
     .toss-threshold-value { margin-left: auto; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; color: var(--toss-grey900); white-space: nowrap; }
