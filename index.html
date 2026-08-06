@@ -1493,6 +1493,7 @@ img,video{max-width:100%;height:auto}
               </div>
               <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}% <span className="text-sm font-bold">(₩ {(scAmt+actAmt).toLocaleString()})</span></span>
               <div className="block absolute w-full -bottom-6 left-0 h-5">
+                <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(incentiveTarget/maxScale)*100}%`, color:'#7c3aed' }}>Incentive</div>
                 <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(tgtKRW/maxScale)*100}%`, color:'#475569' }}>100%</div>
                 <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target120/maxScale)*100}%`, color:'#1d4ed8' }}>120%</div>
                 <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target150/maxScale)*100}%`, color:'#047857' }}>150%</div>
@@ -1517,6 +1518,7 @@ img,video{max-width:100%;height:auto}
                 <span className="toss-tnum hidden md:inline">{actPer > 4 && `${actPer.toFixed(1)}%`}</span>
                 <span className="toss-tnum md:hidden">{actW > 8 && `${actPer.toFixed(1)}%`}</span>
               </div>
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(incentiveTarget/maxScale)*100}%`, borderColor:'#c4b5fd' }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(tgtKRW/maxScale)*100}%`, borderColor:'#94a3b8' }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target120/maxScale)*100}%`, borderColor:'#93c5fd' }}></div>
               <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{ left:`${(target150/maxScale)*100}%`, borderColor:'#6ee7b7' }}></div>
