@@ -1535,7 +1535,7 @@ img,video{max-width:100%;height:auto}
 
       // renderProgressBar를 좁은 카드에 넣을 때 쓰는 축약판 - 100/120/150% 축 표시 없이
       // 목표 대비 현재(SC+ACT, 비율 유지)만 한 줄 바로 보여준다.
-      const renderSimpleProgressBar = (scAmt, actAmt, tgtKRW) => {
+      const renderSimpleProgressBar = (scAmt, actAmt, tgtKRW, showIncentive) => {
         if (!tgtKRW) return null;
         const totalAmt = scAmt + actAmt;
         const scale = Math.max(tgtKRW, totalAmt, 1);
@@ -1545,16 +1545,21 @@ img,video{max-width:100%;height:auto}
         const scW = scAmt/scale*100;
         const actW = actAmt/scale*100;
         const totalColor = totalPer>=120?'#047857':totalPer>=100?'#1d4ed8':'#475569';
+        const incentiveTarget = tgtKRW/1.2;
         return (
           <div style={{marginBottom:'8px'}}>
             <div className="flex justify-between items-end mb-1">
               <span className="text-[11px] font-bold text-gray-500">목표 ₩{tgtKRW.toLocaleString()}</span>
               <span className="text-[11px] font-extrabold" style={{color:totalColor}}>현재 ₩{totalAmt.toLocaleString()} ({totalPer.toFixed(1)}%)</span>
             </div>
-            {tgtKRW<scale && <div className="relative w-full" style={{height:'14px'}}><span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${tgtKRW/scale*100}%`, color:'#1e293b'}}>Target</span></div>}
+            <div className="relative w-full" style={{height:'14px'}}>
+              {showIncentive && <span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${incentiveTarget/scale*100}%`, color:'#7c3aed'}}>Incentive</span>}
+              {tgtKRW<scale && <span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${tgtKRW/scale*100}%`, color:'#1e293b'}}>Target</span>}
+            </div>
             <div className="relative w-full rounded-full overflow-hidden bg-gray-100" style={{height:'18px', display:'flex'}}>
-              <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${scW}%`, background:'#3b82f6', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{scW>12 && `${scPer.toFixed(1)}%`}</div>
-              <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${actW}%`, background:'#10b981', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{actW>12 && `${actPer.toFixed(1)}%`}</div>
+              <div className="h-full" style={{width:`${scW}%`, background:'#3b82f6'}}></div>
+              <div className="h-full" style={{width:`${actW}%`, background:'#10b981'}}></div>
+              {showIncentive && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${incentiveTarget/scale*100}%`, borderColor:'#c4b5fd'}} title={`Incentive Target ₩${incentiveTarget.toLocaleString()}`}></div>}
               {tgtKRW<scale && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${tgtKRW/scale*100}%`, borderColor:'#1e293b'}} title={`목표 ₩${tgtKRW.toLocaleString()}`}></div>}
             </div>
           </div>
@@ -2476,7 +2481,7 @@ img,video{max-width:100%;height:auto}
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {(targetKRW*1.2).toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
                   </div>
-                  {renderSimpleProgressBar(shipConfirmKRW, actKRW, targetKRW)}
+                  {renderSimpleProgressBar(shipConfirmKRW, actKRW, targetKRW, true)}
                 </div>
 
                 {/* 분기 요약 지표 */}
