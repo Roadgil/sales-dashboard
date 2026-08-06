@@ -1470,7 +1470,8 @@ img,video{max-width:100%;height:auto}
         if (!tgtKRW) return null;
         const usedER = er || activeER || 1389;
         const target120 = tgtKRW * 1.2; const target150 = tgtKRW * 1.5;
-        const maxScale = Math.max(target150, (scAmt + actAmt) * 1.05);
+        const incentiveTarget = tgtKRW / 1.2;
+        const maxScale = Math.max(target150, scAmt + actAmt);
         const scPer  = (scAmt / tgtKRW) * 100;
         const actPer = (actAmt / tgtKRW) * 100;
         const totalPer = scPer + actPer;
@@ -1525,6 +1526,32 @@ img,video{max-width:100%;height:auto}
             <div className="flex gap-4 mt-2 text-xs">
               <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#3b82f6'}}></span>{lang==='ko'?'SC (Ship Confirm)':'SC'}</span>
               <span className="flex items-center gap-1"><span style={{display:'inline-block',width:'10px',height:'10px',borderRadius:'2px',background:'#10b981'}}></span>{lang==='ko'?'ACT (납품완료)':'ACT'}</span>
+            </div>
+          </div>
+        );
+      };
+
+      // renderProgressBar를 좁은 카드에 넣을 때 쓰는 축약판 - 100/120/150% 축 표시 없이
+      // 목표 대비 현재(SC+ACT, 비율 유지)만 한 줄 바로 보여준다.
+      const renderSimpleProgressBar = (scAmt, actAmt, tgtKRW) => {
+        if (!tgtKRW) return null;
+        const totalAmt = scAmt + actAmt;
+        const scale = Math.max(tgtKRW, totalAmt, 1);
+        const scPer = (scAmt/tgtKRW)*100;
+        const actPer = (actAmt/tgtKRW)*100;
+        const totalPer = scPer + actPer;
+        const scW = scAmt/scale*100;
+        const actW = actAmt/scale*100;
+        const totalColor = totalPer>=120?'#047857':totalPer>=100?'#1d4ed8':'#475569';
+        return (
+          <div style={{marginBottom:'8px'}}>
+            <div className="flex justify-between items-end mb-1">
+              <span className="text-[11px] font-bold text-gray-500">목표 ₩{tgtKRW.toLocaleString()}</span>
+              <span className="text-[11px] font-extrabold" style={{color:totalColor}}>현재 ₩{totalAmt.toLocaleString()} ({totalPer.toFixed(1)}%)</span>
+            </div>
+            <div className="relative w-full rounded-full overflow-hidden bg-gray-100" style={{height:'18px', display:'flex'}}>
+              <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${scW}%`, background:'#3b82f6', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{scW>12 && `${scPer.toFixed(1)}%`}</div>
+              <div className="h-full flex items-center justify-end text-white font-bold" style={{width:`${actW}%`, background:'#10b981', fontSize:'10px', paddingRight:'4px', overflow:'hidden'}}>{actW>12 && `${actPer.toFixed(1)}%`}</div>
             </div>
           </div>
         );
@@ -1684,9 +1711,11 @@ img,video{max-width:100%;height:auto}
                     // ── same 3-zone ascending family as the header/team bars; no boundary labels (no room) ──
                     const mZone      = mTotalPer>=120?3:mTotalPer>=100?2:1;
                     const mPerColorHex = mZone===3?'#047857':mZone===2?'#1d4ed8':'#475569';
-                    // 막대는 목표(100%)까지를 폭 100%로 두고 SC → ACT 순으로 쌓는다(초과분은 잘림)
-                    const mScW  = Math.min(mPer, 100);
-                    const mActW = Math.max(Math.min(mTotalPer, 100) - mScW, 0);
+                    // 막대는 목표(100%)까지를 폭 100%로 두고 SC:ACT 비율 그대로 쌓는다 - SC 혼자 100%를 넘겨도
+                    // ACT가 0으로 밀려나지 않도록 합계가 100%를 넘으면 두 값을 비율 유지한 채 같이 줄인다
+                    const mBarScale = mTotalPer > 100 ? 100/mTotalPer : 1;
+                    const mScW  = mPer * mBarScale;
+                    const mActW = mActPer * mBarScale;
                     const mCount  = memberStats[member]?.count || 0;
                     const mActCount = memberStats[member]?.actCount || 0;
                     return (
@@ -1703,28 +1732,7 @@ img,video{max-width:100%;height:auto}
                             <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mTotalKRW.toLocaleString()}</span>
                             <span className="text-xs font-extrabold" style={{color:'#94a3b8'}}>목표 미설정</span>
                           </div>
-                        ) : (
-                          <>
-                            {/* ① SC 대비 타겟 달성률 / ② SC+ACT 합계 대비 타겟 달성률 */}
-                            <div className="flex justify-between items-baseline">
-                              <span className="text-[10px] font-bold" style={{color:'#1d4ed8'}}>SC 달성률</span>
-                              <span className="text-sm font-extrabold" style={{color:'#1d4ed8'}}>{mPer.toFixed(1)}%</span>
-                            </div>
-                            <div className="flex justify-between items-baseline mt-0.5 mb-1.5 pt-1 border-t border-gray-100">
-                              <span className="text-[10px] font-bold text-gray-500">SC+ACT 합계</span>
-                              <span className="text-sm font-extrabold" style={{color:mPerColorHex}}>{mTotalPer.toFixed(1)}%</span>
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner flex">
-                              <div className="h-full transition-all duration-700" style={{width:`${mScW}%`,background:'#3b82f6'}}/>
-                              <div className="h-full transition-all duration-700" style={{width:`${mActW}%`,background:'#10b981'}}/>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1 text-[9px] font-bold">
-                              <span className="font-mono text-gray-600">₩ {mTotalKRW.toLocaleString()}</span>
-                              <span style={{color:'#047857'}}>ACT {mActPer.toFixed(1)}%</span>
-                              <span className="ml-auto text-gray-400 font-mono font-normal">Target ₩ {mTarget.toLocaleString()}</span>
-                            </div>
-                          </>
-                        )}
+                        ) : renderSimpleProgressBar(mScKRW, mActKRW, mTarget)}
                       </div>
                     );
                   })
@@ -2265,7 +2273,7 @@ img,video{max-width:100%;height:auto}
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'15px', fontWeight:'800', color:'#334155'}}>Ship Confirm+ACT 포함 금액</span></h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'16px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>Ship Confirm+ACT 포함 금액</span></h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2304,42 +2312,13 @@ img,video{max-width:100%;height:auto}
                               합계: ₩{sumKRW.toLocaleString()}
                             </div>
                             {(() => {
-                              // 담당자별 타겟 달성률: SC 단독 / SC+ACT 합계 두 가지를 개인 목표 대비로 보여준다.
+                              // 담당자별 타겟 달성률 - 팀별 대시보드의 renderSimpleProgressBar와 동일한 형태로 통일
                               // (Pending·Back up은 달성으로 안 잡음 - 위 "합계"와 기준이 다르다)
                               const scKRW    = rows.filter(d=>d.status==='Ship Confirm').reduce((s,d)=>s+(d.priceKRW||0),0);
                               const mActKRW  = rows.filter(d=>d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
                               const mTarget  = currentMemberTargets[member] || 0;
                               if (mTarget <= 0) return <div style={{marginBottom:'10px', fontSize:'10px', color:'#94a3b8', textAlign:'right'}}>개인 목표 미설정</div>;
-                              const scPer    = (scKRW/mTarget)*100;
-                              const mActPer  = (mActKRW/mTarget)*100;
-                              const totalPer = scPer + mActPer;
-                              const scW      = Math.min(scPer, 100);
-                              const actW     = Math.max(Math.min(totalPer, 100) - scW, 0);
-                              // 헤더/팀 막대와 같은 3단계 상승형 색 체계
-                              const totalColor = totalPer>=120?'#047857':totalPer>=100?'#1d4ed8':'#475569';
-                              return (
-                                <div style={{marginBottom:'10px', padding:'8px', border:'1px solid #e5e7eb', borderRadius:'6px', background:'#f8fafc'}}>
-                                  {/* ① Ship Confirm 대비 타겟 달성률 */}
-                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'6px'}}>
-                                    <span style={{fontSize:'11px', fontWeight:'bold', color:'#1d4ed8'}}>SC 달성률</span>
-                                    <span style={{fontSize:'15px', fontWeight:'800', color:'#1d4ed8'}}>{scPer.toFixed(1)}%</span>
-                                  </div>
-                                  {/* ② SC+ACT 합계 대비 타겟 달성률 */}
-                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'6px', marginTop:'2px', marginBottom:'6px', paddingTop:'4px', borderTop:'1px solid #e2e8f0'}}>
-                                    <span style={{fontSize:'11px', fontWeight:'bold', color:'#475569'}}>SC+ACT 합계 달성률</span>
-                                    <span style={{fontSize:'15px', fontWeight:'800', color:totalColor}}>{totalPer.toFixed(1)}%</span>
-                                  </div>
-                                  <div style={{display:'flex', height:'8px', borderRadius:'999px', overflow:'hidden', background:'#e2e8f0'}}>
-                                    <div style={{width:`${scW}%`, background:'#3b82f6', transition:'width 0.7s'}}></div>
-                                    <div style={{width:`${actW}%`, background:'#10b981', transition:'width 0.7s'}}></div>
-                                  </div>
-                                  <div style={{display:'flex', flexWrap:'wrap', gap:'4px 10px', marginTop:'5px', fontSize:'10px', fontWeight:'bold'}}>
-                                    <span style={{color:'#1d4ed8'}}>SC ₩{scKRW.toLocaleString()}</span>
-                                    <span style={{color:'#047857'}}>ACT ₩{mActKRW.toLocaleString()} <span style={{color:'#94a3b8', fontWeight:'normal'}}>({mActPer.toFixed(1)}%)</span></span>
-                                  </div>
-                                  <div style={{marginTop:'4px', fontSize:'10px', color:'#64748b'}}>Target ₩{mTarget.toLocaleString()} · SC+ACT ₩{(scKRW+mActKRW).toLocaleString()}</div>
-                                </div>
-                              );
+                              return renderSimpleProgressBar(scKRW, mActKRW, mTarget);
                             })()}
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
@@ -2451,12 +2430,11 @@ img,video{max-width:100%;height:auto}
                           <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
                           <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
-                        {mTarget>0 ? renderProgressBar(scAmt, actAmt, mTarget) : (
-                          <div className="flex gap-2 mb-1">
-                            <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
-                            <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
-                          </div>
-                        )}
+                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
+                        <div className="flex gap-2 mb-1">
+                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
+                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -2505,6 +2483,7 @@ img,video{max-width:100%;height:auto}
                 <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
                   <div className="toss-threshold-row">
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#7c3aed'}}></span><span className="toss-threshold-label">Incentive Target ÷120%</span><span className="toss-threshold-value" style={{color:'#6d28d9'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {(targetKRW*1.2).toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
