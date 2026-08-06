@@ -1733,10 +1733,13 @@ img,video{max-width:100%;height:auto}
 
             {/* 팀 대시보드: 목표 대비 현재 + 장비별 대수 */}
             {(() => {
-              const teamActKRW = (teams[selectedTeam]||[]).reduce((s,m) => s + (memberStats[m]?.sumKRW||0), 0);
+              const teamQRows = salesData.filter(d => d.quarter===selectedQuarter && d.team===selectedTeam && d.status!=='Back up');
+              const scAmt = teamQRows.filter(d=>d.status==='Ship Confirm').reduce((s,d)=>s+(d.priceKRW||0),0);
+              const actAmt = teamQRows.filter(d=>d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
+              const pendingAmt = teamQRows.filter(d=>d.status==='Pending').reduce((s,d)=>s+(d.priceKRW||0),0);
+              const teamActKRW = scAmt + actAmt + pendingAmt;
               const teamTargetKRW = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
               const teamPct = teamTargetKRW > 0 ? (teamActKRW/teamTargetKRW)*100 : 0;
-              const teamQRows = salesData.filter(d => d.quarter===selectedQuarter && d.team===selectedTeam && d.status!=='Back up');
               const byProduct = {};
               teamQRows.forEach(d => { byProduct[d.product] = (byProduct[d.product]||0) + 1; });
               const products = Object.keys(byProduct).sort();
@@ -1748,7 +1751,12 @@ img,video{max-width:100%;height:auto}
                       <span className="text-sm font-bold text-gray-600">목표 ₩ {teamTargetKRW.toLocaleString()}</span>
                       <span className="text-sm font-bold text-gray-600">현재 ₩ {teamActKRW.toLocaleString()} <span className="text-blue-600">({teamPct.toFixed(1)}%)</span></span>
                     </div>
-                    {teamTargetKRW>0 && <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(teamPct,100)}%`, background: teamPct>=100?'#10b981':'#3b82f6'}}/></div>}
+                    {teamTargetKRW>0 && <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner mb-3"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(teamPct,100)}%`, background: teamPct>=100?'#10b981':'#3b82f6'}}/></div>}
+                    <div className="flex flex-wrap gap-2">
+                      <span style={{background:STATUS_PILL_STYLE['Ship Confirm'].bg, color:STATUS_PILL_STYLE['Ship Confirm'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>SC ₩{scAmt.toLocaleString()}</span>
+                      <span style={{background:STATUS_PILL_STYLE['ACT'].bg, color:STATUS_PILL_STYLE['ACT'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>ACT ₩{actAmt.toLocaleString()}</span>
+                      <span style={{background:STATUS_PILL_STYLE['Pending'].bg, color:STATUS_PILL_STYLE['Pending'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>Pending ₩{pendingAmt.toLocaleString()}</span>
+                    </div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
                     <h4 className="text-sm font-bold text-gray-600 mb-3">장비별 대수 <span className="text-xs text-gray-400 font-semibold">(SC+ACT+Pending 기준)</span></h4>
@@ -2092,7 +2100,7 @@ img,video{max-width:100%;height:auto}
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>데이터 입력란</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별 대시보드(데이터 입력란)</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별 대시보드</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
               </div>
@@ -2396,7 +2404,7 @@ img,video{max-width:100%;height:auto}
               const ranked = [...roster].map(({team, member}) => ({ team, member, sumKRW: memberStats[member]?.sumKRW || 0 })).sort((a,b) => b.sumKRW - a.sumKRW);
               return (
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">데이터 입력란 <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">개인별 대시보드(데이터 입력란) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
                   {roster.map(({team, member}) => {
                     const mActKRW = memberStats[member]?.sumKRW || 0;
