@@ -1562,6 +1562,10 @@ img,video{max-width:100%;height:auto}
               {showIncentive && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${incentiveTarget/scale*100}%`, borderColor:'#c4b5fd'}} title={`Incentive Target ₩${incentiveTarget.toLocaleString()}`}></div>}
               {tgtKRW<scale && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${tgtKRW/scale*100}%`, borderColor:'#1e293b'}} title={`목표 ₩${tgtKRW.toLocaleString()}`}></div>}
             </div>
+            <div className="flex gap-3 mt-1">
+              <span className="text-[11px] font-bold" style={{color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
+              <span className="text-[11px] font-bold" style={{color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
+            </div>
           </div>
         );
       };
@@ -2419,6 +2423,7 @@ img,video{max-width:100%;height:auto}
                           <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mTotalKRW.toLocaleString()}</span>
                           <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
+                        {mTarget>0 && <div className="relative w-full" style={{height:'12px'}}><span className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${Math.min(mTarget/mScale*100,100)}%`, color:'#1e293b'}}>Target</span></div>}
                         {mTarget>0 && <div className="relative w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2" style={{display:'flex'}}>
                           <div className="h-full transition-all duration-700" style={{width:`${mScW}%`,background:'#3b82f6'}}/>
                           <div className="h-full transition-all duration-700" style={{width:`${mActW}%`,background:'#10b981'}}/>
@@ -2474,7 +2479,10 @@ img,video{max-width:100%;height:auto}
 
                 {/* 전체 목표 달성 현황 */}
                 <div className="toss-panel p-4 md:p-6 mb-6 md:mb-8">
-                  <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
+                  <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800 flex justify-between items-baseline flex-wrap gap-2">
+                    <span>{T.overallTarget}</span>
+                    <span className="text-base md:text-lg font-extrabold" style={{color: targetKRW>0 && (shipConfirmKRW+actKRW)>=targetKRW ? '#047857' : '#1d4ed8'}}>₩ {(shipConfirmKRW+actKRW).toLocaleString()} {targetKRW>0 && `(${((shipConfirmKRW+actKRW)/targetKRW*100).toFixed(1)}%)`}</span>
+                  </h3>
                   <div className="toss-threshold-row">
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#7c3aed'}}></span><span className="toss-threshold-label">Incentive Target ÷120%</span><span className="toss-threshold-value" style={{color:'#6d28d9'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
