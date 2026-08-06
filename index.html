@@ -2092,8 +2092,8 @@ img,video{max-width:100%;height:auto}
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>데이터 입력 (개인별)</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>데이터 입력란</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별 대시보드</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
               </div>
             </div>
@@ -2231,7 +2231,7 @@ img,video{max-width:100%;height:auto}
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span></h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'12px', fontWeight:'normal', color:'#94a3b8'}}>Ship Confirm+ACT+Pending 포함 금액</span></h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2396,7 +2396,7 @@ img,video{max-width:100%;height:auto}
               const ranked = [...roster].map(({team, member}) => ({ team, member, sumKRW: memberStats[member]?.sumKRW || 0 })).sort((a,b) => b.sumKRW - a.sumKRW);
               return (
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">데이터 입력 (개인별) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">데이터 입력란 <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
                   {roster.map(({team, member}) => {
                     const mActKRW = memberStats[member]?.sumKRW || 0;
