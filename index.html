@@ -2499,7 +2499,7 @@ img,video{max-width:100%;height:auto}
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {(targetKRW*1.2).toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
                   </div>
-                  {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
+                  {renderSimpleProgressBar(shipConfirmKRW, actKRW, targetKRW)}
                 </div>
 
                 {/* 분기 요약 지표 */}
