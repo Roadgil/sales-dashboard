@@ -1655,12 +1655,6 @@ img,video{max-width:100%;height:auto}
                 // ── 3-zone ascending achievement family, same hue tokens as the header bar ──
                 const teamZone   = teamPer>=120?3:teamPer>=100?2:1;
                 const perColor   = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
-                const fillColor  = teamZone===3?'#10b981':teamZone===2?'#3b82f6':'#94a3b8';
-                const scaleMax   = teamTarget>0 ? Math.max(teamTarget*1.5, teamActKRW*1.05) : 0;
-                const fillPct    = scaleMax>0 ? Math.min((teamActKRW/scaleMax)*100,100) : 0;
-                const zone1W     = scaleMax>0 ? (teamTarget/scaleMax)*100 : 0;
-                const zone2W     = scaleMax>0 ? (teamTarget*1.2/scaleMax)*100 - zone1W : 0;
-                const zone3W     = 100 - zone1W - zone2W;
                 return (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4" style={{maxWidth:'420px'}} data-region="team-progress-bar">
                     <div className="flex justify-between items-center mb-3">
@@ -1672,27 +1666,10 @@ img,video{max-width:100%;height:auto}
                       <span className="text-slate-400 font-bold text-xs mx-1">₩</span>
                       <input type="number" min="0" value={teamTargets[selectedTeam]?.[selectedQuarter]||''} onChange={e=>handleTeamTargetChange(selectedTeam,selectedQuarter,e.target.value)} placeholder="목표 금액 입력" className="flex-1 bg-transparent text-right font-mono font-bold text-sm outline-none text-slate-800 min-w-0" style={{borderBottom:'1.5px solid #cbd5e1'}}/>
                     </div>
-                    <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+                    <div className="flex justify-between text-[11px] font-semibold text-gray-500">
                       <span>{lang==='ko'?'누적 달성 (SC+ACT 기준)':'Cumulative (SC+ACT)'}</span>
                       <span className="font-mono font-bold text-gray-700">₩ {teamActKRW.toLocaleString()}</span>
                     </div>
-                    {teamTarget>0 && (
-                      <>
-                        <div className="relative" style={{height:'13px'}}>
-                          <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W}%`,color:'#475569'}}>100%</div>
-                          <div className="absolute -translate-x-1/2 text-[9px] font-bold" style={{left:`${zone1W+zone2W}%`,color:'#1d4ed8'}}>120%</div>
-                        </div>
-                        <div className="relative w-full rounded-full overflow-hidden shadow-inner border border-gray-200" style={{height:'10px'}}>
-                          <div className="absolute inset-0" style={{display:'flex'}} aria-hidden="true">
-                            <div style={{width:`${Math.max(zone1W,0)}%`,background:'#f1f5f9'}}></div>
-                            <div style={{width:`${Math.max(zone2W,0)}%`,background:'#eff6ff'}}></div>
-                            <div style={{width:`${Math.max(zone3W,0)}%`,background:'#ecfdf5'}}></div>
-                          </div>
-                          <div className="h-full rounded-full transition-all duration-700 relative" style={{width:`${fillPct}%`,background:fillColor}}/>
-                        </div>
-                        <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium"><span>0%</span><span style={{color:'#94a3b8'}}>{lang==='ko'?'목표':'Target'} ₩ {teamTarget.toLocaleString()}</span></div>
-                      </>
-                    )}
                   </div>
                 );
               })()}
