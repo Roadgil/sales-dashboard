@@ -1490,7 +1490,7 @@ img,video{max-width:100%;height:auto}
                 <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()} ({scPer.toFixed(1)}%)</span>
                 <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()} ({actPer.toFixed(1)}%)</span>
               </div>
-              <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}%</span>
+              <span className="toss-tnum text-lg font-extrabold" style={{color:totalColor}}>{lang==='ko'?'합계 달성률':'Total'}: {totalPer.toFixed(1)}% <span className="text-sm font-bold">(₩ {(scAmt+actAmt).toLocaleString()})</span></span>
               <div className="block absolute w-full -bottom-6 left-0 h-5">
                 <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(tgtKRW/maxScale)*100}%`, color:'#475569' }}>100%</div>
                 <div className="toss-tnum absolute -translate-x-1/2 text-xs font-bold" style={{ left:`${(target120/maxScale)*100}%`, color:'#1d4ed8' }}>120%</div>
@@ -2094,7 +2094,7 @@ img,video{max-width:100%;height:auto}
           </div>
 
           {/* 데스크탑 사이드바 접기/펴기 탭 - position:fixed라 사이드바의 위치 컨텍스트와 무관하게 항상 화면 기준으로 붙는다 */}
-          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="hidden md:flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white w-6 h-16 rounded-r-lg shadow-md" style={{position:'fixed', left: sidebarCollapsed ? 0 : '256px', top:'50%', transform:'translateY(-50%)', zIndex:15, transition:'left 0.2s'}} title={sidebarCollapsed ? '사이드바 펴기' : '사이드바 접기'}>{sidebarCollapsed ? '▶' : '◀'}</button>
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="hidden md:flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white w-7 h-20 rounded-r-lg shadow-lg border-2 border-white" style={{position:'fixed', left: sidebarCollapsed ? 0 : '256px', top:'50%', transform:'translateY(-50%)', zIndex:15, transition:'left 0.2s', fontSize:'18px', fontWeight:'900'}} title={sidebarCollapsed ? '사이드바 펴기' : '사이드바 접기'}>{sidebarCollapsed ? '▶' : '◀'}</button>
 
           {/* 사이드바 */}
           <div className={`${isSidebarOpen ? 'block' : 'hidden'} ${sidebarCollapsed ? 'md:hidden' : 'md:flex'} flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
@@ -2265,7 +2265,7 @@ img,video{max-width:100%;height:auto}
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'12px', fontWeight:'normal', color:'#94a3b8'}}>Ship Confirm+ACT 포함 금액</span></h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'15px', fontWeight:'800', color:'#334155'}}>Ship Confirm+ACT 포함 금액</span></h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2443,7 +2443,6 @@ img,video{max-width:100%;height:auto}
                     const mCount  = memberStats[member]?.count || 0;
                     const scAmt = mActKRW;
                     const actAmt = salesData.filter(d=>d.quarter===selectedQuarter && d.member===member && d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
-                    const barTotal = (scAmt+actAmt) || 1;
                     return (
                       <div key={member} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all group">
                         <div className="text-base font-extrabold text-gray-800 group-hover:text-blue-600">{member}</div>
@@ -2452,15 +2451,12 @@ img,video{max-width:100%;height:auto}
                           <span className="text-[11px] font-mono font-bold text-gray-700">₩ {mActKRW.toLocaleString()}</span>
                           <span className="text-xs font-extrabold" style={{color:mTarget>0?mPerColorHex:'#94a3b8'}}>{mTarget>0?`${mPer.toFixed(1)}%`:'목표 미설정'}</span>
                         </div>
-                        {mTarget>0 && <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner mb-2"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(mPer,100)}%`,background:mFillColor}}/></div>}
-                        <div className="flex gap-2 mb-1">
-                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
-                          <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
-                        </div>
-                        <div style={{display:'flex', width:'100%', height:'6px', borderRadius:'3px', overflow:'hidden', background:'#f1f5f9'}}>
-                          <div style={{width:`${scAmt/barTotal*100}%`, background:'#3b82f6'}}></div>
-                          <div style={{width:`${actAmt/barTotal*100}%`, background:'#10b981'}}></div>
-                        </div>
+                        {mTarget>0 ? renderProgressBar(scAmt, actAmt, mTarget) : (
+                          <div className="flex gap-2 mb-1">
+                            <span style={{fontSize:'10px', fontWeight:'bold', color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
+                            <span style={{fontSize:'10px', fontWeight:'bold', color:'#047857'}}>ACT ₩{actAmt.toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
