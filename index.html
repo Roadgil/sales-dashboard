@@ -1554,13 +1554,13 @@ img,video{max-width:100%;height:auto}
             </div>
             <div className="relative w-full" style={{height:'14px'}}>
               {showIncentive && <span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${incentiveTarget/scale*100}%`, color:'#7c3aed'}}>Incentive</span>}
-              {tgtKRW<scale && <span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${tgtKRW/scale*100}%`, color:'#1e293b'}}>Target</span>}
+              <span className="absolute -translate-x-1/2 text-[10px] font-bold" style={{left:`${Math.min(tgtKRW/scale*100,98)}%`, color:'#1e293b'}}>Target</span>
             </div>
             <div className="relative w-full rounded-full overflow-hidden bg-gray-100" style={{height:'18px', display:'flex'}}>
               <div className="h-full" style={{width:`${scW}%`, background:'#3b82f6'}}></div>
               <div className="h-full" style={{width:`${actW}%`, background:'#10b981'}}></div>
               {showIncentive && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${incentiveTarget/scale*100}%`, borderColor:'#c4b5fd'}} title={`Incentive Target ₩${incentiveTarget.toLocaleString()}`}></div>}
-              {tgtKRW<scale && <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${tgtKRW/scale*100}%`, borderColor:'#1e293b'}} title={`목표 ₩${tgtKRW.toLocaleString()}`}></div>}
+              <div className="absolute top-0 bottom-0 border-l-2 border-dashed" style={{left:`${Math.min(tgtKRW/scale*100,99.5)}%`, borderColor:'#1e293b'}} title={`목표 ₩${tgtKRW.toLocaleString()}`}></div>
             </div>
             <div className="flex gap-3 mt-1">
               <span className="text-[11px] font-bold" style={{color:'#1d4ed8'}}>SC ₩{scAmt.toLocaleString()}</span>
