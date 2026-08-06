@@ -663,6 +663,7 @@ img,video{max-width:100%;height:auto}
 
 
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+      const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
       const T = {
         loginTitle:        lang==='ko' ? '영업 납품처 Dashboard'      : 'Sales Delivery Dashboard',
@@ -1733,33 +1734,33 @@ img,video{max-width:100%;height:auto}
 
             {/* 팀 대시보드: 목표 대비 현재 + 장비별 대수 */}
             {(() => {
-              const teamQRows = salesData.filter(d => d.quarter===selectedQuarter && d.team===selectedTeam && d.status!=='Back up');
+              const teamQRows = salesData.filter(d => d.quarter===selectedQuarter && d.team===selectedTeam && isRevenue(d));
               const scAmt = teamQRows.filter(d=>d.status==='Ship Confirm').reduce((s,d)=>s+(d.priceKRW||0),0);
               const actAmt = teamQRows.filter(d=>d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
-              const pendingAmt = teamQRows.filter(d=>d.status==='Pending').reduce((s,d)=>s+(d.priceKRW||0),0);
-              const teamActKRW = scAmt + actAmt + pendingAmt;
+              const teamActKRW = scAmt + actAmt;
               const teamTargetKRW = teamTargets[selectedTeam]?.[selectedQuarter] || 0;
               const teamPct = teamTargetKRW > 0 ? (teamActKRW/teamTargetKRW)*100 : 0;
               const byProduct = {};
               teamQRows.forEach(d => { byProduct[d.product] = (byProduct[d.product]||0) + 1; });
               const products = Object.keys(byProduct).sort();
+              const currentYear = (selectedQuarter||'').split(' ')[0];
+              const quarterlyStats = {};
+              ['Q1','Q2','Q3','Q4'].forEach(q => {
+                const qRows = salesData.filter(d => d.quarter===`${currentYear} ${q}` && d.team===selectedTeam && isRevenue(d));
+                quarterlyStats[q] = { count: qRows.length, sumKRW: qRows.reduce((s,d)=>s+(d.priceKRW||0),0) };
+              });
               return (
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg md:text-xl font-bold text-gray-700 flex items-center gap-2 mb-4">📊 {selectedTeam} 대시보드<span className="text-sm text-gray-400 font-normal">({selectedQuarter})</span></h3>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-4">
-                    <div className="flex flex-wrap justify-between items-end gap-2 mb-2">
+                    <div className="flex flex-wrap justify-between items-end gap-2">
                       <span className="text-sm font-bold text-gray-600">목표 ₩ {teamTargetKRW.toLocaleString()}</span>
                       <span className="text-sm font-bold text-gray-600">현재 ₩ {teamActKRW.toLocaleString()} <span className="text-blue-600">({teamPct.toFixed(1)}%)</span></span>
                     </div>
-                    {teamTargetKRW>0 && <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner mb-3"><div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.min(teamPct,100)}%`, background: teamPct>=100?'#10b981':'#3b82f6'}}/></div>}
-                    <div className="flex flex-wrap gap-2">
-                      <span style={{background:STATUS_PILL_STYLE['Ship Confirm'].bg, color:STATUS_PILL_STYLE['Ship Confirm'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>SC ₩{scAmt.toLocaleString()}</span>
-                      <span style={{background:STATUS_PILL_STYLE['ACT'].bg, color:STATUS_PILL_STYLE['ACT'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>ACT ₩{actAmt.toLocaleString()}</span>
-                      <span style={{background:STATUS_PILL_STYLE['Pending'].bg, color:STATUS_PILL_STYLE['Pending'].text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>Pending ₩{pendingAmt.toLocaleString()}</span>
-                    </div>
+                    {teamTargetKRW>0 ? renderProgressBar(scAmt, actAmt, teamTargetKRW) : <div className="text-xs text-gray-400 mt-2">목표 미설정</div>}
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-                    <h4 className="text-sm font-bold text-gray-600 mb-3">장비별 대수 <span className="text-xs text-gray-400 font-semibold">(SC+ACT+Pending 기준)</span></h4>
+                    <h4 className="text-sm font-bold text-gray-600 mb-3">장비별 대수 <span className="text-xs text-gray-400 font-semibold">(SC+ACT 기준)</span></h4>
                     {products.length === 0 ? (
                       <div className="text-gray-400 text-sm">데이터 없음</div>
                     ) : (
@@ -1772,6 +1773,28 @@ img,video{max-width:100%;height:auto}
                         ))}
                       </div>
                     )}
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mt-4">
+                    <h4 className="text-sm font-bold text-gray-600 mb-3">{currentYear}년 분기별 매출 <span className="text-xs text-gray-400 font-semibold">(SC+ACT 기준)</span></h4>
+                    <div className="space-y-4">
+                      {(() => {
+                        const maxVal = Math.max(...['Q1','Q2','Q3','Q4'].map(q => quarterlyStats[q].sumKRW), 1);
+                        return ['Q1','Q2','Q3','Q4'].map(q => {
+                          const stat = quarterlyStats[q];
+                          const per = maxVal === 0 ? 0 : (stat.sumKRW / maxVal) * 100;
+                          const isCurrent = `${currentYear} ${q}` === selectedQuarter;
+                          return (
+                            <div key={q} className="flex flex-col">
+                              <div className="flex justify-between items-end mb-1 text-xs md:text-sm">
+                                <span className={`font-bold ${isCurrent?'text-blue-700':'text-gray-800'}`}>{q} <span className="text-gray-400 font-normal ml-1">({stat.count}건)</span></span>
+                                <span className="font-mono font-bold text-gray-700 text-[13px] md:text-[15px]">₩ {stat.sumKRW.toLocaleString()}</span>
+                              </div>
+                              <div className="w-full bg-gray-100 h-2 md:h-3 rounded-full overflow-hidden shadow-inner flex"><div className={`${isCurrent?'bg-blue-600':'bg-blue-300'} h-full rounded-full transition-all duration-1000`} style={{ width:`${per}%` }}></div></div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 </div>
               );
@@ -2070,8 +2093,11 @@ img,video{max-width:100%;height:auto}
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-2xl focus:outline-none">{isSidebarOpen ? '✕' : '☰'}</button>
           </div>
 
+          {/* 데스크탑 사이드바 접기/펴기 탭 - position:fixed라 사이드바의 위치 컨텍스트와 무관하게 항상 화면 기준으로 붙는다 */}
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="hidden md:flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white w-6 h-16 rounded-r-lg shadow-md" style={{position:'fixed', left: sidebarCollapsed ? 0 : '256px', top:'50%', transform:'translateY(-50%)', zIndex:15, transition:'left 0.2s'}} title={sidebarCollapsed ? '사이드바 펴기' : '사이드바 접기'}>{sidebarCollapsed ? '▶' : '◀'}</button>
+
           {/* 사이드바 */}
-          <div className={`${isSidebarOpen ? 'block' : 'hidden'} md:flex flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
+          <div className={`${isSidebarOpen ? 'block' : 'hidden'} ${sidebarCollapsed ? 'md:hidden' : 'md:flex'} flex-col w-full md:w-64 bg-slate-800 text-white p-5 overflow-y-auto z-10 md:static absolute h-full md:h-auto shadow-2xl md:shadow-none`}>
             <h2 className="hidden md:block text-xl font-bold mb-6 text-blue-400">영업 납품처 Dashboard</h2>
             <div className="flex-1">
               {(() => {
@@ -2100,7 +2126,7 @@ img,video{max-width:100%;height:auto}
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별 대시보드(데이터 입력란)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별 대시보드</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
               </div>
@@ -2235,11 +2261,11 @@ img,video{max-width:100%;height:auto}
                 </div>
               </div>
             ) : showAllTeamsCombined && !selectedMember ? (() => {
-              const combinedGrandTotalKRW = salesData.filter(d => d.quarter===selectedQuarter && d.status!=='Back up').reduce((s,d)=>s+(d.priceKRW||0),0);
+              const combinedGrandTotalKRW = salesData.filter(d => d.quarter===selectedQuarter && isRevenue(d)).reduce((s,d)=>s+(d.priceKRW||0),0);
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'12px', fontWeight:'normal', color:'#94a3b8'}}>Ship Confirm+ACT+Pending 포함 금액</span></h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'12px', fontWeight:'normal', color:'#94a3b8'}}>Ship Confirm+ACT 포함 금액</span></h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
@@ -2252,8 +2278,8 @@ img,video{max-width:100%;height:auto}
 
                 {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => {
                   const teamMembers = teams[team]||[];
-                  const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member) && d.status!=='Back up');
-                  const teamSumKRW = teamRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                  const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member));
+                  const teamSumKRW = teamRows.filter(isRevenue).reduce((s,d)=>s+(d.priceKRW||0),0);
                   return (
                   <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
                     <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', flexWrap:'wrap', gap:'8px'}}>
@@ -2267,7 +2293,7 @@ img,video{max-width:100%;height:auto}
                         <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
                       ) : (teams[team]||[]).map(member => {
                         const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
-                        const revenueRows = rows.filter(d => d.status!=='Back up');
+                        const revenueRows = rows.filter(isRevenue);
                         const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                         return (
                           <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
@@ -2321,11 +2347,12 @@ img,video{max-width:100%;height:auto}
                                 if (stRows.length===0) return null;
                                 const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                                 const pill = STATUS_PILL_STYLE[st];
+                                const excluded = st==='Back up' || st==='Pending';
                                 return (
                                   <div key={st} style={{marginBottom:'8px'}}>
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0'}}>
-                                      <span style={{background:pill.bg, color:pill.text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>{label} ({stRows.length}건{st==='Back up'?', 합계 미포함':''})</span>
-                                      <span style={{fontWeight:'800', fontSize:'13px', color: st==='Back up'?'#c2410c':'#1e293b'}}>₩{stSum.toLocaleString()}</span>
+                                      <span style={{background:pill.bg, color:pill.text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>{label} ({stRows.length}건)</span>
+                                      <span style={{fontWeight:'800', fontSize:'13px', color: excluded?'#c2410c':'#1e293b'}}>₩{stSum.toLocaleString()}</span>
                                     </div>
                                     <table style={{width:'100%'}}>
                                       <tbody>
@@ -2367,7 +2394,7 @@ img,video{max-width:100%;height:auto}
                         {dealers.length === 0 ? (
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealers.map(dealer => {
-                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && d.status!=='Back up');
+                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && isRevenue(d));
                           const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                           return (
                             <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
@@ -2404,7 +2431,7 @@ img,video{max-width:100%;height:auto}
               const ranked = [...roster].map(({team, member}) => ({ team, member, sumKRW: memberStats[member]?.sumKRW || 0 })).sort((a,b) => b.sumKRW - a.sumKRW);
               return (
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">개인별 대시보드(데이터 입력란) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-4">개인별(데이터 입력란) <span className="text-lg text-gray-500 font-medium">({selectedQuarter})</span></h1>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
                   {roster.map(({team, member}) => {
                     const mActKRW = memberStats[member]?.sumKRW || 0;
@@ -2483,7 +2510,7 @@ img,video{max-width:100%;height:auto}
                   <h3 className="text-lg md:text-xl font-bold mb-4 border-b pb-2 text-gray-800">{T.overallTarget}</h3>
                   <div className="toss-threshold-row">
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#94a3b8'}}></span><span className="toss-threshold-label">100% Target</span><span className="toss-threshold-value">₩ {targetKRW.toLocaleString()}</span></div>
-                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {incentiveTargetKRW.toLocaleString()}</span></div>
+                    <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#3182f6'}}></span><span className="toss-threshold-label">120% Target</span><span className="toss-threshold-value" style={{color:'#1d4ed8'}}>₩ {(targetKRW*1.2).toLocaleString()}</span></div>
                     <div className="toss-threshold-card"><span className="toss-threshold-dot" style={{background:'#10b981'}}></span><span className="toss-threshold-label">150% Target</span><span className="toss-threshold-value" style={{color:'#047857'}}>₩ {(targetKRW*1.5).toLocaleString()}</span></div>
                   </div>
                   {renderProgressBar(shipConfirmKRW, actKRW, targetKRW)}
