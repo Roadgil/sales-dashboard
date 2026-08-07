@@ -2294,23 +2294,19 @@ img,video{max-width:100%;height:auto}
                         const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
                         const revenueRows = rows.filter(isRevenue);
                         const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                        const mTarget = currentMemberTargets[member] || 0;
+                        const mPer = mTarget > 0 ? (sumKRW/mTarget)*100 : 0;
                         return (
                           <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
                             <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
                               {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({revenueRows.length}건)</span>
                             </div>
-                            <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
-                              합계: ₩{sumKRW.toLocaleString()}
+                            <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'4px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                              합계: ₩{sumKRW.toLocaleString()}{mTarget > 0 && ` (${mPer.toFixed(1)}%)`}
                             </div>
-                            {(() => {
-                              // 담당자별 타겟 달성률 - 팀별 대시보드의 renderSimpleProgressBar와 동일한 형태로 통일
-                              // (Pending·Back up은 달성으로 안 잡음 - 위 "합계"와 기준이 다르다)
-                              const scKRW    = rows.filter(d=>d.status==='Ship Confirm').reduce((s,d)=>s+(d.priceKRW||0),0);
-                              const mActKRW  = rows.filter(d=>d.status==='ACT').reduce((s,d)=>s+(d.priceKRW||0),0);
-                              const mTarget  = currentMemberTargets[member] || 0;
-                              if (mTarget <= 0) return <div style={{marginBottom:'10px', fontSize:'10px', color:'#94a3b8', textAlign:'right'}}>개인 목표 미설정</div>;
-                              return renderSimpleProgressBar(scKRW, mActKRW, mTarget);
-                            })()}
+                            <div style={{textAlign:'right', marginBottom:'8px', fontSize:'11px', color:'#64748b', fontWeight:'bold'}}>
+                              {mTarget > 0 ? `목표 ₩${mTarget.toLocaleString()}` : '목표 미설정'}
+                            </div>
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st);
