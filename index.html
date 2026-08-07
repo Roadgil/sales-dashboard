@@ -1478,27 +1478,42 @@ img,video{max-width:100%;height:auto}
       // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 같은 SO를 GMPP/Cryo7 등 여러 줄로
       // 쪼개서 들고 있으므로, SO를 중복 제거하고 SO당 한 번만 더해야 이중 차감이 안 된다.
       // SO가 비어있는 행은 매칭 자체가 불가능하므로 그냥 0원 취급(= 커미션 없는 것으로 표시).
-      // SO(계약)별 매출 합계 - 커미션 안분의 분모. 매출로 잡히는 행(SC/ACT)만 센다.
-      const soRevenueTotal = {};
-      salesData.forEach(d => {
-        if (!isRevenue(d)) return;
-        const so = String(d.so || '').trim();
-        if (!so) return;
-        soRevenueTotal[so] = (soRevenueTotal[so] || 0) + (d.priceKRW || 0);
-      });
+      // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 한 계약을 GMPP/Cryo7 등 여러 줄로
+      // 쪼개 갖고 있다. 커미션은 주력 장비(GMPP) 판매에 대해 나가는 것이고 Cryo7 등은 딸려간
+      // 구성품이므로, 금액 비율로 안분하지 않고 GMPP 줄에서 전액 차감한다
+      // (GMPP가 없는 계약이면 금액이 가장 큰 줄). 합계는 어느 줄에 붙이든 같다.
+      const commissionBearerId = {};
+      {
+        const bySo = {};
+        salesData.forEach(d => {
+          if (!isRevenue(d)) return;
+          const so = String(d.so || '').trim();
+          if (!so || !commissions[so]) return;
+          (bySo[so] = bySo[so] || []).push(d);
+        });
+        Object.keys(bySo).forEach(so => {
+          const best = bySo[so].slice().sort((a, b) => {
+            const ag = a.product === 'GMPP' ? 0 : 1, bg = b.product === 'GMPP' ? 0 : 1;
+            if (ag !== bg) return ag - bg;
+            return (b.priceKRW || 0) - (a.priceKRW || 0);
+          })[0];
+          commissionBearerId[so] = best.id;
+        });
+      }
 
-      // 한 행이 부담하는 커미션. 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 한 계약을
-      // GMPP/Cryo7 등 여러 줄로 쪼개 갖고 있으므로, 줄 금액 비율대로 안분한다. 이렇게 해야
-      // 줄 합계 = 상태별 소계 = 카드 합계 = 팀 합계가 서로 어긋나지 않는다.
-      // SO가 없거나(매칭 불가) 매출 대상이 아닌 행(Pending·Back up)은 0.
+      // 실제로 이 행에서 빠지는 커미션 (계약당 대표 줄 하나만 부담)
       const rowCommission = (row) => {
         if (!applyCommission || !isRevenue(row)) return 0;
         const so = String(row.so || '').trim();
         if (!so) return 0;
-        const total = commissions[so] || 0;
-        const base = soRevenueTotal[so] || 0;
-        if (!total || base <= 0) return 0;
-        return total * ((row.priceKRW || 0) / base);
+        return commissionBearerId[so] === row.id ? (commissions[so] || 0) : 0;
+      };
+
+      // 색 표기용 - 차감을 지지 않는 같은 계약의 다른 줄(Cryo7 등)도 빨갛게 보여준다
+      const inCommissionContract = (row) => {
+        if (!applyCommission || !isRevenue(row)) return 0;
+        const so = String(row.so || '').trim();
+        return so ? (commissions[so] || 0) : 0;
       };
 
       // 한 계약(같은 병원/SO)의 GMPP·Cryo7 줄이 목록에서 흩어지지 않고 붙어 나오도록.
@@ -2393,13 +2408,15 @@ img,video{max-width:100%;height:auto}
                                       <tbody>
                                         {stRows.map(r => {
                                           const rc = Math.round(rowCommission(r));
+                                          const inC = inCommissionContract(r);
                                           return (
                                           <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
                                             <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
                                             <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
                                             <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
-                                            <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: rc?'#dc2626':'inherit', fontWeight: rc?'bold':'normal'}}
-                                              title={rc?`SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`:''}>₩{netPrice(r).toLocaleString()}</td>
+                                            <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}
+                                              title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
+                                                        : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)` : ''}>₩{netPrice(r).toLocaleString()}</td>
                                           </tr>
                                           );
                                         })}
@@ -2449,13 +2466,15 @@ img,video{max-width:100%;height:auto}
                                 <tbody>
                                   {dRevenueRows.map(r => {
                                     const rc = Math.round(rowCommission(r));
+                                    const inC = inCommissionContract(r);
                                     return (
                                     <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
                                       <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
                                       <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
                                       <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
-                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: rc?'#dc2626':'inherit', fontWeight: rc?'bold':'normal'}}
-                                        title={rc?`SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`:''}>₩{netPrice(r).toLocaleString()}</td>
+                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}
+                                        title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
+                                                  : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)` : ''}>₩{netPrice(r).toLocaleString()}</td>
                                     </tr>
                                     );
                                   })}
