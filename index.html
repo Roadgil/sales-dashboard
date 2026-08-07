@@ -633,7 +633,7 @@ img,video{max-width:100%;height:auto}
     const App = () => {
       const SECRET_PASSWORD = "dladydcjf";
       // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
-      const CACHE_VERSION = 'v5';
+      const CACHE_VERSION = 'v6';
       if (safeLS.get('cacheVersion') !== CACHE_VERSION) {
         safeLS.remove('summaryCardOrder');
         safeLS.remove('summaryCardColors');
@@ -832,7 +832,7 @@ img,video{max-width:100%;height:auto}
       };
       const handleLogout = () => { auth.signOut().then(() => showToast(lang==='ko' ? '로그아웃 되었습니다' : 'Signed out')); };
 
-      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','estimatedKRW','shipConfirmKRW','actEstimatedKRW','gapKRW','gmppTarget','gmppEstimated','gmppGap'];
+      const DEFAULT_CARD_ORDER = ['targetKRW','incentiveKRW','gapKRW','estimatedKRW','shipConfirmKRW','actEstimatedKRW','gmppTarget','gmppEstimated','gmppGap'];
       const CARD_ORDER_KEY = 'summaryCardOrder';
       const [cardOrder, setCardOrder] = useState(() => {
         try {
