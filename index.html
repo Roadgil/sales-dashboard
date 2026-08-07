@@ -1007,6 +1007,18 @@ img,video{max-width:100%;height:auto}
         return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
       }, [currentUser]);
 
+      // 커미션 참조 데이터 - { SO번호: 수수료 } 맵. 금액 정보라 정적 파일로 두면 인증 없이
+      // 공개되므로(저장소가 public) settings 컬렉션에 보관해 로그인 사용자만 읽게 한다.
+      // 없거나 깨져도 대시보드는 그대로 동작해야 하므로 실패는 조용히 무시(커미션 토글만 0원 처리됨).
+      React.useEffect(() => {
+        if (!currentUser) return;
+        const unsub = db.collection("settings").doc("commissions").onSnapshot(
+          doc => { const d = doc.exists ? (doc.data() || {}).bySo : null; if (d && typeof d === 'object') setCommissions(d); },
+          () => {}
+        );
+        return () => unsub();
+      }, [currentUser]);
+
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
       useEffect(() => {
         if (salesData.length === 0) return;
@@ -1297,6 +1309,9 @@ img,video{max-width:100%;height:auto}
       const [showTeamOnly, setShowTeamOnly] = useState(false);
       const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
       const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'dealer'
+      // 외부 커미션(ext. commission) - SO별 수수료(부가세 별도). commissions.json은 재무 엑셀에서 추출한 참조 데이터.
+      const [commissions, setCommissions] = useState({});
+      const [applyCommission, setApplyCommission] = useState(false);
       const [showMemberPicker, setShowMemberPicker] = useState(false);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
@@ -1458,6 +1473,23 @@ img,video{max-width:100%;height:auto}
         dealerStats[dealer].count += 1;
         dealerStats[dealer].sumKRW += (cur.priceKRW||0);
       });
+
+      // 주어진 매출 행들에 걸린 외부 커미션 합계.
+      // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 같은 SO를 GMPP/Cryo7 등 여러 줄로
+      // 쪼개서 들고 있으므로, SO를 중복 제거하고 SO당 한 번만 더해야 이중 차감이 안 된다.
+      // SO가 비어있는 행은 매칭 자체가 불가능하므로 그냥 0원 취급(= 커미션 없는 것으로 표시).
+      const commissionFor = (rows) => {
+        if (!applyCommission) return 0;
+        const seen = new Set();
+        let total = 0;
+        rows.forEach(d => {
+          const so = String(d.so || '').trim();
+          if (!so || seen.has(so)) return;
+          seen.add(so);
+          total += commissions[so] || 0;
+        });
+        return total;
+      };
 
       const allMembers = Object.values(teams).flat();
       const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0, actCount:0, actKRW:0 });
@@ -2260,15 +2292,23 @@ img,video{max-width:100%;height:auto}
                 </div>
               </div>
             ) : showAllTeamsCombined && !selectedMember ? (() => {
-              const combinedGrandTotalKRW = salesData.filter(d => d.quarter===selectedQuarter && isRevenue(d)).reduce((s,d)=>s+(d.priceKRW||0),0);
+              const combinedRows = salesData.filter(d => d.quarter===selectedQuarter && isRevenue(d));
+              const combinedCommission = commissionFor(combinedRows);
+              const combinedGrandTotalKRW = combinedRows.reduce((s,d)=>s+(d.priceKRW||0),0) - combinedCommission;
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'16px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>Ship Confirm+ACT 포함 금액</span></h1>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'16px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>Ship Confirm+ACT 포함 금액</span>
+                    {applyCommission && <span style={{fontSize:'14px', fontWeight:'800', color:'#c2410c', marginLeft:'8px'}}>커미션 −₩{combinedCommission.toLocaleString()} 차감됨</span>}
+                  </h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
                     ))}
+                    <button onClick={() => setApplyCommission(v => !v)} title="SO가 등록된 건에 한해 외부 커미션(수수료, 부가세 별도)을 매출에서 차감합니다"
+                      style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:`1px solid ${applyCommission?'#c2410c':'#cbd5e1'}`, background: applyCommission?'#ea580c':'#fff', color: applyCommission?'#fff':'#334155', cursor:'pointer'}}>
+                      커미션 적용{applyCommission?' ✓':''}
+                    </button>
                     <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
                       {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => <option key={fq} value={fq}>{fq}</option>)}
                     </select>
@@ -2278,7 +2318,8 @@ img,video{max-width:100%;height:auto}
                 {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => {
                   const teamMembers = teams[team]||[];
                   const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member));
-                  const teamSumKRW = teamRows.filter(isRevenue).reduce((s,d)=>s+(d.priceKRW||0),0);
+                  const teamRevenueRows = teamRows.filter(isRevenue);
+                  const teamSumKRW = teamRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamRevenueRows);
                   return (
                   <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
                     <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', flexWrap:'wrap', gap:'8px'}}>
@@ -2293,7 +2334,8 @@ img,video{max-width:100%;height:auto}
                       ) : (teams[team]||[]).map(member => {
                         const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
                         const revenueRows = rows.filter(isRevenue);
-                        const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                        const mCommission = commissionFor(revenueRows);
+                        const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - mCommission;
                         const mTarget = currentMemberTargets[member] || 0;
                         const mPer = mTarget > 0 ? (sumKRW/mTarget)*100 : 0;
                         return (
@@ -2306,6 +2348,7 @@ img,video{max-width:100%;height:auto}
                             </div>
                             <div style={{textAlign:'right', marginBottom:'8px', fontSize:'11px', color:'#64748b', fontWeight:'bold'}}>
                               {mTarget > 0 ? `목표 ₩${mTarget.toLocaleString()}` : '목표 미설정'}
+                              {mCommission > 0 && <span style={{color:'#c2410c', marginLeft:'6px'}}>· 커미션 −₩{mCommission.toLocaleString()}</span>}
                             </div>
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
@@ -2364,12 +2407,14 @@ img,video{max-width:100%;height:auto}
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealers.map(dealer => {
                           const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && isRevenue(d));
-                          const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                          const dCommission = commissionFor(dRevenueRows);
+                          const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - dCommission;
                           return (
                             <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
                               <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
+                                {dCommission > 0 && <div style={{fontSize:'11px', fontWeight:'bold', color:'#c2410c'}}>커미션 −₩{dCommission.toLocaleString()}</div>}
                               </div>
                               <table style={{width:'100%', fontSize:'11px', tableLayout:'fixed'}}>
                                 <colgroup><col/><col style={{width:'68px'}}/><col style={{width:'86px'}}/><col style={{width:'96px'}}/></colgroup>
