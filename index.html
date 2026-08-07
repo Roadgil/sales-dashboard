@@ -1501,6 +1501,16 @@ img,video{max-width:100%;height:auto}
         return total * ((row.priceKRW || 0) / base);
       };
 
+      // 한 계약(같은 병원/SO)의 GMPP·Cryo7 줄이 목록에서 흩어지지 않고 붙어 나오도록.
+      // Firestore 반환 순서 그대로 뿌리면 같은 계약이 멀찍이 떨어져 커미션 차감분을 대조하기 어렵다.
+      const sortByContract = (a, b) => {
+        const ax = (a.account || ''), bx = (b.account || '');
+        if (ax !== bx) return ax.localeCompare(bx, 'ko');
+        const as = String(a.so || ''), bs = String(b.so || '');
+        if (as !== bs) return as.localeCompare(bs);
+        return (a.product || '').localeCompare(b.product || '');
+      };
+
       // 화면 표기용 - 커미션 차감 후 금액
       const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
       const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
@@ -2366,7 +2376,7 @@ img,video{max-width:100%;height:auto}
                             </div>
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
-                                const stRows = rows.filter(d=>d.status===st);
+                                const stRows = rows.filter(d=>d.status===st).sort(sortByContract);
                                 if (stRows.length===0) return null;
                                 const stSum = stRows.reduce((s,d)=>s+netPrice(d),0);
                                 const pill = STATUS_PILL_STYLE[st];
@@ -2424,7 +2434,7 @@ img,video{max-width:100%;height:auto}
                         {dealers.length === 0 ? (
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealers.map(dealer => {
-                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && isRevenue(d));
+                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && isRevenue(d)).sort(sortByContract);
                           const dCommission = commissionFor(dRevenueRows);
                           const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - dCommission;
                           return (
