@@ -215,14 +215,21 @@ def upload_candidates(candidates, db):
 def sync_price_updates(candidates, db):
     """이미 sales로 넘어간 건(같은 id의 sales 문서가 존재)에 대해:
     - Salesforce 금액이 바뀌었으면 priceKRW/priceUSD를 자동 갱신
+    - SO(Oracle Sales Order Number)가 대시보드엔 비어있는데 Salesforce엔 생겼으면 채워넣음.
+      등록 시점엔 아직 오라클 오더가 없어서 SO 없이 넘어간 건이 많은데(미래 분기일수록 많음),
+      그대로 두면 영영 빈칸으로 남아 커미션 정산 등에서 이 건을 짚어낼 방법이 없어진다.
+      이미 값이 있으면(수기 입력 포함) 절대 덮어쓰지 않는다.
     - Salesforce가 제안하는 분기가 현재 등록된 분기와 달라졌으면, 분기를 직접 바꾸지는 않고
       _sfQuarterMismatch 필드에 새 제안 분기를 남겨 대시보드에서 확인 후 사람이 판단하게 함
       (다시 일치하면 _sfQuarterMismatch 제거)
-    status/계약일/납품예정일/Dealer 등 수기 입력 필드는 그대로 둔다."""
+    status/계약일/납품예정일/Dealer 등 수기 입력 필드는 그대로 둔다.
+
+    반환: (금액 등 갱신 건수, SO 신규 기입 건수)"""
     from firebase_admin import firestore
 
     sales_ref = db.collection("sales")
     updated = 0
+    so_filled = 0
     now_iso = datetime.utcnow().isoformat()
     for c in candidates:
         doc_ref = sales_ref.document(c["id"])
@@ -238,6 +245,12 @@ def sync_price_updates(candidates, db):
             patch["_sfPriceUpdatedAt"] = now_iso
             patch["_sfPriceUpdatedFrom"] = existing.get("priceKRW")
 
+        # 비어있을 때만 채운다 - 사람이 넣은 값을 Salesforce가 밀어내면 안 됨
+        if c.get("so") and not str(existing.get("so") or "").strip():
+            patch["so"] = c["so"]
+            patch["_sfSoFilledAt"] = now_iso
+            so_filled += 1
+
         if existing.get("quarter") != c["suggestedQuarter"]:
             if existing.get("_sfQuarterMismatch") != c["suggestedQuarter"]:
                 patch["_sfQuarterMismatch"] = c["suggestedQuarter"]
@@ -247,4 +260,4 @@ def sync_price_updates(candidates, db):
         if patch:
             doc_ref.update(patch)
             updated += 1
-    return updated
+    return updated, so_filled

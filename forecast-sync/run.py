@@ -8,7 +8,8 @@
 4) Firestore sf_candidates 컬렉션에 반영 - 신규 후보는 생성, 아직 안 쓴(used=false) 기존
    후보는 최신 Salesforce 값으로 덮어씀, 이미 사용된(used=true) 후보는 건드리지 않음
 5) 이미 sales로 넘어간 건(같은 id의 sales 문서 존재)의 Salesforce 금액이 바뀌었으면
-   priceKRW/priceUSD만 자동 갱신 (수기 입력 필드는 그대로 둠)
+   priceKRW/priceUSD 자동 갱신, 대시보드에 비어있는 SO가 Salesforce에 생겼으면 그것도 채움
+   (수기 입력 필드와 이미 값이 있는 SO는 그대로 둠)
 6) state에 new_to 저장
 
 --dry-run 옵션: Selenium/Firestore 업로드 없이, 이미 받아둔 파일을 파싱 결과만 출력.
@@ -63,8 +64,8 @@ def main():
     created, updated, skipped_used = parse_upload.upload_candidates(candidates, db)
     print(f"Firestore 후보 동기화 완료: 신규 {created}건, 갱신 {updated}건, 이미 사용됨(건너뜀) {skipped_used}건")
 
-    price_updated = parse_upload.sync_price_updates(candidates, db)
-    print(f"이미 sales로 넘어간 건 중 금액 변경 감지되어 갱신: {price_updated}건")
+    price_updated, so_filled = parse_upload.sync_price_updates(candidates, db)
+    print(f"이미 sales로 넘어간 건 중 갱신: {price_updated}건 (그중 SO 신규 기입 {so_filled}건)")
 
     state.save_last_to(new_to.isoformat())
     print(f"state 저장 완료: last_to = {new_to.isoformat()}")
