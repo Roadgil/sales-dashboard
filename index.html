@@ -1478,26 +1478,32 @@ img,video{max-width:100%;height:auto}
       // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 같은 SO를 GMPP/Cryo7 등 여러 줄로
       // 쪼개서 들고 있으므로, SO를 중복 제거하고 SO당 한 번만 더해야 이중 차감이 안 된다.
       // SO가 비어있는 행은 매칭 자체가 불가능하므로 그냥 0원 취급(= 커미션 없는 것으로 표시).
-      // 이 행이 커미션 차감 대상인지 - 대상이면 해당 SO의 커미션 금액(>0), 아니면 0.
-      // 같은 SO의 여러 행이 모두 표시 대상이 된다(차감은 SO당 1회지만 어느 계약인지는 다 보여야 함).
-      const hasCommission = (row) => {
-        if (!applyCommission) return 0;
+      // SO(계약)별 매출 합계 - 커미션 안분의 분모. 매출로 잡히는 행(SC/ACT)만 센다.
+      const soRevenueTotal = {};
+      salesData.forEach(d => {
+        if (!isRevenue(d)) return;
+        const so = String(d.so || '').trim();
+        if (!so) return;
+        soRevenueTotal[so] = (soRevenueTotal[so] || 0) + (d.priceKRW || 0);
+      });
+
+      // 한 행이 부담하는 커미션. 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 한 계약을
+      // GMPP/Cryo7 등 여러 줄로 쪼개 갖고 있으므로, 줄 금액 비율대로 안분한다. 이렇게 해야
+      // 줄 합계 = 상태별 소계 = 카드 합계 = 팀 합계가 서로 어긋나지 않는다.
+      // SO가 없거나(매칭 불가) 매출 대상이 아닌 행(Pending·Back up)은 0.
+      const rowCommission = (row) => {
+        if (!applyCommission || !isRevenue(row)) return 0;
         const so = String(row.so || '').trim();
-        return so ? (commissions[so] || 0) : 0;
+        if (!so) return 0;
+        const total = commissions[so] || 0;
+        const base = soRevenueTotal[so] || 0;
+        if (!total || base <= 0) return 0;
+        return total * ((row.priceKRW || 0) / base);
       };
 
-      const commissionFor = (rows) => {
-        if (!applyCommission) return 0;
-        const seen = new Set();
-        let total = 0;
-        rows.forEach(d => {
-          const so = String(d.so || '').trim();
-          if (!so || seen.has(so)) return;
-          seen.add(so);
-          total += commissions[so] || 0;
-        });
-        return total;
-      };
+      // 화면 표기용 - 커미션 차감 후 금액
+      const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
+      const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
 
       const allMembers = Object.values(teams).flat();
       const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0, actCount:0, actKRW:0 });
@@ -2362,7 +2368,7 @@ img,video{max-width:100%;height:auto}
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st);
                                 if (stRows.length===0) return null;
-                                const stSum = stRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                                const stSum = stRows.reduce((s,d)=>s+netPrice(d),0);
                                 const pill = STATUS_PILL_STYLE[st];
                                 const excluded = st==='Back up' || st==='Pending';
                                 return (
@@ -2376,14 +2382,14 @@ img,video{max-width:100%;height:auto}
                                       <colgroup><col/><col style={{width:'68px'}}/><col style={{width:'86px'}}/><col style={{width:'96px'}}/></colgroup>
                                       <tbody>
                                         {stRows.map(r => {
-                                          const rc = hasCommission(r);
+                                          const rc = Math.round(rowCommission(r));
                                           return (
                                           <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
                                             <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
                                             <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
                                             <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
                                             <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: rc?'#dc2626':'inherit', fontWeight: rc?'bold':'normal'}}
-                                              title={rc?`SO ${r.so} 커미션 ₩${rc.toLocaleString()} 차감 대상`:''}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                              title={rc?`SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`:''}>₩{netPrice(r).toLocaleString()}</td>
                                           </tr>
                                           );
                                         })}
@@ -2432,14 +2438,14 @@ img,video{max-width:100%;height:auto}
                                 <colgroup><col/><col style={{width:'68px'}}/><col style={{width:'86px'}}/><col style={{width:'96px'}}/></colgroup>
                                 <tbody>
                                   {dRevenueRows.map(r => {
-                                    const rc = hasCommission(r);
+                                    const rc = Math.round(rowCommission(r));
                                     return (
                                     <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
                                       <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
                                       <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
                                       <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
                                       <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: rc?'#dc2626':'inherit', fontWeight: rc?'bold':'normal'}}
-                                        title={rc?`SO ${r.so} 커미션 ₩${rc.toLocaleString()} 차감 대상`:''}>₩{(r.priceKRW||0).toLocaleString()}</td>
+                                        title={rc?`SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`:''}>₩{netPrice(r).toLocaleString()}</td>
                                     </tr>
                                     );
                                   })}
