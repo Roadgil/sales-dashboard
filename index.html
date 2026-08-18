@@ -1466,14 +1466,20 @@ img,video{max-width:100%;height:auto}
       const [scenarioDrag, setScenarioDrag] = useState({ rowId:null, overKey:null });
       const teamOfMember = (m) => Object.keys(teams).find(t => (Array.isArray(teams[t]) ? teams[t] : []).includes(m)) || null;
 
+      // 끌고 있는 행 id를 ref에도 둔다. setState는 비동기라 dragstart 직후의 dragover/drop에서
+      // 아직 반영되지 않을 수 있는데, 그때 드롭을 놓치면 "끌었는데 아무 일도 안 생김"이 된다.
+      const scenarioDragIdRef = useRef(null);
       const onScenarioDragStart = (e, rowId) => {
         if (!scenarioMode) return;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(rowId));
+        scenarioDragIdRef.current = String(rowId);
         setScenarioDrag({ rowId:String(rowId), overKey:null });
       };
       const onScenarioDragOver = (e, dropKey) => {
-        if (!scenarioMode || !scenarioDrag.rowId) return;
+        if (!scenarioMode) return;
+        // preventDefault를 걸지 않은 dragover 다음에는 drop 자체가 발생하지 않는다.
+        // 그래서 상태 반영 여부와 무관하게 시나리오 모드면 항상 건다.
         e.preventDefault(); e.dataTransfer.dropEffect = 'move';
         if (scenarioDrag.overKey !== dropKey) setScenarioDrag(s => ({ ...s, overKey:dropKey }));
       };
@@ -1482,7 +1488,9 @@ img,video{max-width:100%;height:auto}
       const onScenarioDrop = (e, { member, status }) => {
         if (!scenarioMode) return;
         e.preventDefault(); e.stopPropagation();
-        const rowId = String(scenarioDrag.rowId || e.dataTransfer.getData('text/plain') || '');
+        // ref 먼저 - state가 아직 안 넘어왔을 수도 있다. dataTransfer는 최후 수단.
+        const rowId = String(scenarioDragIdRef.current || scenarioDrag.rowId || e.dataTransfer.getData('text/plain') || '');
+        scenarioDragIdRef.current = null;
         setScenarioDrag({ rowId:null, overKey:null });
         if (!rowId) return;
         const base = rawSalesData.find(d => String(d.id) === rowId);
@@ -1501,8 +1509,8 @@ img,video{max-width:100%;height:auto}
           return n;
         });
       };
-      const onScenarioDragEnd = () => setScenarioDrag({ rowId:null, overKey:null });
-      const resetScenario = () => { setScenarioMoves({}); setScenarioDrag({ rowId:null, overKey:null }); };
+      const onScenarioDragEnd = () => { scenarioDragIdRef.current = null; setScenarioDrag({ rowId:null, overKey:null }); };
+      const resetScenario = () => { scenarioDragIdRef.current = null; setScenarioMoves({}); setScenarioDrag({ rowId:null, overKey:null }); };
 
       const safeQuarters = Array.isArray(quarters) ? quarters : [];
       const groupedQuarters = safeQuarters.reduce((acc, q) => { const [year, quarter] = (q||'').split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
@@ -1651,6 +1659,14 @@ img,video{max-width:100%;height:auto}
       // 화면 표기용 - 커미션 차감 후 금액
       const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
       const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
+
+      // ── 클릭으로 고른 건들의 소계 ────────────────────────────────────────────
+      // "이 건들만 잡으면 얼마가 되고 목표의 몇 %인가"를 바로 보려는 용도.
+      // 색칠 대상과 같은 선택을 쓴다(행 한 번 클릭 = 고르기).
+      const pickedRowsInQ = currentQData.filter(d => pickedRowIds.includes(String(d.id)));
+      const pickedSumKRW  = pickedRowsInQ.reduce((s,d) => s + netPrice(d), 0);
+      const pickedTargetPct   = targetKRW  ? (pickedSumKRW / targetKRW) * 100 : 0;
+      const pickedExpectedPct = expectedKRW ? (pickedSumKRW / expectedKRW) * 100 : 0;
 
       const allMembers = Object.values(teams).flat();
       const memberStats = {}; allMembers.forEach(m => memberStats[m] = { count:0, sumKRW:0, actCount:0, actKRW:0 });
@@ -1922,6 +1938,36 @@ img,video{max-width:100%;height:auto}
                 ? <button onClick={() => unlockSummary()} title="Target 수정하려면 잠금 해제" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #fbbf24', background:'#fefce8', color:'#b45309', cursor:'pointer', fontWeight:'700'}}>🔒</button>
                 : <button onClick={() => setSummaryLocked(true)} title="잠그기" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #86efac', background:'#f0fdf4', color:'#15803d', cursor:'pointer', fontWeight:'700'}}>🔓</button>}
             </div>
+
+            {/* 행을 클릭해 고른 건들의 소계 - 고른 게 있을 때만 나온다 */}
+            {pickedRowsInQ.length > 0 && (
+              <div style={{marginBottom:'8px', border:'2px solid #2563eb', borderRadius:'8px', overflow:'hidden'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px', padding:'4px 6px', background:'#2563eb'}}>
+                  <span style={{fontSize:'10px', fontWeight:'900', color:'#fff'}}>선택한 {pickedRowsInQ.length}건 소계</span>
+                  <button onClick={clearPickedRows} style={{fontSize:'9px', fontWeight:'800', color:'#1d4ed8', background:'#fff', border:'none', borderRadius:'4px', padding:'1px 5px', cursor:'pointer'}}>해제</button>
+                </div>
+                <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
+                  <colgroup><col style={{width:'47%'}}/><col/></colgroup>
+                  <tbody>
+                    <tr>
+                      <td style={{...L, background:'#eff6ff', color:'#1d4ed8'}}>합계</td>
+                      <td style={{...V, background:'#eff6ff', color:'#1d4ed8', fontWeight:'900'}}>
+                        <div style={{whiteSpace:'nowrap'}}>{won(pickedSumKRW)}</div>
+                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>{usd(pickedSumKRW)}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{...L, background:'#eff6ff', color:'#1d4ed8'}}>Target 대비</td>
+                      <td style={{...V, background:'#eff6ff', color: pickedTargetPct>=100 ? '#047857' : '#1d4ed8', fontWeight:'900'}}>{pickedTargetPct.toFixed(2)}%</td>
+                    </tr>
+                    <tr>
+                      <td style={{...L, background:'#eff6ff', color:'#1d4ed8'}}>예상치 대비</td>
+                      <td style={{...V, background:'#eff6ff', color:'#1d4ed8', fontWeight:'900'}}>{pickedExpectedPct.toFixed(2)}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
               <colgroup><col style={{width:'47%'}}/><col/></colgroup>
@@ -2606,7 +2652,9 @@ img,video{max-width:100%;height:auto}
 
                   {/* 행 색상: 행을 클릭해 고른 뒤 색을 누른다 */}
                   <span style={{fontSize:'11px', fontWeight:'800', color: pickedRowIds.length>0 ? '#1d4ed8' : '#94a3b8'}}>
-                    🎨 {pickedRowIds.length>0 ? `${pickedRowIds.length}건 선택` : '행 클릭 후 색 선택'}
+                    🎨 {pickedRowIds.length>0
+                      ? `${pickedRowsInQ.length}건 선택 · ₩${pickedSumKRW.toLocaleString()} (Target ${pickedTargetPct.toFixed(1)}%)`
+                      : '행 클릭 → 소계·색칠'}
                   </span>
                   {Object.entries(ROW_HILITE).map(([key, pal]) => (
                     <button key={key} onClick={() => applyRowColor(key)} title={pal.label}
