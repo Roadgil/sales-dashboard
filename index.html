@@ -448,7 +448,7 @@ img,video{max-width:100%;height:auto}
       set(k,v)  { try { window.localStorage.setItem(k, v); }     catch(e) {} },
       remove(k) { try { window.localStorage.removeItem(k); }     catch(e) {} },
     };
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
     // ── [FIX #10] 토스트 컴포넌트 ──────────────────────────────────────────
     const Toast = ({ msg, type }) => (
@@ -780,7 +780,18 @@ img,video{max-width:100%;height:auto}
       });
       const [teamTargets, setTeamTargets]       = useState({});
       const [quarterTargets, setQuarterTargets] = useState({ '2026 Q1': { target: 0, gmppTarget: 0, er: 1389 }, '2026 Q2': { target: 7255198319, gmppTarget: 4550036400, er: 1389 } });
-      const [salesData, setSalesData]           = useState([]);
+      const [rawSalesData, setRawSalesData]     = useState([]);
+
+      // ── 가상 시나리오(엑셀 시트처럼 건을 옮겨보는 모드) ────────────────────
+      // Firestore에는 절대 쓰지 않는다. 실제 Ship Confirm/ACT 확정은 개인별 화면에서만 한다.
+      // 여기서는 "금액을 얼마나 맞출 수 있나" 시나리오만 본다 → 새로고침하면 원상복구.
+      // scenarioMoves: { [rowId]: { member?, team?, status?, contractType? } }
+      const [scenarioMode, setScenarioMode]   = useState(false);
+      const [scenarioMoves, setScenarioMoves] = useState({});
+      const scenarioCount = Object.keys(scenarioMoves).length;
+      // 실제 salesData(오버레이 적용본)는 currentQData 바로 위에서 만든다.
+      // Firestore 쓰기·감사로그·CSV는 반드시 rawSalesData 를 쓴다 - 아래 주석 참고.
+
       // Salesforce 자동 수집 후보 (sf_candidates) - 아직 대시보드에 반영 안 된 건들
       const [candidates, setCandidates]         = useState([]);
       const [convertingCandidateId, setConvertingCandidateId] = useState(null);
@@ -970,7 +981,7 @@ img,video{max-width:100%;height:auto}
       // ── Firestore 구독 ──────────────────────────────────────────────────
       useEffect(() => {
         if (!currentUser) return;
-        const unsubSales        = db.collection("sales").onSnapshot(snap => setSalesData(snap.docs.map(d => d.data())));
+        const unsubSales        = db.collection("sales").onSnapshot(snap => setRawSalesData(snap.docs.map(d => d.data())));
         const unsubCandidates   = db.collection("sf_candidates").where("used","==",false).onSnapshot(snap => setCandidates(snap.docs.map(d => d.data())));
         const unsubTargets      = db.collection("targets").doc("quarterTargets").onSnapshot(doc => { if (doc.exists) setQuarterTargets(doc.data()); });
         const unsubMemberTargets= db.collection("targets").doc("memberTargets").onSnapshot(doc => {
@@ -1021,7 +1032,7 @@ img,video{max-width:100%;height:auto}
 
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
       useEffect(() => {
-        if (salesData.length === 0) return;
+        if (rawSalesData.length === 0) return;
         if (!currentUser) return; // 미선적 이월은 로그인된 사용자가 접속했을 때만 수행
 
         // 현재 날짜 기준으로 해당 분기 계산
@@ -1043,7 +1054,7 @@ img,video{max-width:100%;height:auto}
           if (flags[rolloverKey]) return; // 이미 처리됨
 
           // 이전 분기의 미선적(Ship Confirm 아님) 데이터 = ACT + Pending + Back up
-          const carryOver = salesData.filter(d => d.quarter === prevQ && d.status !== 'Ship Confirm');
+          const carryOver = rawSalesData.filter(d => d.quarter === prevQ && d.status !== 'Ship Confirm');
           if (carryOver.length === 0) return;
 
           // quarters 목록에 현재 분기 없으면 추가
@@ -1071,7 +1082,7 @@ img,video{max-width:100%;height:auto}
             );
           });
         });
-      }, [salesData.length, currentUser]);
+      }, [rawSalesData.length, currentUser]);
 
       // ── [FIX #2] 강화된 저장 검증 ────────────────────────────────────────
       const handleSave = () => {
@@ -1109,7 +1120,7 @@ img,video{max-width:100%;height:auto}
         };
 
         // 수정 전 스냅샷 (edit인 경우)
-        const beforeSnap = editingId ? salesData.find(d => String(d.id) === String(editingId)) : null;
+        const beforeSnap = editingId ? rawSalesData.find(d => String(d.id) === String(editingId)) : null;
         const auditAction = editingId ? 'edit' : 'create';
 
         db.collection("sales").doc(payload.id).set(payload)
@@ -1167,7 +1178,7 @@ img,video{max-width:100%;height:auto}
       const deleteSalesData = (id) => {
         if (!requireAuth()) return;
         if (window.confirm(T.confirmDelete)) {
-          const targetData = salesData.find(d => String(d.id) === String(id));
+          const targetData = rawSalesData.find(d => String(d.id) === String(id));
           db.collection("sales").doc(String(id)).delete()
             .then(() => {
               // ── Audit Log 기록 ──
@@ -1207,12 +1218,12 @@ img,video{max-width:100%;height:auto}
       const handleEdit = (data) => { setForm(data); setEditingId(data.id); setShowEditModal(true); };
 
       // 같은 SO 또는 같은 Account로 이미 등록된 sales 데이터가 있는지 확인 - 있으면 그 데이터(분기 포함) 반환
-      const findExistingSalesMatch = (c) => salesData.find(d =>
+      const findExistingSalesMatch = (c) => rawSalesData.find(d =>
         (c.so && d.so === c.so) || (d.account === c.account)
       );
       const isCandidateLikelyDuplicate = (c) => !!findExistingSalesMatch(c);
       // SO가 완전히 같으면 이미 등록된 게 확실하므로 후보 목록 자체에서 제외한다 (Account만 겹치는 건 확실치 않아 경고만)
-      const isAlreadyRegisteredBySO = (c) => !!(c.so && salesData.some(d => d.so === c.so));
+      const isAlreadyRegisteredBySO = (c) => !!(c.so && rawSalesData.some(d => d.so === c.so));
       const visibleCandidates = candidates.filter(c => !isAlreadyRegisteredBySO(c));
 
       // Salesforce 후보를 선택하면: 분기/팀/멤버를 후보 기준으로 맞추고, 폼에 SO/Account/Product/가격을
@@ -1257,20 +1268,25 @@ img,video{max-width:100%;height:auto}
       };
 
       const addTeam = () => { if (!requireAuth()) return; const n = prompt(T.promptTeam); if (n && !teams[n]) { const nt = { ...teams, [n]: [] }; setTeams(nt); setSelectedTeam(n); setSelectedMember(null); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const addMember = () => { if (!requireAuth()) return; const n = prompt(`${selectedTeam}${T.promptMember}`); if (n && !teams[selectedTeam].includes(n)) { const nt = { ...teams, [selectedTeam]: [...teams[selectedTeam], n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
-      const editMemberName = (oldName, e) => {
-        e.stopPropagation();
+      // teamArg가 없으면 selectedTeam을 쓴다. 통합데이터에서는 팀별로 돌면서 호출하므로
+      // 팀을 넘겨야 하고, onClick={addMember} 처럼 이벤트가 첫 인자로 들어오는 기존 호출도
+      // 그대로 동작해야 해서 문자열인지 확인해 구분한다.
+      const teamArgOr = (teamArg) => (typeof teamArg === 'string' && teamArg ? teamArg : selectedTeam);
+      const addMember = (teamArg) => { if (!requireAuth()) return; const tm = teamArgOr(teamArg); const n = prompt(`${tm}${T.promptMember}`); if (n && !(teams[tm]||[]).includes(n)) { const nt = { ...teams, [tm]: [...(teams[tm]||[]), n] }; setTeams(nt); handleMemberTargetChange(n, 0); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); } };
+      const editMemberName = (oldName, e, teamArg) => {
+        if (e && e.stopPropagation) e.stopPropagation();
         if (!requireAuth()) return;
+        const selectedTeam = teamArgOr(teamArg);
         const newName = prompt(T.promptRename, oldName);
-        if (newName && newName !== oldName && !teams[selectedTeam].includes(newName)) {
+        if (newName && newName !== oldName && !(teams[selectedTeam]||[]).includes(newName)) {
           const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].map(m => m===oldName ? newName : m); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true });
           const ntg = { ...memberTargets }; let ntgChanged = false;
           Object.keys(ntg).forEach(q => { if (ntg[q] && ntg[q][oldName] !== undefined) { ntg[q] = { ...ntg[q], [newName]: ntg[q][oldName] }; delete ntg[q][oldName]; ntgChanged = true; } });
           if (ntgChanged) { setMemberTargets(ntg); db.collection("targets").doc("memberTargets").set(ntg); }
-          salesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
+          rawSalesData.filter(d => d.member===oldName).forEach(d => db.collection("sales").doc(String(d.id)).update({ member: newName }));
         }
       };
-      const deleteMember = (memberName, e) => { e.stopPropagation(); if (!requireAuth()) return; if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[selectedTeam] = nt[selectedTeam].filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
+      const deleteMember = (memberName, e, teamArg) => { if (e && e.stopPropagation) e.stopPropagation(); if (!requireAuth()) return; const tm = teamArgOr(teamArg); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[tm] = (nt[tm]||[]).filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
       const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } if (!memberTargets[q]) { const nmt = { ...memberTargets, [q]: { ...(memberTargets[selectedQuarter]||{}) } }; setMemberTargets(nmt); db.collection("targets").doc("memberTargets").set(nmt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
@@ -1290,7 +1306,7 @@ img,video{max-width:100%;height:auto}
 
       // ── [FIX #8] CSV 내보내기 — 필터 옵션 지원 ──────────────────────────
       const exportToCSV = (mode = 'current') => {
-        let data = mode === 'all' ? salesData : salesData.filter(d => d.quarter === selectedQuarter);
+        let data = mode === 'all' ? rawSalesData : rawSalesData.filter(d => d.quarter === selectedQuarter);
         if (data.length === 0) return alert(T.noExportData);
         const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
         const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,d.deliveryDate,d.salesType,d.dealerName,d.so,d.account,d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
@@ -1307,8 +1323,12 @@ img,video{max-width:100%;height:auto}
       const [showCsvMenu, setShowCsvMenu] = useState(false);
       const [showCandidatesPage, setShowCandidatesPage] = useState(false);
       const [showTeamOnly, setShowTeamOnly] = useState(false);
-      const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(false);
+      // 통합데이터가 기본(그리고 유일한) 전체 화면. 대시보드/팀별 대시보드는 통합데이터로 합쳐졌다.
+      const [showAllTeamsCombined, setShowAllTeamsCombined] = useState(true);
       const [allTeamsViewMode, setAllTeamsViewMode] = useState('team'); // 'team' | 'dealer'
+      // 팀/멤버 추가·이름변경·삭제와 팀 목표 입력은 원래 '팀별 대시보드'에 있던 것.
+      // 통합데이터로 옮겨왔지만 평소 화면이 지저분해지지 않게 이 토글을 켤 때만 노출한다.
+      const [combinedEditMode, setCombinedEditMode] = useState(false);
       // 외부 커미션(ext. commission) - SO별 수수료(부가세 별도). commissions.json은 재무 엑셀에서 추출한 참조 데이터.
       const [commissions, setCommissions] = useState({});
       const [applyCommission, setApplyCommission] = useState(false);
@@ -1400,6 +1420,90 @@ img,video{max-width:100%;height:auto}
       };
       const handleRowDragEnd = () => setRowDragState({ type:null, fromId:null, overId:null });
 
+      // ── 행 강조색 (팀 공유) ────────────────────────────────────────────────
+      // sales 문서를 건드리지 않고 settings/rowColors 에 { [rowId]: palette } 로 따로 둔다.
+      // rowOrders와 같은 방식 - 매출 데이터와 표시용 설정을 섞지 않으려는 것.
+      const ROW_HILITE = {
+        yellow: { label:'노랑', bg:'#fef9c3', border:'#fde047' },
+        green:  { label:'초록', bg:'#dcfce7', border:'#86efac' },
+        blue:   { label:'파랑', bg:'#dbeafe', border:'#93c5fd' },
+        pink:   { label:'분홍', bg:'#fce7f3', border:'#f9a8d4' },
+        orange: { label:'주황', bg:'#ffedd5', border:'#fdba74' },
+        purple: { label:'보라', bg:'#ede9fe', border:'#c4b5fd' },
+        gray:   { label:'회색', bg:'#e2e8f0', border:'#cbd5e1' },
+      };
+      const [rowColors, setRowColors] = useState({});
+      useEffect(() => {
+        if (!currentUser) return;
+        const unsub = db.collection("settings").doc("rowColors").onSnapshot(doc => {
+          const d = doc.exists ? doc.data() : null;
+          setRowColors(d && typeof d === 'object' ? d : {});
+        }, () => {});
+        return () => unsub();
+      }, [currentUser]);
+
+      // 색 선택 대상 행들 (통합데이터에서 클릭으로 모음). 저장 후에도 선택은 유지 - 색을 연달아 바꿔볼 수 있게.
+      const [pickedRowIds, setPickedRowIds] = useState([]);
+      const togglePickedRow = (rowId) => setPickedRowIds(prev => {
+        const id = String(rowId);
+        return prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      });
+      const clearPickedRows = () => setPickedRowIds([]);
+
+      const applyRowColor = (palette) => {
+        if (!auth.currentUser) { setShowLoginModal(true); return; }
+        if (pickedRowIds.length === 0) { showToast('먼저 색을 넣을 행을 클릭해서 고르세요', 'error'); return; }
+        const next = { ...rowColors };
+        // palette === null 이면 색 해제
+        pickedRowIds.forEach(id => { if (palette) next[id] = palette; else delete next[id]; });
+        setRowColors(next);
+        db.collection("settings").doc("rowColors").set(next)
+          .then(() => showToast(palette ? `${pickedRowIds.length}건 ${ROW_HILITE[palette].label}으로 표시` : `${pickedRowIds.length}건 색 해제`))
+          .catch(() => showToast('색상 저장 실패', 'error'));
+      };
+
+      // ── 가상 시나리오: 건을 다른 담당자/상태로 끌어다 놓기 ─────────────────
+      const [scenarioDrag, setScenarioDrag] = useState({ rowId:null, overKey:null });
+      const teamOfMember = (m) => Object.keys(teams).find(t => (Array.isArray(teams[t]) ? teams[t] : []).includes(m)) || null;
+
+      const onScenarioDragStart = (e, rowId) => {
+        if (!scenarioMode) return;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(rowId));
+        setScenarioDrag({ rowId:String(rowId), overKey:null });
+      };
+      const onScenarioDragOver = (e, dropKey) => {
+        if (!scenarioMode || !scenarioDrag.rowId) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        if (scenarioDrag.overKey !== dropKey) setScenarioDrag(s => ({ ...s, overKey:dropKey }));
+      };
+      // member / status 중 넘어온 것만 바꾼다. 원래 값과 같아지면 그 건의 오버레이를 지워
+      // "안 옮긴 상태"로 되돌린다 - 그래야 변경 건수 표시가 실제와 맞는다.
+      const onScenarioDrop = (e, { member, status }) => {
+        if (!scenarioMode) return;
+        e.preventDefault(); e.stopPropagation();
+        const rowId = String(scenarioDrag.rowId || e.dataTransfer.getData('text/plain') || '');
+        setScenarioDrag({ rowId:null, overKey:null });
+        if (!rowId) return;
+        const base = rawSalesData.find(d => String(d.id) === rowId);
+        if (!base) return;
+
+        const cur = scenarioMoves[rowId] || {};
+        const nextPatch = { ...cur };
+        if (member !== undefined) { nextPatch.member = member; nextPatch.team = teamOfMember(member) || base.team; }
+        if (status !== undefined) { nextPatch.status = status; }
+
+        // 원본과 완전히 같으면 오버레이 제거
+        const isSame = Object.keys(nextPatch).every(k => nextPatch[k] === base[k]);
+        setScenarioMoves(prev => {
+          const n = { ...prev };
+          if (isSame) delete n[rowId]; else n[rowId] = nextPatch;
+          return n;
+        });
+      };
+      const onScenarioDragEnd = () => setScenarioDrag({ rowId:null, overKey:null });
+      const resetScenario = () => { setScenarioMoves({}); setScenarioDrag({ rowId:null, overKey:null }); };
+
       const safeQuarters = Array.isArray(quarters) ? quarters : [];
       const groupedQuarters = safeQuarters.reduce((acc, q) => { const [year, quarter] = (q||'').split(' '); if (!acc[year]) acc[year] = []; acc[year].push(quarter); return acc; }, {});
 
@@ -1415,6 +1519,24 @@ img,video{max-width:100%;height:auto}
       }
 
       // ── [FIX #1] 집계 기준: ACT + Pending 만 (Backup/미납 제외) ──────────
+      // ── 가상 시나리오 오버레이를 여기서 씌운다 ──────────────────────────────
+      // currentQData·memberStats·팀 합계·전사 총액·달성률이 전부 salesData에서 파생되므로
+      // 이 한 곳만 갈아끼우면 건을 옮기는 순간 모든 숫자가 알아서 다시 계산된다.
+      //
+      // 두 가지를 일부러 지킨다:
+      //  1) 이 줄보다 위에서는 rawSalesData만 쓴다 - Firestore 쓰기(분기 이월, 멤버 이름변경),
+      //     감사 로그의 before 스냅샷, 중복 등록 검사, CSV 추출이 가상 이동에 오염되면 안 된다.
+      //  2) 담당자 상세/개인별 화면에서는 오버레이를 끈다 - 거기가 실제 Ship Confirm·ACT를
+      //     확정하는 자리라, 가상으로 옮긴 건이 진짜처럼 보이면 위험하다.
+      const scenarioActive = scenarioCount > 0 && !selectedMember && !showMemberPicker;
+      const salesData = useMemo(() => {
+        if (!scenarioActive) return rawSalesData;
+        return rawSalesData.map(d => {
+          const patch = scenarioMoves[String(d.id)];
+          return patch ? { ...d, ...patch, _scenarioMoved: true } : d;
+        });
+      }, [rawSalesData, scenarioMoves, scenarioActive]);
+
       const currentQData   = salesData.filter(d => d.quarter === selectedQuarter);
       const currentTargets = quarterTargets[selectedQuarter] || { target: 0, gmppTarget: 0, er: 1389 };
       const targetKRW      = currentTargets.target || 0;
@@ -1711,6 +1833,111 @@ img,video{max-width:100%;height:auto}
                 </div>
               );
             })}
+          </div>
+        );
+      };
+
+      // ── 통합데이터 오른쪽 요약 패널 ─────────────────────────────────────────
+      // 옛 대시보드의 "분기 요약 지표" KPI 카드 9개를, 엑셀 납품처 FCST 시트의
+      // 세로 라벨|값 격자 모양으로만 바꿔 옮긴 것. 값·산식은 카드와 동일하다.
+      //  · 순서는 cardOrder(대시보드에서 저장해둔 카드 순서)를 그대로 따른다.
+      //  · 커미션 토글이 꺼져 있으면(기본) rowCommission이 0이라 카드 값과 정확히 일치하고,
+      //    켜면 화면 상단 총액과 어긋나지 않도록 커미션을 뺀 금액으로 보여준다.
+      const renderFcstSummaryPanel = () => {
+        const revRows   = currentQData.filter(isRevenue);
+        const pExpected = revRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(revRows);
+        const pGap      = targetKRW - pExpected;
+        const pGmppRows = revRows.filter(d => d.product==='GMPP');
+        const pGmppExp  = pGmppRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pGmppRows);
+        const pGmppGap  = gmppTargetKRW - pGmppExp;
+        const pGmppPct  = gmppTargetKRW ? (pGmppExp / gmppTargetKRW) * 100 : 0;
+        const pActRows  = currentQData.filter(isACT);
+        const pAct      = pActRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pActRows);
+        const pScRows   = currentQData.filter(isShipConfirm);
+        const pSc       = pScRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pScRows);
+        const pIncentivePct = incentiveTargetKRW ? (pExpected / incentiveTargetKRW) * 100 : 0;
+
+        const won = (n) => '₩ ' + Math.round(n).toLocaleString();
+        const usd = (n) => '$ ' + Math.round(n / activeER).toLocaleString();
+
+        const L = { padding:'5px 6px', border:'1px solid #cbd5e1', fontSize:'11px', fontWeight:'700', color:'#334155', background:'#f1f5f9', whiteSpace:'nowrap' };
+        const V = { padding:'5px 6px', border:'1px solid #cbd5e1', fontSize:'11px', fontWeight:'700', textAlign:'right', fontFamily:'monospace' };
+
+        // 카드 하나 = 한 행. note는 카드에 붙어있던 배지(vs Target %, 초과/미달)를 옮긴 것.
+        const Row = ({ label, value, sub, note, noteAhead, labelStyle, valueStyle, editable, onEdit, editColor }) => (
+          <tr>
+            <td style={{...L, ...(labelStyle||{})}}>
+              {label}{editable && <span style={{marginLeft:'3px', opacity:0.7}}>✏️</span>}
+            </td>
+            <td style={{...V, ...(valueStyle||{})}}>
+              {editable && !summaryLocked
+                ? <input type="number" min="0" value={value===0?'':value} onChange={e=>onEdit(e.target.value)}
+                    style={{width:'100%', textAlign:'right', fontFamily:'monospace', fontSize:'11px', fontWeight:'700', color:editColor||'#1e293b', border:'none', borderBottom:`1px solid ${editColor||'#cbd5e1'}`, outline:'none', background:'transparent'}}/>
+                : <div style={{whiteSpace:'nowrap'}}>{won(value)}</div>}
+              <div style={{display:'flex', justifyContent:'space-between', gap:'4px', fontSize:'9px', fontWeight:'700', marginTop:'1px'}}>
+                {note
+                  ? <span style={{color: noteAhead ? '#047857' : '#b45309'}}>{note}</span>
+                  : <span></span>}
+                <span style={{color:'#94a3b8', whiteSpace:'nowrap'}}>{sub}</span>
+              </div>
+            </td>
+          </tr>
+        );
+
+        // 대시보드 카드 9개와 1:1
+        const KPI = {
+          targetKRW: () => <Row key="targetKRW" label="Target" value={targetKRW} sub={usd(targetKRW)}
+                                labelStyle={{color:'#b91c1c', background:'#fee2e2'}} valueStyle={{color:'#b91c1c'}}
+                                editable onEdit={v=>handleTargetChange('target', v)} editColor="#b91c1c"/>,
+          incentiveKRW: () => <Row key="incentiveKRW" label="Incentive Target ÷120%" value={incentiveTargetKRW} sub={usd(incentiveTargetKRW)}
+                                labelStyle={{color:'#7c3aed'}} valueStyle={{color:'#6d28d9'}}
+                                note={'ACT+SC ' + pIncentivePct.toFixed(1) + '%'} noteAhead={pIncentivePct>=100}/>,
+          gapKRW: () => <Row key="gapKRW" label="GAP" value={pGap} sub={usd(pGap)}
+                                valueStyle={{color: pGap<=0 ? '#047857' : '#b45309'}}
+                                note={pGap<=0 ? '목표 초과' : '목표 미달'} noteAhead={pGap<=0}/>,
+          estimatedKRW: () => <Row key="estimatedKRW" label="예상치 (ACT+SC)" value={pExpected} sub={usd(pExpected)}
+                                labelStyle={{fontWeight:'900'}} valueStyle={{background:'#fef08a', fontWeight:'900', color:'#0f172a'}}
+                                note={targetKRW ? 'vs Target ' + (pExpected/targetKRW*100).toFixed(1) + '%' : null}
+                                noteAhead={targetKRW ? pExpected>=targetKRW : false}/>,
+          shipConfirmKRW: () => <Row key="shipConfirmKRW" label="SC 예상치" value={pSc} sub={usd(pSc)}
+                                valueStyle={{background:'#dbeafe', color:'#1d4ed8'}}/>,
+          actEstimatedKRW: () => <Row key="actEstimatedKRW" label="ACT 예상치" value={pAct} sub={usd(pAct)}
+                                valueStyle={{background:'#dcfce7', color:'#15803d'}}/>,
+          gmppTarget: () => <Row key="gmppTarget" label="GMPP Target" value={gmppTargetKRW} sub={usd(gmppTargetKRW)}
+                                labelStyle={{color:'#1d4ed8'}} valueStyle={{color:'#1d4ed8'}}
+                                editable onEdit={v=>handleTargetChange('gmppTarget', v)} editColor="#1d4ed8"/>,
+          gmppEstimated: () => <Row key="gmppEstimated" label="GMPP 예상치 (ACT+SC)" value={pGmppExp} sub={usd(pGmppExp)}
+                                labelStyle={{color:'#1d4ed8'}}
+                                note={'vs Target ' + pGmppPct.toFixed(1) + '%'} noteAhead={pGmppPct>=100}/>,
+          gmppGap: () => <Row key="gmppGap" label="GMPP GAP" value={pGmppGap} sub={usd(pGmppGap)}
+                                labelStyle={{color:'#1d4ed8'}} valueStyle={{color: pGmppGap<=0 ? '#047857' : '#b45309'}}
+                                note={pGmppGap<=0 ? '목표 초과' : '목표 미달'} noteAhead={pGmppGap<=0}/>,
+        };
+
+        return (
+          <div style={{background:'#fff', border:'1px solid #cbd5e1', borderRadius:'10px', padding:'10px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)'}}>
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px', gap:'6px'}}>
+              <div style={{fontSize:'12px', fontWeight:'900', color:'#0f172a'}}>{selectedQuarter} 요약</div>
+              {summaryLocked
+                ? <button onClick={() => unlockSummary()} title="Target 수정하려면 잠금 해제" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #fbbf24', background:'#fefce8', color:'#b45309', cursor:'pointer', fontWeight:'700'}}>🔒</button>
+                : <button onClick={() => setSummaryLocked(true)} title="잠그기" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #86efac', background:'#f0fdf4', color:'#15803d', cursor:'pointer', fontWeight:'700'}}>🔓</button>}
+            </div>
+
+            <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
+              <colgroup><col style={{width:'47%'}}/><col/></colgroup>
+              <tbody>
+                {cardOrder.filter(id => KPI[id]).map(id => KPI[id]())}
+              </tbody>
+            </table>
+
+            {scenarioCount > 0 && (
+              <div style={{marginTop:'8px', padding:'6px 8px', borderRadius:'6px', background:'#fff7ed', border:'1px dashed #fdba74', fontSize:'10px', fontWeight:'800', color:'#c2410c'}}>
+                시나리오 {scenarioCount}건 반영된 숫자입니다 (저장 안 됨)
+              </div>
+            )}
+            {applyCommission && (
+              <div style={{marginTop:'6px', fontSize:'10px', fontWeight:'700', color:'#c2410c'}}>커미션 차감 반영됨</div>
+            )}
           </div>
         );
       };
@@ -2195,10 +2422,8 @@ img,video{max-width:100%;height:auto}
 
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${!showTeamOnly && !showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowTeamOnly(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showTeamOnly ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>팀별 대시보드</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowTeamOnly(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2330,7 +2555,7 @@ img,video{max-width:100%;height:auto}
                   </div>
                 </div>
               </div>
-            ) : showAllTeamsCombined && !selectedMember ? (() => {
+            ) : !selectedMember && !showMemberPicker ? (() => {
               const combinedRows = salesData.filter(d => d.quarter===selectedQuarter && isRevenue(d));
               const combinedCommission = commissionFor(combinedRows);
               const combinedGrandTotalKRW = combinedRows.reduce((s,d)=>s+(d.priceKRW||0),0) - combinedCommission;
@@ -2354,19 +2579,137 @@ img,video{max-width:100%;height:auto}
                   </div>
                 </div>
 
+                {/* ── 도구 모음: 가상 시나리오 · 행 색상 · 편집 ── */}
+                <div style={{display:'flex', flexWrap:'wrap', gap:'8px', alignItems:'center', marginBottom:'12px', padding:'8px 10px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:'10px'}}>
+                  <button onClick={() => { setScenarioMode(v => !v); if (scenarioMode) resetScenario(); }}
+                    title="건을 드래그해서 담당자·상태를 바꿔보며 금액 시나리오를 봅니다. Firestore에 저장되지 않고 새로고침하면 원래대로 돌아갑니다."
+                    style={{padding:'6px 12px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', cursor:'pointer',
+                            border:`1px solid ${scenarioMode?'#c2410c':'#cbd5e1'}`, background: scenarioMode?'#ea580c':'#fff', color: scenarioMode?'#fff':'#334155'}}>
+                    🧪 가상 시나리오{scenarioMode?' ON':''}
+                  </button>
+
+                  {scenarioMode && (
+                    <>
+                      <span style={{fontSize:'11px', fontWeight:'800', color: scenarioCount>0 ? '#c2410c' : '#94a3b8'}}>
+                        {scenarioCount>0 ? `${scenarioCount}건 이동됨` : '건을 다른 담당자·상태로 끌어다 놓으세요'}
+                      </span>
+                      <button onClick={resetScenario} disabled={scenarioCount===0}
+                        style={{padding:'6px 10px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', border:'1px solid #cbd5e1', background:'#fff',
+                                color: scenarioCount>0?'#334155':'#cbd5e1', cursor: scenarioCount>0?'pointer':'not-allowed'}}>↺ 되돌리기</button>
+                      <span style={{fontSize:'10px', fontWeight:'700', color:'#c2410c', background:'#fff7ed', border:'1px dashed #fdba74', borderRadius:'6px', padding:'3px 8px'}}>
+                        저장 안 됨 · 실제 확정은 개인별 화면에서
+                      </span>
+                    </>
+                  )}
+
+                  <span style={{width:'1px', alignSelf:'stretch', background:'#e2e8f0', margin:'0 2px'}}></span>
+
+                  {/* 행 색상: 행을 클릭해 고른 뒤 색을 누른다 */}
+                  <span style={{fontSize:'11px', fontWeight:'800', color: pickedRowIds.length>0 ? '#1d4ed8' : '#94a3b8'}}>
+                    🎨 {pickedRowIds.length>0 ? `${pickedRowIds.length}건 선택` : '행 클릭 후 색 선택'}
+                  </span>
+                  {Object.entries(ROW_HILITE).map(([key, pal]) => (
+                    <button key={key} onClick={() => applyRowColor(key)} title={pal.label}
+                      style={{width:'22px', height:'22px', borderRadius:'50%', background:pal.bg, border:`2px solid ${pal.border}`, cursor:'pointer', padding:0}}/>
+                  ))}
+                  <button onClick={() => applyRowColor(null)} title="색 해제"
+                    style={{width:'22px', height:'22px', borderRadius:'50%', background:'#fff', border:'2px solid #cbd5e1', cursor:'pointer', padding:0, fontSize:'11px', fontWeight:'900', color:'#64748b', lineHeight:1}}>✕</button>
+                  {pickedRowIds.length>0 && (
+                    <button onClick={clearPickedRows} style={{padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:'800', border:'1px solid #cbd5e1', background:'#fff', color:'#334155', cursor:'pointer'}}>선택 해제</button>
+                  )}
+
+                  <span style={{width:'1px', alignSelf:'stretch', background:'#e2e8f0', margin:'0 2px'}}></span>
+
+                  <button onClick={() => setCombinedEditMode(v => !v)} title="팀/멤버 추가·이름변경·삭제, 팀 목표 입력"
+                    style={{padding:'6px 12px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', cursor:'pointer',
+                            border:`1px solid ${combinedEditMode?'#1d4ed8':'#cbd5e1'}`, background: combinedEditMode?'#2563eb':'#fff', color: combinedEditMode?'#fff':'#334155'}}>
+                    ⚙ 팀·멤버 편집{combinedEditMode?' ON':''}
+                  </button>
+                  {combinedEditMode && (
+                    <button onClick={addTeam} style={{padding:'6px 10px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', border:'1px solid #bfdbfe', background:'#eff6ff', color:'#1d4ed8', cursor:'pointer'}}>+ 팀 추가</button>
+                  )}
+                </div>
+
+                {/* ── 본문(좌) + 요약 패널(우) ── */}
+                <div style={{display:'flex', gap:'16px', alignItems:'flex-start'}}>
+                <div style={{flex:'1 1 0', minWidth:0}}>
+
                 {allTeamsViewMode === 'team' && Object.keys(teams).sort().map(team => {
                   const teamMembers = teams[team]||[];
                   const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member));
                   const teamRevenueRows = teamRows.filter(isRevenue);
                   const teamSumKRW = teamRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamRevenueRows);
+                  // ↓ 원래 '팀별 대시보드'에 있던 팀 요약 (목표 대비 달성률 + 장비별 대수)
+                  const teamTargetKRW = teamTargets[team]?.[selectedQuarter] || 0;
+                  const teamPer = teamTargetKRW > 0 ? (teamSumKRW/teamTargetKRW)*100 : 0;
+                  const teamZone = teamPer>=120?3:teamPer>=100?2:1;
+                  const teamPerColor = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
+                  const teamScRows  = teamRevenueRows.filter(isShipConfirm);
+                  const teamActRows = teamRevenueRows.filter(isACT);
+                  const teamScKRW  = teamScRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamScRows);
+                  const teamActKRW = teamActRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamActRows);
+                  const teamBarScale = Math.max(teamTargetKRW, teamSumKRW, 1);
+                  const teamByProduct = {};
+                  teamRevenueRows.forEach(d => { const p = d.product || '미지정'; teamByProduct[p] = (teamByProduct[p]||0) + 1; });
+                  const teamProducts = Object.keys(teamByProduct).sort((a,b) => teamByProduct[b]-teamByProduct[a] || a.localeCompare(b));
                   return (
                   <div key={team} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', flexWrap:'wrap', gap:'8px'}}>
-                      <h3 className="text-lg font-bold text-gray-800">{team}</h3>
-                      <div style={{fontWeight:'bold', padding:'6px 12px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
-                        합계: ₩{teamSumKRW.toLocaleString()}
+                    {/* ── 팀 헤더: 합계 · 목표 대비 달성률 · 장비별 대수 ── */}
+                    <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'10px', flexWrap:'wrap', gap:'10px'}}>
+                      <h3 className="text-lg font-bold text-gray-800">{team}
+                        <span style={{fontSize:'12px', fontWeight:'700', color:'#64748b', marginLeft:'6px'}}>({teamRevenueRows.length}건)</span>
+                      </h3>
+                      <div style={{display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap'}}>
+                        {combinedEditMode && (
+                          <div style={{display:'flex', alignItems:'center', gap:'4px', padding:'4px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:'6px'}}>
+                            <span style={{fontSize:'10px', fontWeight:'800', color:'#475569'}}>팀 목표 ₩</span>
+                            <input type="number" min="0" value={teamTargetKRW===0?'':teamTargetKRW}
+                              onChange={e=>handleTeamTargetChange(team, selectedQuarter, e.target.value)}
+                              style={{width:'118px', textAlign:'right', fontFamily:'monospace', fontSize:'11px', fontWeight:'700', color:'#334155', border:'none', borderBottom:'1px solid #cbd5e1', outline:'none', background:'transparent'}}/>
+                          </div>
+                        )}
+                        <div style={{fontWeight:'bold', padding:'6px 12px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
+                          합계: ₩{teamSumKRW.toLocaleString()}
+                          {teamTargetKRW > 0 && <span style={{marginLeft:'6px', color:teamPerColor, fontWeight:'900'}}>({teamPer.toFixed(1)}%)</span>}
+                        </div>
                       </div>
                     </div>
+
+                    {/* 목표 대비 진행 바 (SC 파랑 + ACT 초록) */}
+                    {teamTargetKRW > 0 ? (
+                      <div style={{marginBottom:'10px'}}>
+                        <div style={{position:'relative', width:'100%', height:'10px', background:'#f1f5f9', borderRadius:'999px', overflow:'hidden', display:'flex'}}>
+                          <div style={{width:`${teamScKRW/teamBarScale*100}%`, background:'#3b82f6', height:'100%'}}></div>
+                          <div style={{width:`${teamActKRW/teamBarScale*100}%`, background:'#10b981', height:'100%'}}></div>
+                          <div style={{position:'absolute', top:0, bottom:0, borderLeft:'2px dashed #1e293b', left:`${Math.min(teamTargetKRW/teamBarScale*100, 99.5)}%`}}></div>
+                        </div>
+                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'4px', fontSize:'10px', fontWeight:'800', color:'#64748b'}}>
+                          <span style={{color:'#1d4ed8'}}>SC ₩{teamScKRW.toLocaleString()}</span>
+                          <span style={{color:'#047857'}}>ACT ₩{teamActKRW.toLocaleString()}</span>
+                          <span>목표 ₩{teamTargetKRW.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{marginBottom:'10px', fontSize:'10px', fontWeight:'800', color:'#94a3b8'}}>
+                        팀 목표 미설정{!combinedEditMode && ' · 「⚙ 팀·멤버 편집」에서 입력'}
+                      </div>
+                    )}
+
+                    {/* 장비별 대수 */}
+                    {teamProducts.length > 0 && (
+                      <div style={{display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'12px'}}>
+                        <span style={{fontSize:'10px', fontWeight:'900', color:'#475569', alignSelf:'center'}}>장비별</span>
+                        {teamProducts.map(p => (
+                          <span key={p} style={{fontSize:'10px', fontWeight:'800', color:'#334155', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:'999px', padding:'2px 8px'}}>
+                            {p} <span style={{color:'#1d4ed8'}}>{teamByProduct[p]}</span>
+                          </span>
+                        ))}
+                        <span style={{fontSize:'10px', fontWeight:'900', color:'#b91c1c', background:'#fee2e2', border:'1px solid #fecaca', borderRadius:'999px', padding:'2px 8px'}}>
+                          Total {teamRevenueRows.length}
+                        </span>
+                      </div>
+                    )}
+
                     <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
                       {(teams[team]||[]).length === 0 ? (
                         <div className="text-gray-400 text-sm p-4">{T.noMembers}</div>
@@ -2377,10 +2720,89 @@ img,video{max-width:100%;height:auto}
                         const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - mCommission;
                         const mTarget = currentMemberTargets[member] || 0;
                         const mPer = mTarget > 0 ? (sumKRW/mTarget)*100 : 0;
+                        const colKey = `col__${member}`;
+                        const colOver = scenarioMode && scenarioDrag.overKey === colKey;
+
+                        // 한 상태 그룹의 행 표.
+                        // compact=true 는 ACT를 일반/Try&Buy 좌우로 쪼갤 때 쓴다. 반쪽 폭(약 145px)에
+                        // 계정+제품+금액을 한 줄로 넣으면 계정명이 한두 글자로 잘려서, 금액을 아랫줄로 내린다.
+                        const renderRowTable = (rowsArr, compact) => (
+                          <table style={{width:'100%', tableLayout:'fixed'}}>
+                            {compact
+                              ? <colgroup><col/></colgroup>
+                              : <colgroup><col/><col style={{width:'56px'}}/><col style={{width:'92px'}}/></colgroup>}
+                            <tbody>
+                              {rowsArr.map(r => {
+                                const rc = Math.round(rowCommission(r));
+                                const inC = inCommissionContract(r);
+                                const rid = String(r.id);
+                                const picked = pickedRowIds.includes(rid);
+                                const hl = ROW_HILITE[rowColors[rid]];
+                                const dragging = scenarioDrag.rowId === rid;
+                                return (
+                                <tr key={r.id}
+                                  data-row-id={rid}
+                                  draggable={scenarioMode}
+                                  onDragStart={e => onScenarioDragStart(e, r.id)}
+                                  onDragEnd={onScenarioDragEnd}
+                                  onClick={() => togglePickedRow(r.id)}
+                                  title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
+                                            : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)`
+                                            : r._scenarioMoved ? '시나리오로 옮긴 건 (저장 안 됨)'
+                                            : scenarioMode ? '드래그해서 다른 담당자·상태로 옮기기' : '클릭하면 색칠 대상으로 선택'}
+                                  style={{
+                                    borderBottom:'1px solid #f1f5f9',
+                                    background: picked ? '#bfdbfe' : (hl ? hl.bg : 'transparent'),
+                                    boxShadow: picked ? 'inset 0 0 0 2px #2563eb' : (r._scenarioMoved ? 'inset 3px 0 0 0 #ea580c' : 'none'),
+                                    opacity: dragging ? 0.4 : 1,
+                                    cursor: scenarioMode ? 'grab' : 'pointer',
+                                  }}>
+                                  {compact ? (
+                                    <td style={{padding:'2px 4px'}}>
+                                      <div className="truncate" title={`${r.account} · ${r.product} ${r.accType||''}`} style={{fontSize:'10px'}}>
+                                        {r._scenarioMoved && <span style={{color:'#ea580c', fontWeight:'900', marginRight:'2px'}}>▸</span>}
+                                        {r.account}
+                                      </div>
+                                      <div style={{display:'flex', justifyContent:'space-between', gap:'4px', fontSize:'10px'}}>
+                                        <span style={{color:'#94a3b8'}} className="truncate">{r.product}</span>
+                                        <span style={{whiteSpace:'nowrap', fontFamily:'monospace', color: inC?'#dc2626':'#1e293b', fontWeight: inC?'bold':'600'}}>₩{netPrice(r).toLocaleString()}</span>
+                                      </div>
+                                    </td>
+                                  ) : (
+                                  <>
+                                  <td style={{padding:'2px 4px 2px 4px'}} className="truncate" title={r.account}>
+                                    {r._scenarioMoved && <span style={{color:'#ea580c', fontWeight:'900', marginRight:'2px'}}>▸</span>}
+                                    {r.account}
+                                  </td>
+                                  <td style={{padding:'2px 4px'}} className="truncate" title={`${r.product} ${r.accType||''}`}>{r.product}</td>
+                                  <td style={{padding:'2px 4px 2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}>₩{netPrice(r).toLocaleString()}</td>
+                                  </>
+                                  )}
+                                </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        );
+
                         return (
-                          <div key={member} style={{minWidth:'260px', flex:'1 1 260px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
-                            <div style={{fontWeight:'bold', marginBottom:'6px', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
-                              {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({revenueRows.length}건)</span>
+                          <div key={member}
+                            data-drop-member={member}
+                            onDragOver={e => onScenarioDragOver(e, colKey)}
+                            onDrop={e => onScenarioDrop(e, { member })}
+                            style={{minWidth:'320px', flex:'1 1 320px', borderRadius:'8px', padding:'10px',
+                                    border: colOver ? '2px dashed #ea580c' : '1px solid #e5e7eb',
+                                    background: colOver ? '#fff7ed' : 'transparent'}}>
+                            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'4px', marginBottom:'6px'}}>
+                              <div style={{fontWeight:'bold', cursor:'pointer'}} onClick={() => { setSelectedTeam(team); setSelectedMember(member); }}>
+                                {member} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({revenueRows.length}건)</span>
+                              </div>
+                              {combinedEditMode && (
+                                <span style={{display:'flex', gap:'3px'}}>
+                                  <button onClick={e=>editMemberName(member, e, team)} style={{fontSize:'10px', color:'#64748b', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:'4px', padding:'1px 5px', cursor:'pointer', fontWeight:'700'}}>{T.rename}</button>
+                                  <button onClick={e=>deleteMember(member, e, team)} style={{fontSize:'10px', color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:'4px', padding:'1px 5px', cursor:'pointer', fontWeight:'700'}}>{T.delete}</button>
+                                </span>
+                              )}
                             </div>
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'4px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}{mTarget > 0 && ` (${mPer.toFixed(1)}%)`}
@@ -2392,46 +2814,74 @@ img,video{max-width:100%;height:auto}
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st).sort(sortByContract);
-                                if (stRows.length===0) return null;
+                                // 시나리오 모드에서는 빈 상태 그룹도 남겨둬야 그 칸으로 끌어다 놓을 수 있다
+                                if (stRows.length===0 && !scenarioMode) return null;
                                 const stSum = stRows.reduce((s,d)=>s+netPrice(d),0);
                                 const pill = STATUS_PILL_STYLE[st];
                                 const excluded = st==='Back up' || st==='Pending';
+                                const dropKey = `st__${member}__${st}`;
+                                const stOver = scenarioMode && scenarioDrag.overKey === dropKey;
+
+                                // ACT는 일반 / Try & Buy 를 좌우로 갈라서 각각 건수·소계를 보여준다
+                                const isActGroup = st === 'ACT';
+                                const tbRows = isActGroup ? stRows.filter(d => (d.contractType||'일반') === 'Try & Buy') : [];
+                                const normalRows = isActGroup ? stRows.filter(d => (d.contractType||'일반') !== 'Try & Buy') : stRows;
+                                const sumOf = (arr) => arr.reduce((s,d)=>s+netPrice(d),0);
+
                                 return (
-                                  <div key={st} style={{marginBottom:'8px'}}>
+                                  <div key={st}
+                                    data-drop-member={member} data-drop-status={st}
+                                    onDragOver={e => onScenarioDragOver(e, dropKey)}
+                                    onDrop={e => onScenarioDrop(e, { member, status: st })}
+                                    style={{marginBottom:'8px', borderRadius:'6px',
+                                            border: stOver ? '2px dashed #ea580c' : '1px solid transparent',
+                                            background: stOver ? '#fff7ed' : 'transparent',
+                                            padding: stOver ? '2px' : '0'}}>
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0'}}>
                                       <span style={{background:pill.bg, color:pill.text, padding:'3px 8px', borderRadius:'6px', fontWeight:'800', fontSize:'12px'}}>{label} ({stRows.length}건)</span>
                                       <span style={{fontWeight:'800', fontSize:'13px', color: excluded?'#c2410c':'#1e293b'}}>₩{stSum.toLocaleString()}</span>
                                     </div>
-                                    {/* 상태 그룹마다 table이 따로라 폭을 고정해야 제품/금액 열이 세로로 정렬됨 */}
-                                    <table style={{width:'100%', tableLayout:'fixed'}}>
-                                      <colgroup><col/><col style={{width:'68px'}}/><col style={{width:'86px'}}/><col style={{width:'96px'}}/></colgroup>
-                                      <tbody>
-                                        {stRows.map(r => {
-                                          const rc = Math.round(rowCommission(r));
-                                          const inC = inCommissionContract(r);
-                                          return (
-                                          <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                                            <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
-                                            <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
-                                            <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
-                                            <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}
-                                              title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
-                                                        : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)` : ''}>₩{netPrice(r).toLocaleString()}</td>
-                                          </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
+
+                                    {isActGroup ? (
+                                      <div style={{display:'flex', gap:'6px', alignItems:'flex-start'}}>
+                                        {/* 일반 */}
+                                        <div style={{flex:'1 1 0', minWidth:0, borderRight:'1px solid #e2e8f0', paddingRight:'6px'}}>
+                                          <div style={{fontSize:'10px', fontWeight:'900', color:'#15803d', marginBottom:'2px'}}>
+                                            일반 ({normalRows.length}건)
+                                            <div style={{fontFamily:'monospace', color:'#1e293b'}}>₩{sumOf(normalRows).toLocaleString()}</div>
+                                          </div>
+                                          {normalRows.length ? renderRowTable(normalRows, true) : <div style={{color:'#cbd5e1', padding:'2px 0'}}>-</div>}
+                                        </div>
+                                        {/* Try & Buy */}
+                                        <div style={{flex:'1 1 0', minWidth:0}}>
+                                          <div style={{fontSize:'10px', fontWeight:'900', color:'#7c3aed', marginBottom:'2px'}}>
+                                            Try &amp; Buy ({tbRows.length}건)
+                                            <div style={{fontFamily:'monospace', color:'#1e293b'}}>₩{sumOf(tbRows).toLocaleString()}</div>
+                                          </div>
+                                          {tbRows.length ? renderRowTable(tbRows, true) : <div style={{color:'#cbd5e1', padding:'2px 0'}}>-</div>}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      stRows.length ? renderRowTable(stRows)
+                                        : <div style={{color:'#cbd5e1', padding:'2px 0', fontSize:'10px'}}>여기로 끌어다 놓기</div>
+                                    )}
                                   </div>
                                 );
                               })}
-                              {rows.length === 0 && (
+                              {rows.length === 0 && !scenarioMode && (
                                 <div style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</div>
                               )}
                             </div>
                           </div>
                         );
                       })}
+                      {combinedEditMode && (
+                        <div style={{minWidth:'140px', flex:'0 0 140px', display:'flex', alignItems:'flex-start', paddingTop:'10px'}}>
+                          <button onClick={() => addMember(team)} style={{fontSize:'11px', fontWeight:'800', color:'#1d4ed8', background:'#eff6ff', border:'1px dashed #bfdbfe', borderRadius:'8px', padding:'8px 10px', cursor:'pointer', width:'100%'}}>
+                            {T.addMember}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   );
@@ -2467,8 +2917,17 @@ img,video{max-width:100%;height:auto}
                                   {dRevenueRows.map(r => {
                                     const rc = Math.round(rowCommission(r));
                                     const inC = inCommissionContract(r);
+                                    const rid = String(r.id);
+                                    const picked = pickedRowIds.includes(rid);
+                                    const hl = ROW_HILITE[rowColors[rid]];
                                     return (
-                                    <tr key={r.id} style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer'}} onClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
+                                    <tr key={r.id}
+                                      style={{borderBottom:'1px solid #f1f5f9', cursor:'pointer',
+                                              background: picked ? '#bfdbfe' : (hl ? hl.bg : 'transparent'),
+                                              boxShadow: picked ? 'inset 0 0 0 2px #2563eb' : 'none'}}
+                                      title={`${picked ? '클릭: 선택 해제' : '클릭: 색칠 대상으로 선택'} · 더블클릭: ${r.member} 상세로 이동`}
+                                      onClick={() => togglePickedRow(r.id)}
+                                      onDoubleClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
                                       <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
                                       <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
                                       <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
@@ -2490,6 +2949,13 @@ img,video{max-width:100%;height:auto}
                     </div>
                   );
                 })()}
+
+                </div>{/* 본문 끝 */}
+
+                <aside style={{flex:'0 0 288px', width:'288px', position:'sticky', top:'12px', alignSelf:'flex-start'}}>
+                  {renderFcstSummaryPanel()}
+                </aside>
+                </div>{/* 좌우 2단 끝 */}
               </div>
               );
             })() : showMemberPicker && !selectedMember ? (() => {
