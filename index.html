@@ -1604,9 +1604,9 @@ img,video{max-width:100%;height:auto}
       allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
       scData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
 
-      const ALL_DEALERS = DEALERS;
+      // 실적이 있는 딜러만 집계에 넣는다. 예전엔 딜러 목록 전체를 0원으로 미리 깔아둬서
+      // 거래 없는 딜러가 ₩0으로 줄줄이 나왔는데, 딜러가 15개로 늘면서 목록만 길어졌다.
       const dealerStats = {};
-      ALL_DEALERS.forEach(d => dealerStats[d] = { count:0, sumKRW:0 });
       scData.forEach(cur => {
         const dealer = cur.dealerName || '기타';
         if (!dealerStats[dealer]) dealerStats[dealer] = { count:0, sumKRW:0 };
