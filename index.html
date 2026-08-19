@@ -2283,7 +2283,7 @@ img,video{max-width:100%;height:auto}
           <td className="p-2 md:p-3">{row.product}</td>
           <td className="p-2 md:p-3 text-gray-500">{row.accType}</td>
           <td className="p-2 md:p-3 text-right font-mono text-gray-700"><div>{'₩ ' + (row.priceKRW||0).toLocaleString()}</div><div style={{fontSize:'10px',color:'#94a3b8'}}>{'$ ' + (row.priceUSD||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></td>
-          <td className={`p-2 md:p-3 text-center space-x-1 sld-row-actions ${requirePwd ? 'sld-row-actions--gated' : ''}`}>
+          <td className="p-2 md:p-3 text-center space-x-1 sld-row-actions">
             {requirePwd
               ? <><button onClick={() => requestScAction('edit', row)} className={`text-[10px] md:text-xs ${editCls} px-2 py-1 rounded font-bold transition`}>🔐 {T.editBtn}</button>
                   <button onClick={() => requestScAction('delete', row)} className="text-[10px] md:text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">🔐 {T.deleteBtn}</button>
@@ -3908,16 +3908,9 @@ img,video{max-width:100%;height:auto}
       .mtg-row { display: flex; flex-wrap: wrap; }
     }
 
-    /* Hover-revealed row actions (non-gated Pending/ACT/Back up rows); gated Ship Confirm rows
-       (.sld-row-actions--gated) stay permanently visible — the lock glyph must never hide. */
-    .sld-row-actions { opacity: 0; transition: opacity .15s ease; }
-    tr:hover .sld-row-actions,
-    tr:focus-within .sld-row-actions { opacity: 1; }
-    .sld-row-actions--gated { opacity: 1 !important; }
-    @media (max-width: 768px) {
-      /* no hover on touch input — row actions stay reachable at every width */
-      .sld-row-actions { opacity: 1; }
-    }
+    /* Row actions stay visible at all times. They used to fade in on row hover, which hid the
+       fact that a row was editable at all until you happened to move over it. */
+    .sld-row-actions { opacity: 1; }
 
     /* ── finish pass: selection, focus ring, scrollbar (craft/finish-pass.md) ── */
     ::selection { background-color: rgba(37,99,235,0.22); color: #0f172a; }
