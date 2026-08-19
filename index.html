@@ -436,10 +436,10 @@ img,video{max-width:100%;height:auto}
       'Pending':      { bg:'#dbeafe', text:'#1d4ed8' },
       'Back up':      { bg:'#ffedd5', text:'#c2410c' },
     };
-    // 딜러 목록 - 입력 드롭다운 / 딜러별 집계 / 딜러별 정렬 순서가 모두 이 배열 하나를 쓴다.
-    // (예전엔 같은 목록이 4곳에 따로 박혀 있어서 한 곳만 고치면 나머지가 어긋났음)
+    // 딜러 목록 기본값 - settings/layout의 dealers가 비어있을 때만 쓰는 초기 시드.
+    // 실제 목록은 '딜러 관리' 화면에서 편집하며 Firestore에 저장된다.
     // 배열 순서가 곧 화면 표시 순서. '병원'은 딜러 경유 없이 병원에 직접 판매한 건.
-    const DEALERS = [
+    const DEFAULT_DEALERS = [
       '병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디',
       'Beauko', 'Bori', 'Human', '티모티', '엘룩스코리아',
       '동안기획', '엠디마케팅', 'Seed Group', 'BBG', '최강닥터',
@@ -773,6 +773,7 @@ img,video{max-width:100%;height:auto}
         return `${y} Q${q}`;
       };
       const [quarters, setQuarters] = useState([...new Set(['2026 Q1', '2026 Q2', getCurrentQuarter()])].sort());
+      const [dealers, setDealers] = useState(DEFAULT_DEALERS);
       const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
       const quartersRef = useRef(quarters);
       useEffect(() => { quartersRef.current = quarters; }, [quarters]);
@@ -1014,6 +1015,9 @@ img,video{max-width:100%;height:auto}
           if (doc.exists) {
             const data = doc.data();
             if (data.teams && typeof data.teams === 'object') setTeams(data.teams);
+            // dealers가 아직 없는 문서면 기본 목록을 한 번 심어준다(기존 배포분 호환).
+            if (Array.isArray(data.dealers) && data.dealers.length) setDealers(data.dealers);
+            else if (auth.currentUser) db.collection("settings").doc("layout").set({ dealers: DEFAULT_DEALERS }, { merge: true });
             if (data.quarters && Array.isArray(data.quarters)) {
               const cleaned = [...new Set(data.quarters.map(q => normalizeQuarter(q) || q))].sort();
               setQuarters(cleaned);
@@ -1022,7 +1026,7 @@ img,video{max-width:100%;height:auto}
               }
             }
           } else if (auth.currentUser) {
-            db.collection("settings").doc("layout").set({ teams, quarters });
+            db.collection("settings").doc("layout").set({ teams, quarters, dealers: DEFAULT_DEALERS });
           }
         });
         return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
@@ -1297,6 +1301,58 @@ img,video{max-width:100%;height:auto}
         }
       };
       const deleteMember = (memberName, e, teamArg) => { if (e && e.stopPropagation) e.stopPropagation(); if (!requireAuth()) return; const tm = teamArgOr(teamArg); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[tm] = (nt[tm]||[]).filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
+      // ── 딜러 관리 ─────────────────────────────────────────────────────────
+      const saveDealers = (next) => { setDealers(next); db.collection("settings").doc("layout").set({ dealers: next }, { merge: true }); };
+      const dealerUseCount = (name) => salesData.filter(d => (d.dealerName || '') === name).length;
+
+      const addDealer = () => {
+        if (!requireAuth()) return;
+        const raw = prompt(lang==='ko' ? '추가할 딜러명을 입력하세요' : 'Enter dealer name');
+        const n = (raw || '').trim();
+        if (!n) return;
+        if (dealers.includes(n)) { alert(lang==='ko' ? '이미 있는 딜러입니다.' : 'Already exists.'); return; }
+        saveDealers([...dealers, n]);
+      };
+
+      // 이름을 바꾸면 그 딜러로 저장된 매출 행의 dealerName도 같이 바꿔야 집계에서 떨어져 나가지 않는다.
+      const renameDealer = (oldName) => {
+        if (!requireAuth()) return;
+        const raw = prompt(lang==='ko' ? '새 딜러명' : 'New dealer name', oldName);
+        const n = (raw || '').trim();
+        if (!n || n === oldName) return;
+        if (dealers.includes(n)) { alert(lang==='ko' ? '이미 있는 딜러입니다.' : 'Already exists.'); return; }
+        const used = salesData.filter(d => (d.dealerName || '') === oldName);
+        if (used.length && !window.confirm(lang==='ko'
+          ? `이 딜러로 등록된 매출 ${used.length}건의 딜러명도 함께 '${n}'으로 변경됩니다. 계속할까요?`
+          : `${used.length} sales row(s) will also be renamed to '${n}'. Continue?`)) return;
+        saveDealers(dealers.map(d => d === oldName ? n : d));
+        used.forEach(row => db.collection("sales").doc(String(row.id)).update({ dealerName: n }).catch(() => {}));
+      };
+
+      // 이미 쓰인 딜러는 지우지 않는다 - 지우면 그 매출 행의 딜러명이 목록에 없는 값으로 남아
+      // 드롭다운에서 선택 불가 상태가 되고, 나중에 수정할 때 조용히 빈칸으로 덮일 수 있다.
+      const deleteDealer = (name) => {
+        if (!requireAuth()) return;
+        const used = dealerUseCount(name);
+        if (used > 0) {
+          alert(lang==='ko'
+            ? `'${name}'은 매출 ${used}건에 쓰이고 있어 삭제할 수 없습니다.\n먼저 해당 건들의 딜러를 바꾸거나, 이름 수정을 이용해 주세요.`
+            : `'${name}' is used by ${used} sales row(s) and cannot be deleted.`);
+          return;
+        }
+        if (!window.confirm(lang==='ko' ? `'${name}' 딜러를 삭제하시겠습니까?` : `Delete '${name}'?`)) return;
+        saveDealers(dealers.filter(d => d !== name));
+      };
+
+      const moveDealer = (idx, dir) => {
+        if (!requireAuth()) return;
+        const to = idx + dir;
+        if (to < 0 || to >= dealers.length) return;
+        const next = [...dealers];
+        [next[idx], next[to]] = [next[to], next[idx]];
+        saveDealers(next);
+      };
+
       const addQuarter = () => { if (!requireAuth()) return; const n = prompt(T.promptQuarter); if (!n) return; const q = normalizeQuarter(n); if (!q) { alert(lang==='ko' ? '형식이 올바르지 않습니다. 예: 2026 Q3' : 'Invalid format. e.g. 2026 Q3'); return; } if (quarters.includes(q)) return; const nq = [...quarters, q].sort(); setQuarters(nq); if (hasRole(TARGET_ADMIN_EMAILS) && !quarterTargets[q]) { const nt = { ...quarterTargets, [q]: { target: 0, gmppTarget: 0, er: currentER || 1389 } }; setQuarterTargets(nt); db.collection("targets").doc("quarterTargets").set(nt); } if (!memberTargets[q]) { const nmt = { ...memberTargets, [q]: { ...(memberTargets[selectedQuarter]||{}) } }; setMemberTargets(nmt); db.collection("targets").doc("memberTargets").set(nmt); } db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true }); };
 
       const currentER      = quarterTargets[selectedQuarter]?.er || 1389;
@@ -1343,6 +1399,7 @@ img,video{max-width:100%;height:auto}
       const [commissions, setCommissions] = useState({});
       const [applyCommission, setApplyCommission] = useState(false);
       const [showMemberPicker, setShowMemberPicker] = useState(false);
+      const [showDealerPage, setShowDealerPage] = useState(false);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
       const [candidatesFilterOpen, setCandidatesFilterOpen] = useState(null);
       const [candidatesFilterSearchQuery, setCandidatesFilterSearchQuery] = useState('');
@@ -2478,8 +2535,9 @@ img,video{max-width:100%;height:auto}
 
               {/* 화면 전환 */}
               <div className="pt-3 border-t border-slate-600 space-y-1">
-                <button onClick={() => { setShowCandidatesPage(false); setShowMemberPicker(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined && !showMemberPicker && !showCandidatesPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowMemberPicker(false); setShowDealerPage(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined && !showMemberPicker && !showCandidatesPage && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowDealerPage(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowDealerPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>딜러 관리</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2502,7 +2560,7 @@ img,video{max-width:100%;height:auto}
                 </button>
               </div>
               <div className="mb-4">
-                <button onClick={() => { setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} style={{width:'100%', background:'#d97706', color:'#fff', fontWeight:800, padding:'12px', borderRadius:'8px', border:'1px solid #b45309', cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.15)', whiteSpace:'nowrap'}}>
+                <button onClick={() => { setShowDealerPage(false); setShowCandidatesPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} style={{width:'100%', background:'#d97706', color:'#fff', fontWeight:800, padding:'12px', borderRadius:'8px', border:'1px solid #b45309', cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.15)', whiteSpace:'nowrap'}}>
                   Salesforce 신규 후보
                 </button>
               </div>
@@ -2525,7 +2583,48 @@ img,video{max-width:100%;height:auto}
 
           {/* 메인 콘텐츠 */}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
-            {showCandidatesPage ? (
+            {showDealerPage ? (
+              <div style={{marginTop:'44px'}}>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러 관리</h1>
+                <p className="text-sm text-gray-500 mb-4">여기에 등록한 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.</p>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6" style={{maxWidth:'720px'}}>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm font-bold text-gray-600">등록된 딜러 {dealers.length}개</span>
+                    <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
+                  </div>
+                  <table className="min-w-full text-sm text-left">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                        <th className="py-2 px-2" style={{width:'44px'}}>순서</th>
+                        <th className="py-2 px-2">딜러명</th>
+                        <th className="py-2 px-2 text-right" style={{width:'90px'}}>사용 건수</th>
+                        <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dealers.map((d, i) => {
+                        const used = dealerUseCount(d);
+                        return (
+                          <tr key={d} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-2 text-gray-400 font-mono text-xs">{i+1}</td>
+                            <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(d)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-xs" style={{color: used ? '#1d4ed8' : '#94a3b8'}}>{used ? `${used}건` : '-'}</td>
+                            <td className="py-2 px-2 text-right whitespace-nowrap">
+                              <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
+                              <button onClick={() => moveDealer(i, 1)} disabled={i===dealers.length-1} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30 ml-1" title="아래로">▼</button>
+                              <button onClick={() => renameDealer(d)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
+                              <button onClick={() => deleteDealer(d)} disabled={used>0} title={used>0 ? '매출에 쓰이고 있어 삭제할 수 없습니다' : ''}
+                                className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1 disabled:opacity-30 disabled:cursor-not-allowed">삭제</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-gray-400 mt-3">· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다.<br/>· 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다. 먼저 해당 건의 딜러를 바꿔주세요.</p>
+                </div>
+              </div>
+            ) : showCandidatesPage ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({visibleCandidates.length}건)</h1>
@@ -2947,7 +3046,7 @@ img,video{max-width:100%;height:auto}
 
                 {allTeamsViewMode === 'dealer' && (() => {
                   const rows = salesData.filter(d => d.quarter===selectedQuarter);
-                  const DEALER_ORDER = DEALERS;
+                  const DEALER_ORDER = dealers;
                   const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
                     const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
                     if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -3308,7 +3407,7 @@ img,video{max-width:100%;height:auto}
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                             <option value="">{T.selectRequired}</option>
-                            {DEALERS.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                            {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                           </select></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3387,7 +3486,7 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">{T.selectRequired}</option>
-                        {DEALERS.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                        {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                       </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
