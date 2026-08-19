@@ -436,6 +436,16 @@ img,video{max-width:100%;height:auto}
       'Pending':      { bg:'#dbeafe', text:'#1d4ed8' },
       'Back up':      { bg:'#ffedd5', text:'#c2410c' },
     };
+    // 딜러 목록 - 입력 드롭다운 / 딜러별 집계 / 딜러별 정렬 순서가 모두 이 배열 하나를 쓴다.
+    // (예전엔 같은 목록이 4곳에 따로 박혀 있어서 한 곳만 고치면 나머지가 어긋났음)
+    // 배열 순서가 곧 화면 표시 순서. '병원'은 딜러 경유 없이 병원에 직접 판매한 건.
+    const DEALERS = [
+      '병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디',
+      'Beauko', 'Bori', 'Human', '티모티', '엘룩스코리아',
+      '동안기획', '엠디마케팅', 'Seed Group', 'BBG', '최강닥터',
+    ];
+    const DEALER_LABELS = { 'Innomed': 'Innomed (이노메드)', 'SEVEN U': 'SEVEN U (세븐유)' };
+    const dealerLabel = (d) => DEALER_LABELS[d] || d;
   </script>
 </head>
 <body className="bg-gray-100">
@@ -1594,7 +1604,7 @@ img,video{max-width:100%;height:auto}
       allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
       scData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
 
-      const ALL_DEALERS = ['병원', 'Innomed', 'SEVEN U', 'TMI', '알펙스메디'];
+      const ALL_DEALERS = DEALERS;
       const dealerStats = {};
       ALL_DEALERS.forEach(d => dealerStats[d] = { count:0, sumKRW:0 });
       scData.forEach(cur => {
@@ -2937,7 +2947,7 @@ img,video{max-width:100%;height:auto}
 
                 {allTeamsViewMode === 'dealer' && (() => {
                   const rows = salesData.filter(d => d.quarter===selectedQuarter);
-                  const DEALER_ORDER = ['병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
+                  const DEALER_ORDER = DEALERS;
                   const dealers = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
                     const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
                     if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -3298,11 +3308,7 @@ img,video{max-width:100%;height:auto}
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                             <option value="">{T.selectRequired}</option>
-                            <option value="병원">병원</option>
-                            <option value="Innomed">Innomed (이노메드)</option>
-                            <option value="SEVEN U">SEVEN U (세븐유)</option>
-                            <option value="TMI">TMI</option>
-                            <option value="알펙스메디">알펙스메디</option>
+                            {DEALERS.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                           </select></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3381,11 +3387,7 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">{T.selectRequired}</option>
-                        <option value="병원">병원</option>
-                        <option value="Innomed">Innomed (이노메드)</option>
-                        <option value="SEVEN U">SEVEN U (세븐유)</option>
-                        <option value="TMI">TMI</option>
-                        <option value="알펙스메디">알펙스메디</option>
+                        {DEALERS.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                       </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
