@@ -774,6 +774,7 @@ img,video{max-width:100%;height:auto}
       };
       const [quarters, setQuarters] = useState([...new Set(['2026 Q1', '2026 Q2', getCurrentQuarter()])].sort());
       const [dealers, setDealers] = useState(DEFAULT_DEALERS);
+      const [dealerRequests, setDealerRequests] = useState([]);
       const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
       const quartersRef = useRef(quarters);
       useEffect(() => { quartersRef.current = quarters; }, [quarters]);
@@ -841,8 +842,13 @@ img,video{max-width:100%;height:auto}
         if (!hasRole(list)) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
         return true;
       };
+      // 딜러 목록 편집자 - 딜러명이 커미션·집계의 기준 값이라 한 사람이 관리한다.
+      // 나머지 사용자는 '딜러 추가 요청'만 남기고, 이 사람이 승인해야 목록에 들어간다.
+      const DEALER_ADMIN_EMAILS = ['yunap@candelamedical.com'];
       const requireTargetAdmin = () => requireRole(TARGET_ADMIN_EMAILS);
       const requireScAdmin     = () => requireRole(SC_ADMIN_EMAILS);
+      const isDealerAdmin      = () => hasRole(DEALER_ADMIN_EMAILS);
+      const requireDealerAdmin = () => requireRole(DEALER_ADMIN_EMAILS);
       const handleLogin = () => {
         if (isLoggingIn) return;
         if (!loginEmail.trim() || !loginPwd) { setLoginError(lang==='ko' ? '이메일과 비밀번호를 입력하세요.' : 'Enter email and password.'); return; }
@@ -1011,6 +1017,8 @@ img,video{max-width:100%;height:auto}
           }
         });
         const unsubTeamTargets  = db.collection("targets").doc("teamTargets").onSnapshot(doc => { if (doc.exists) setTeamTargets(doc.data()); });
+        const unsubDealerReq    = db.collection("settings").doc("dealerRequests").onSnapshot(
+          doc => { const l = doc.exists ? doc.data().list : null; setDealerRequests(Array.isArray(l) ? l : []); }, () => {});
         const unsubLayout       = db.collection("settings").doc("layout").onSnapshot(doc => {
           if (doc.exists) {
             const data = doc.data();
@@ -1029,7 +1037,7 @@ img,video{max-width:100%;height:auto}
             db.collection("settings").doc("layout").set({ teams, quarters, dealers: DEFAULT_DEALERS });
           }
         });
-        return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); };
+        return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); unsubDealerReq(); };
       }, [currentUser]);
 
       // 커미션 참조 데이터 - { SO번호: 수수료 } 맵. 금액 정보라 정적 파일로 두면 인증 없이
@@ -1306,7 +1314,7 @@ img,video{max-width:100%;height:auto}
       const dealerUseCount = (name) => salesData.filter(d => (d.dealerName || '') === name).length;
 
       const addDealer = () => {
-        if (!requireAuth()) return;
+        if (!requireDealerAdmin()) return;
         const raw = prompt(lang==='ko' ? '추가할 딜러명을 입력하세요' : 'Enter dealer name');
         const n = (raw || '').trim();
         if (!n) return;
@@ -1316,7 +1324,7 @@ img,video{max-width:100%;height:auto}
 
       // 이름을 바꾸면 그 딜러로 저장된 매출 행의 dealerName도 같이 바꿔야 집계에서 떨어져 나가지 않는다.
       const renameDealer = (oldName) => {
-        if (!requireAuth()) return;
+        if (!requireDealerAdmin()) return;
         const raw = prompt(lang==='ko' ? '새 딜러명' : 'New dealer name', oldName);
         const n = (raw || '').trim();
         if (!n || n === oldName) return;
@@ -1332,7 +1340,7 @@ img,video{max-width:100%;height:auto}
       // 이미 쓰인 딜러는 지우지 않는다 - 지우면 그 매출 행의 딜러명이 목록에 없는 값으로 남아
       // 드롭다운에서 선택 불가 상태가 되고, 나중에 수정할 때 조용히 빈칸으로 덮일 수 있다.
       const deleteDealer = (name) => {
-        if (!requireAuth()) return;
+        if (!requireDealerAdmin()) return;
         const used = dealerUseCount(name);
         if (used > 0) {
           alert(lang==='ko'
@@ -1344,8 +1352,40 @@ img,video{max-width:100%;height:auto}
         saveDealers(dealers.filter(d => d !== name));
       };
 
-      const moveDealer = (idx, dir) => {
+      // ── 딜러 추가 요청 (편집 권한 없는 사용자용) ───────────────────────────
+      const saveDealerRequests = (list) => { setDealerRequests(list); db.collection("settings").doc("dealerRequests").set({ list }, { merge: true }); };
+
+      const requestDealer = () => {
         if (!requireAuth()) return;
+        const raw = prompt(lang==='ko' ? '추가를 요청할 딜러명을 입력하세요' : 'Dealer name to request');
+        const name = (raw || '').trim();
+        if (!name) return;
+        if (dealers.includes(name)) { alert(lang==='ko' ? '이미 등록된 딜러입니다.' : 'Already registered.'); return; }
+        if (dealerRequests.some(r => r.name === name)) { alert(lang==='ko' ? '이미 요청된 딜러입니다.' : 'Already requested.'); return; }
+        const note = (prompt(lang==='ko' ? '메모 (선택 - 어떤 거래처/건인지)' : 'Note (optional)') || '').trim();
+        saveDealerRequests([...dealerRequests, {
+          name, note,
+          requestedBy: (auth.currentUser?.email || ''),
+          requestedAt: new Date().toISOString(),
+        }]);
+        showToast(lang==='ko' ? `'${name}' 추가 요청이 전달되었습니다 ✓` : `Requested '${name}' ✓`);
+      };
+
+      const approveDealerRequest = (req) => {
+        if (!requireDealerAdmin()) return;
+        if (!dealers.includes(req.name)) saveDealers([...dealers, req.name]);
+        saveDealerRequests(dealerRequests.filter(r => r.name !== req.name));
+        showToast(`'${req.name}' 딜러가 추가되었습니다 ✓`);
+      };
+
+      const rejectDealerRequest = (req) => {
+        if (!requireDealerAdmin()) return;
+        if (!window.confirm(lang==='ko' ? `'${req.name}' 요청을 반려하시겠습니까?` : `Reject '${req.name}'?`)) return;
+        saveDealerRequests(dealerRequests.filter(r => r.name !== req.name));
+      };
+
+      const moveDealer = (idx, dir) => {
+        if (!requireDealerAdmin()) return;
         const to = idx + dir;
         if (to < 0 || to >= dealers.length) return;
         const next = [...dealers];
@@ -2583,14 +2623,61 @@ img,video{max-width:100%;height:auto}
 
           {/* 메인 콘텐츠 */}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
-            {showDealerPage ? (
+            {showDealerPage ? (() => {
+              const canEdit = isDealerAdmin();
+              return (
               <div style={{marginTop:'44px'}}>
                 <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러 관리</h1>
-                <p className="text-sm text-gray-500 mb-4">여기에 등록한 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  여기에 등록된 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.
+                  {!canEdit && <span className="block mt-1 text-amber-700 font-bold">목록 편집은 담당자(박윤아)만 가능합니다. 필요한 딜러가 없으면 아래에서 추가 요청해 주세요.</span>}
+                </p>
+
+                {/* 추가 요청 목록 - 관리자에겐 승인/반려, 나머지에겐 진행 상황 */}
+                {(canEdit || dealerRequests.length > 0) && (
+                  <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4 md:p-6 mb-4" style={{maxWidth:'720px'}}>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm font-bold text-amber-800">추가 요청 {dealerRequests.length}건</span>
+                      {!canEdit && <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
+                    </div>
+                    {dealerRequests.length === 0 ? (
+                      <div className="text-gray-400 text-sm">대기 중인 요청이 없습니다.</div>
+                    ) : (
+                      <table className="min-w-full text-sm text-left">
+                        <thead>
+                          <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                            <th className="py-2 px-2">요청 딜러명</th>
+                            <th className="py-2 px-2">메모</th>
+                            <th className="py-2 px-2">요청자</th>
+                            {canEdit && <th className="py-2 px-2 text-right" style={{width:'130px'}}>처리</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dealerRequests.map(r => (
+                            <tr key={r.name} className="border-b border-gray-100">
+                              <td className="py-2 px-2 font-bold text-gray-800">{r.name}</td>
+                              <td className="py-2 px-2 text-gray-500 text-xs">{r.note || '-'}</td>
+                              <td className="py-2 px-2 text-gray-500 text-xs">{(r.requestedBy||'').split('@')[0]}<span className="text-gray-300"> · {(r.requestedAt||'').slice(0,10)}</span></td>
+                              {canEdit && (
+                                <td className="py-2 px-2 text-right whitespace-nowrap">
+                                  <button onClick={() => approveDealerRequest(r)} className="text-[11px] text-white bg-blue-600 hover:bg-blue-700 font-bold px-2 py-1 rounded">승인</button>
+                                  <button onClick={() => rejectDealerRequest(r)} className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1">반려</button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6" style={{maxWidth:'720px'}}>
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-sm font-bold text-gray-600">등록된 딜러 {dealers.length}개</span>
-                    <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
+                    {canEdit
+                      ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
+                      : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
                   </div>
                   <table className="min-w-full text-sm text-left">
                     <thead>
@@ -2598,7 +2685,7 @@ img,video{max-width:100%;height:auto}
                         <th className="py-2 px-2" style={{width:'44px'}}>순서</th>
                         <th className="py-2 px-2">딜러명</th>
                         <th className="py-2 px-2 text-right" style={{width:'90px'}}>사용 건수</th>
-                        <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>
+                        {canEdit && <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -2609,22 +2696,25 @@ img,video{max-width:100%;height:auto}
                             <td className="py-2 px-2 text-gray-400 font-mono text-xs">{i+1}</td>
                             <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(d)}</td>
                             <td className="py-2 px-2 text-right font-mono text-xs" style={{color: used ? '#1d4ed8' : '#94a3b8'}}>{used ? `${used}건` : '-'}</td>
-                            <td className="py-2 px-2 text-right whitespace-nowrap">
-                              <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
-                              <button onClick={() => moveDealer(i, 1)} disabled={i===dealers.length-1} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30 ml-1" title="아래로">▼</button>
-                              <button onClick={() => renameDealer(d)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
-                              <button onClick={() => deleteDealer(d)} disabled={used>0} title={used>0 ? '매출에 쓰이고 있어 삭제할 수 없습니다' : ''}
-                                className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1 disabled:opacity-30 disabled:cursor-not-allowed">삭제</button>
-                            </td>
+                            {canEdit && (
+                              <td className="py-2 px-2 text-right whitespace-nowrap">
+                                <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
+                                <button onClick={() => moveDealer(i, 1)} disabled={i===dealers.length-1} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30 ml-1" title="아래로">▼</button>
+                                <button onClick={() => renameDealer(d)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
+                                <button onClick={() => deleteDealer(d)} disabled={used>0} title={used>0 ? '매출에 쓰이고 있어 삭제할 수 없습니다' : ''}
+                                  className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1 disabled:opacity-30 disabled:cursor-not-allowed">삭제</button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-                  <p className="text-[11px] text-gray-400 mt-3">· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다.<br/>· 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다. 먼저 해당 건의 딜러를 바꿔주세요.</p>
+                  {canEdit && <p className="text-[11px] text-gray-400 mt-3">· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다.<br/>· 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다. 먼저 해당 건의 딜러를 바꿔주세요.</p>}
                 </div>
               </div>
-            ) : showCandidatesPage ? (
+              );
+            })() : showCandidatesPage ? (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({visibleCandidates.length}건)</h1>
