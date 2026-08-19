@@ -437,7 +437,7 @@ img,video{max-width:100%;height:auto}
       'Back up':      { bg:'#ffedd5', text:'#c2410c' },
     };
     // 딜러 목록 기본값 - settings/layout의 dealers가 비어있을 때만 쓰는 초기 시드.
-    // 실제 목록은 '딜러 관리' 화면에서 편집하며 Firestore에 저장된다.
+    // 실제 목록은 '딜러관리(추가 및 수정)' 화면에서 편집하며 Firestore에 저장된다.
     // 배열 순서가 곧 화면 표시 순서. '병원'은 딜러 경유 없이 병원에 직접 판매한 건.
     const DEFAULT_DEALERS = [
       '병원', 'SEVEN U', 'Innomed', 'TMI', '알펙스메디',
@@ -2577,7 +2577,7 @@ img,video{max-width:100%;height:auto}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowMemberPicker(false); setShowDealerPage(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined && !showMemberPicker && !showCandidatesPage && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowDealerPage(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowDealerPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>딜러 관리</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowDealerPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>딜러관리(추가 및 수정)</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
@@ -2627,7 +2627,7 @@ img,video{max-width:100%;height:auto}
               const canEdit = isDealerAdmin();
               return (
               <div style={{marginTop:'44px'}}>
-                <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러 관리</h1>
+                <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러관리(추가 및 수정)</h1>
                 <p className="text-sm text-gray-500 mb-4">
                   여기에 등록된 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.
                   {!canEdit && <span className="block mt-1 text-amber-700 font-bold">목록 편집은 담당자(박윤아)만 가능합니다. 필요한 딜러가 없으면 아래에서 추가 요청해 주세요.</span>}
