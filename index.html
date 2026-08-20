@@ -1743,7 +1743,9 @@ img,video{max-width:100%;height:auto}
       {
         const bySo = {};
         salesData.forEach(d => {
-          if (!isRevenue(d)) return;
+          // 집계에 들어가는 줄(SC + ACT 일반) 중에서만 커미션 부담 줄을 고른다.
+          // Try & Buy 줄이 대표로 뽑히면 그 계약 커미션이 아예 차감되지 않는다.
+          if (!isExpected(d)) return;
           const so = String(d.so || '').trim();
           if (!so || !commissions[so]) return;
           (bySo[so] = bySo[so] || []).push(d);
@@ -1760,7 +1762,7 @@ img,video{max-width:100%;height:auto}
 
       // 실제로 이 행에서 빠지는 커미션 (계약당 대표 줄 하나만 부담)
       const rowCommission = (row) => {
-        if (!applyCommission || !isRevenue(row)) return 0;
+        if (!applyCommission || !isExpected(row)) return 0;
         const so = String(row.so || '').trim();
         if (!so) return 0;
         return commissionBearerId[so] === row.id ? (commissions[so] || 0) : 0;
@@ -1768,7 +1770,7 @@ img,video{max-width:100%;height:auto}
 
       // 색 표기용 - 차감을 지지 않는 같은 계약의 다른 줄(Cryo7 등)도 빨갛게 보여준다
       const inCommissionContract = (row) => {
-        if (!applyCommission || !isRevenue(row)) return 0;
+        if (!applyCommission || !isExpected(row)) return 0;
         const so = String(row.so || '').trim();
         return so ? (commissions[so] || 0) : 0;
       };
