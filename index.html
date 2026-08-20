@@ -2192,13 +2192,18 @@ img,video{max-width:100%;height:auto}
                       <td style={BL}>Incentive Target 대비</td>
                       <td style={{...BV, color: scenarioIncentivePct>=100 ? '#047857' : '#1d4ed8'}}>{scenarioIncentivePct.toFixed(2)}%</td>
                     </tr>
-                    {/* GMPP 예상치는 KPI 행에서 빼고 여기 시나리오 기준으로만 둔다 */}
+                    {/* GMPP 예상치는 KPI 행에서 빼고 여기 시나리오 기준으로만 둔다.
+                        퍼센트는 Target 대비 / Incentive Target 대비와 같은 급으로 별도 행. */}
                     <tr>
                       <td style={BL}>GMPP<div style={{fontSize:'9px', color:'#64748b'}}>SC + 선택 {scGmppRows.length}건</div></td>
                       <td style={{...BV, fontWeight:'700'}}>
                         <div style={{whiteSpace:'nowrap'}}>{won(scGmpp)}</div>
-                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color: scGmppPct>=100 ? '#047857' : '#94a3b8'}}>GMPP Target {scGmppPct.toFixed(1)}%</div>
+                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>{usd(scGmpp)}</div>
                       </td>
+                    </tr>
+                    <tr>
+                      <td style={BL}>GMPP Target 대비</td>
+                      <td style={{...BV, color: scGmppPct>=100 ? '#047857' : '#1d4ed8'}}>{scGmppPct.toFixed(2)}%</td>
                     </tr>
                   </tbody>
                 </table>
