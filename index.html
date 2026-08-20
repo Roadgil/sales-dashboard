@@ -2084,7 +2084,17 @@ img,video{max-width:100%;height:auto}
               {editable && !summaryLocked
                 ? <input type="number" min="0" value={value===0?'':value} onChange={e=>onEdit(e.target.value)}
                     style={{width:'100%', textAlign:'right', fontFamily:'monospace', fontSize:'11px', fontWeight:'700', color:editColor||'#1e293b', border:'none', borderBottom:`1px solid ${editColor||'#cbd5e1'}`, outline:'none', background:'transparent'}}/>
-                : <div style={{whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{won(value)}</div>}
+                : editable
+                  /* 잠겨 있을 때도 값 자체를 눌러서 바로 수정에 들어갈 수 있게.
+                     예전에는 패널 구석의 작은 자물쇠 아이콘이 유일한 진입점이라 못 찾았다. */
+                  ? <div onClick={() => unlockSummary()} title="클릭하면 수정할 수 있습니다"
+                      style={{whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted', textUnderlineOffset:'3px'}}>
+                      {won(value)}
+                    </div>
+                  : <div style={{whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{won(value)}</div>}
+              {editable && summaryLocked && (
+                <div onClick={() => unlockSummary()} style={{fontSize:'9px', fontWeight:'800', color:'#2563eb', cursor:'pointer', textAlign:'right'}}>✏️ 수정하려면 클릭</div>
+              )}
               {(note || sub) && (
                 <div style={{display:'flex', justifyContent:'space-between', gap:'4px', fontSize:'9px', fontWeight:'700', marginTop:'1px'}}>
                   {note
@@ -2130,8 +2140,10 @@ img,video{max-width:100%;height:auto}
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px', gap:'6px'}}>
               <div style={{fontSize:'12px', fontWeight:'900', color:'#0f172a'}}>{selectedQuarter} 요약</div>
               {summaryLocked
-                ? <button onClick={() => unlockSummary()} title="Target 수정하려면 잠금 해제" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #fbbf24', background:'#fefce8', color:'#b45309', cursor:'pointer', fontWeight:'700'}}>🔒</button>
-                : <button onClick={() => setSummaryLocked(true)} title="잠그기" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #86efac', background:'#f0fdf4', color:'#15803d', cursor:'pointer', fontWeight:'700'}}>🔓</button>}
+                ? <button onClick={() => unlockSummary()} title="Target / GMPP Target 을 수정할 수 있게 잠금을 풉니다 (관리자)"
+                    style={{fontSize:'10px', fontWeight:'800', padding:'3px 8px', borderRadius:'6px', border:'1.5px solid #fbbf24', background:'#fefce8', color:'#b45309', cursor:'pointer', whiteSpace:'nowrap'}}>🔒 Target 수정</button>
+                : <button onClick={() => setSummaryLocked(true)} title="다시 잠그기"
+                    style={{fontSize:'10px', fontWeight:'800', padding:'3px 8px', borderRadius:'6px', border:'1.5px solid #86efac', background:'#f0fdf4', color:'#15803d', cursor:'pointer', whiteSpace:'nowrap'}}>🔓 수정 중 · 잠그기</button>}
             </div>
 
             {/* 가상 시나리오 박스 - 항상 보인다.
