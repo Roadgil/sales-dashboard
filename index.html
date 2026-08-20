@@ -1627,7 +1627,7 @@ img,video{max-width:100%;height:auto}
         // 반대로 ACT 밖으로 빼면 선택에서도 뺀다.
         if (status !== undefined) {
           const moved = { ...base, ...nextPatch };
-          const shouldPick = status === 'ACT' && !isTryBuy(moved);
+          const shouldPick = status === 'ACT';   // Try & Buy도 클릭/드롭으로 시나리오에 넣을 수 있다
           setPickedRowIds(prev => {
             const has = prev.includes(rowId);
             if (shouldPick && !has) return [...prev, rowId];
@@ -1791,7 +1791,13 @@ img,video{max-width:100%;height:auto}
 
       // ── 집계 기준 ───────────────────────────────────────────────────────────
       // 실제 집계(합계·예상치·GAP): Ship Confirm + ACT(일반). Try & Buy는 제외.
-      // 가상 시나리오:              Ship Confirm 전부(무조건) + 클릭한 ACT(일반).
+      // 가상 시나리오:              Ship Confirm 전부(무조건) + 클릭한 ACT.
+      //                            ACT는 일반이든 Try & Buy든 클릭하면 들어간다.
+      //
+      // 예상치에서 Try & Buy를 빼는 것과 시나리오에 넣는 것은 서로 다른 얘기다.
+      // 예상치는 "지금 확실히 잡히는 금액", 시나리오는 "이것까지 잡으면 얼마"라서
+      // Try & Buy도 골라 넣어볼 수 있어야 한다. 대신 자동 포함은 아니고 클릭해야 한다
+      // (SC만 확정분이라 무조건 깔린다).
       //
       // 시나리오는 토글에 걸지 않는다. 행을 클릭하면 그 자체로 시나리오가 되고,
       // Ship Confirm은 클릭 여부와 무관하게 항상 깔려 있다. (토글은 드래그 이동 전용)
@@ -1799,18 +1805,23 @@ img,video{max-width:100%;height:auto}
       // 합계의 의미가 모드에 따라 바뀌면 어느 숫자를 보고 있는지 알 수 없어진다.
       const pickedSet = new Set(pickedRowIds.map(String));
       const isPicked  = (d) => pickedSet.has(String(d.id));
-      const inScenario     = (d) => isShipConfirm(d) || (isActNormal(d) && isPicked(d));
+      const inScenario     = (d) => isShipConfirm(d) || (isACT(d) && isPicked(d));
       const countsForTotal = (d) => isExpected(d);
       // 시나리오 표시를 켤 시점: 뭔가 클릭했거나 드래그 모드일 때
       const scenarioView = scenarioMode || pickedRowIds.length > 0;
       // 주어진 행 묶음의 시나리오 합계 (담당자·팀 카드에서 재사용)
       const scenarioSumOf = (rowsArr) => rowsArr.filter(inScenario).reduce((s,d) => s + netPrice(d), 0);
 
-      // 시나리오 박스에 쓰는 값들 (SC 기본분 / 클릭해서 더한 분)
+      // 시나리오 박스에 쓰는 값들. 더한 분은 일반/Try & Buy를 나눠 보여준다 -
+      // 시나리오 금액이 Try & Buy에 얼마나 기대고 있는지 한눈에 보여야 하기 때문.
       const scenarioScRows  = currentQData.filter(isShipConfirm);
-      const scenarioAddRows = currentQData.filter(d => isActNormal(d) && isPicked(d));
+      const scenarioAddNormalRows = currentQData.filter(d => isActNormal(d) && isPicked(d));
+      const scenarioAddTbRows     = currentQData.filter(d => isACT(d) && isTryBuy(d) && isPicked(d));
+      const scenarioAddRows = [...scenarioAddNormalRows, ...scenarioAddTbRows];
       const scenarioScKRW   = scenarioScRows.reduce((s,d) => s + netPrice(d), 0);
-      const scenarioAddKRW  = scenarioAddRows.reduce((s,d) => s + netPrice(d), 0);
+      const scenarioAddNormalKRW = scenarioAddNormalRows.reduce((s,d) => s + netPrice(d), 0);
+      const scenarioAddTbKRW     = scenarioAddTbRows.reduce((s,d) => s + netPrice(d), 0);
+      const scenarioAddKRW  = scenarioAddNormalKRW + scenarioAddTbKRW;
       const scenarioSumKRW  = scenarioScKRW + scenarioAddKRW;
       const scenarioTargetPct    = targetKRW          ? (scenarioSumKRW / targetKRW) * 100 : 0;
       const scenarioIncentivePct = incentiveTargetKRW ? (scenarioSumKRW / incentiveTargetKRW) * 100 : 0;
@@ -2117,8 +2128,12 @@ img,video{max-width:100%;height:auto}
                       <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioScKRW)}</div></td>
                     </tr>
                     <tr>
-                      <td style={BL}>+ 선택 ACT(일반)<div style={{fontSize:'9px', color:'#64748b'}}>{scenarioAddRows.length}건 클릭</div></td>
-                      <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioAddKRW)}</div></td>
+                      <td style={BL}>+ 선택 ACT(일반)<div style={{fontSize:'9px', color:'#64748b'}}>{scenarioAddNormalRows.length}건 클릭</div></td>
+                      <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioAddNormalKRW)}</div></td>
+                    </tr>
+                    <tr>
+                      <td style={{...BL, color:'#7c3aed'}}>+ 선택 Try &amp; Buy<div style={{fontSize:'9px', color:'#64748b'}}>{scenarioAddTbRows.length}건 클릭</div></td>
+                      <td style={{...BV, fontWeight:'700', color:'#7c3aed'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioAddTbKRW)}</div></td>
                     </tr>
                     <tr>
                       <td style={{...BL, fontWeight:'900'}}>합계</td>
@@ -3084,13 +3099,15 @@ img,video{max-width:100%;height:auto}
                                 // 이 건이 시나리오 합계에 들어가는지: SC는 무조건, ACT(일반)은 클릭한 것만.
                                 // Try & Buy와 Pending/Back up은 클릭해도 합계에 안 들어간다(색칠 대상만 됨).
                                 const scBase   = isShipConfirm(r);
-                                const scAdded  = isActNormal(r) && picked;
-                                const scNoCount = isTryBuy(r);
+                                const scAdded  = isACT(r) && picked;
+                                const scAddedTb = scAdded && isTryBuy(r);
                                 const bg = scBase  ? '#eff6ff'
+                                         : scAddedTb ? '#f3e8ff'
                                          : scAdded ? '#dcfce7'
                                          : picked  ? '#bfdbfe'
                                          : (hl ? hl.bg : 'transparent');
                                 const edge = scBase ? 'inset 3px 0 0 0 #2563eb'
+                                           : scAddedTb ? 'inset 3px 0 0 0 #7c3aed'
                                            : scAdded ? 'inset 3px 0 0 0 #16a34a'
                                            : picked ? 'inset 0 0 0 2px #2563eb'
                                            : (r._scenarioMoved ? 'inset 3px 0 0 0 #ea580c' : 'none');
@@ -3101,9 +3118,9 @@ img,video{max-width:100%;height:auto}
                                   onDragStart={e => onScenarioDragStart(e, r.id)}
                                   onDragEnd={onScenarioDragEnd}
                                   onClick={() => togglePickedRow(r.id)}
-                                  title={scBase ? 'Ship Confirm - 합계에 기본 포함'
-                                        : scNoCount ? 'Try & Buy - 합계에 안 들어감 (색칠만 됨)'
-                                        : scAdded ? '클릭해서 합계에 넣은 건 (다시 클릭하면 빠짐)'
+                                  title={scBase ? 'Ship Confirm - 시나리오에 기본 포함'
+                                        : scAddedTb ? 'Try & Buy - 클릭해서 시나리오에 넣은 건 (다시 클릭하면 빠짐)'
+                                        : scAdded ? '클릭해서 시나리오에 넣은 건 (다시 클릭하면 빠짐)'
                                         : scenarioMode ? '클릭하면 합계에 포함 · 드래그하면 담당자/상태 이동'
                                         : rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
                                         : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)`
@@ -3112,7 +3129,7 @@ img,video{max-width:100%;height:auto}
                                     borderBottom:'1px solid #f1f5f9',
                                     background: bg,
                                     boxShadow: edge,
-                                    opacity: dragging ? 0.4 : (scNoCount ? 0.75 : 1),
+                                    opacity: dragging ? 0.4 : 1,
                                     cursor: scenarioMode ? 'grab' : 'pointer',
                                   }}>
                                   {compact ? (
@@ -3223,12 +3240,12 @@ img,video{max-width:100%;height:auto}
                                           </div>
                                           {normalRows.length ? renderRowTable(normalRows, true) : <div style={{color:'#cbd5e1', padding:'2px 0'}}>-</div>}
                                         </div>
-                                        {/* Try & Buy - 예상치·합계에는 안 들어간다 (체험 계약) */}
-                                        <div style={{flex:'1 1 0', minWidth:0, opacity:0.72}}>
+                                        {/* Try & Buy - 예상치에는 안 들어가지만 클릭하면 시나리오에는 들어간다 */}
+                                        <div style={{flex:'1 1 0', minWidth:0}}>
                                           <div style={{fontSize:'10px', fontWeight:'900', color:'#7c3aed', marginBottom:'2px'}}>
                                             Try &amp; Buy ({tbRows.length}건)
-                                            <div style={{fontFamily:'monospace', color:'#64748b'}}>₩{sumOf(tbRows).toLocaleString()}</div>
-                                            <div style={{fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>합계 미포함</div>
+                                            <div style={{fontFamily:'monospace', color:'#1e293b'}}>₩{sumOf(tbRows).toLocaleString()}</div>
+                                            <div style={{fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>예상치 제외 · 클릭하면 시나리오 포함</div>
                                           </div>
                                           {tbRows.length ? renderRowTable(tbRows, true) : <div style={{color:'#cbd5e1', padding:'2px 0'}}>-</div>}
                                         </div>
