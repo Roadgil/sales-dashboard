@@ -1789,14 +1789,22 @@ img,video{max-width:100%;height:auto}
       const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
       const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
 
-      // ── 집계 기준 한 곳 ─────────────────────────────────────────────────────
-      // 평소:      Ship Confirm + ACT(일반)                       ← Try & Buy 제외
-      // 시나리오:  Ship Confirm 전부(무조건) + 클릭한 ACT(일반)만
-      // 담당자 합계 · 팀 합계 · 전사 총액 · 오른쪽 지표가 모두 이 함수 하나를 쓴다.
+      // ── 집계 기준 ───────────────────────────────────────────────────────────
+      // 실제 집계(합계·예상치·GAP): Ship Confirm + ACT(일반). Try & Buy는 제외.
+      // 가상 시나리오:              Ship Confirm 전부(무조건) + 클릭한 ACT(일반).
+      //
+      // 시나리오는 토글에 걸지 않는다. 행을 클릭하면 그 자체로 시나리오가 되고,
+      // Ship Confirm은 클릭 여부와 무관하게 항상 깔려 있다. (토글은 드래그 이동 전용)
+      // 그리고 실제 합계를 시나리오 값으로 갈아치우지 않고 나란히 같이 보여준다 -
+      // 합계의 의미가 모드에 따라 바뀌면 어느 숫자를 보고 있는지 알 수 없어진다.
       const pickedSet = new Set(pickedRowIds.map(String));
       const isPicked  = (d) => pickedSet.has(String(d.id));
       const inScenario     = (d) => isShipConfirm(d) || (isActNormal(d) && isPicked(d));
-      const countsForTotal = (d) => scenarioMode ? inScenario(d) : isExpected(d);
+      const countsForTotal = (d) => isExpected(d);
+      // 시나리오 표시를 켤 시점: 뭔가 클릭했거나 드래그 모드일 때
+      const scenarioView = scenarioMode || pickedRowIds.length > 0;
+      // 주어진 행 묶음의 시나리오 합계 (담당자·팀 카드에서 재사용)
+      const scenarioSumOf = (rowsArr) => rowsArr.filter(inScenario).reduce((s,d) => s + netPrice(d), 0);
 
       // 시나리오 박스에 쓰는 값들 (SC 기본분 / 클릭해서 더한 분)
       const scenarioScRows  = currentQData.filter(isShipConfirm);
@@ -2055,24 +2063,23 @@ img,video{max-width:100%;height:auto}
                                 editable onEdit={v=>handleTargetChange('target', v)} editColor="#b91c1c"/>,
           incentiveKRW: () => <Row key="incentiveKRW" label="Incentive Target" hint="÷120%" value={incentiveTargetKRW} sub={usd(incentiveTargetKRW)}
                                 labelStyle={{color:'#7c3aed'}} valueStyle={{color:'#6d28d9'}}/>,
-          gapKRW: () => <Row key="gapKRW" label="GAP" value={pGap} sub={usd(pGap)}
+          gapKRW: () => <Row key="gapKRW" label="GAP" hint="Target − 예상치" value={pGap} sub={usd(pGap)}
                                 valueStyle={{color: pGap<=0 ? '#047857' : '#b45309'}}
                                 note={pGap<=0 ? '초과' : '미달'} noteAhead={pGap<=0}/>,
-          estimatedKRW: () => <Row key="estimatedKRW" label="예상치" hint={scenarioMode ? 'SC + 선택 ACT(일반)' : 'SC + ACT(일반)'} value={pExpected} sub={usd(pExpected)}
+          estimatedKRW: () => <Row key="estimatedKRW" label="예상치" hint="SC + ACT(일반)" value={pExpected} sub={usd(pExpected)}
                                 labelStyle={{fontWeight:'900'}} valueStyle={{background:'#fef08a', fontWeight:'900', color:'#0f172a'}}
                                 note={targetKRW ? 'Target ' + (pExpected/targetKRW*100).toFixed(1) + '%' : null}
                                 noteAhead={targetKRW ? pExpected>=targetKRW : false}/>,
           shipConfirmKRW: () => <Row key="shipConfirmKRW" label="SC 예상치" value={pSc} sub={usd(pSc)}
                                 valueStyle={{background:'#dbeafe', color:'#1d4ed8'}}/>,
-          actEstimatedKRW: () => <Row key="actEstimatedKRW" label="ACT(일반) 예상치" hint={scenarioMode ? '선택한 건만' : 'Try & Buy 제외'} value={pAct} sub={usd(pAct)}
+          actEstimatedKRW: () => <Row key="actEstimatedKRW" label="ACT(일반) 예상치" hint="Try & Buy 제외" value={pAct} sub={usd(pAct)}
                                 valueStyle={{background:'#dcfce7', color:'#15803d'}}/>,
           gmppTarget: () => <Row key="gmppTarget" label="GMPP Target" value={gmppTargetKRW} sub={usd(gmppTargetKRW)}
                                 labelStyle={{color:'#1d4ed8'}} valueStyle={{color:'#1d4ed8'}}
                                 editable onEdit={v=>handleTargetChange('gmppTarget', v)} editColor="#1d4ed8"/>,
-          // 'GMPP 예상치 (ACT+SC)' 는 없애고, 시나리오 기준(SC 전부 + 클릭한 ACT 일반)으로 대체
-          gmppEstimated: () => <Row key="gmppEstimated" label="GMPP 예상치" hint={scenarioMode ? 'SC + 선택 ACT(일반)' : 'SC + ACT(일반)'} value={pGmppExp} sub={usd(pGmppExp)}
-                                labelStyle={{color:'#1d4ed8'}}/>,
-          gmppGap: () => <Row key="gmppGap" label="GMPP GAP" value={pGmppGap} sub={usd(pGmppGap)}
+          // 'GMPP 예상치' KPI 행은 없앴다. GMPP는 위 시나리오 박스에서 SC + 클릭한 건 기준으로만 본다.
+          gmppEstimated: () => null,
+          gmppGap: () => <Row key="gmppGap" label="GMPP GAP" hint="GMPP Target − 실제 GMPP" value={pGmppGap} sub={usd(pGmppGap)}
                                 labelStyle={{color:'#1d4ed8'}} valueStyle={{color: pGmppGap<=0 ? '#047857' : '#b45309'}}
                                 note={pGmppGap<=0 ? '초과' : '미달'} noteAhead={pGmppGap<=0}/>,
         };
@@ -2086,53 +2093,55 @@ img,video{max-width:100%;height:auto}
                 : <button onClick={() => setSummaryLocked(true)} title="잠그기" style={{fontSize:'13px', padding:'1px 6px', borderRadius:'6px', border:'1.5px solid #86efac', background:'#f0fdf4', color:'#15803d', cursor:'pointer', fontWeight:'700'}}>🔓</button>}
             </div>
 
-            {/* 시나리오 박스: Ship Confirm은 무조건 깔고, 클릭한 ACT(일반)만 위에 더한다.
-                시나리오 모드가 꺼져 있으면 그냥 "고른 건들 소계"로 쓴다. */}
-            {(scenarioMode || pickedRowsInQ.length > 0) && (() => {
-              const boxSum   = scenarioMode ? scenarioSumKRW : pickedSumKRW;
-              const boxTgt   = scenarioMode ? scenarioTargetPct : pickedTargetPct;
-              const boxInc   = scenarioMode ? scenarioIncentivePct : pickedIncentivePct;
+            {/* 가상 시나리오 박스 - 항상 보인다.
+                Ship Confirm은 클릭 없이 무조건 깔리고, 클릭한 ACT(일반)만 위에 더해진다. */}
+            {(() => {
               const BL = {...L, background:'#eff6ff', color:'#1d4ed8'};
               const BV = {...V, background:'#eff6ff', color:'#1d4ed8', fontWeight:'900'};
+              const scGmppRows = currentQData.filter(d => inScenario(d) && d.product==='GMPP');
+              const scGmpp     = scGmppRows.reduce((s,d)=>s+netPrice(d),0);
+              const scGmppPct  = gmppTargetKRW ? (scGmpp / gmppTargetKRW) * 100 : 0;
               return (
               <div style={{marginBottom:'8px', border:'2px solid #2563eb', borderRadius:'8px', overflow:'hidden'}}>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px', padding:'4px 6px', background:'#2563eb'}}>
-                  <span style={{fontSize:'10px', fontWeight:'900', color:'#fff'}}>
-                    {scenarioMode ? '가상 시나리오 합계' : `고른 ${pickedRowsInQ.length}건 소계`}
-                  </span>
-                  {(pickedRowsInQ.length > 0) && (
+                  <span style={{fontSize:'10px', fontWeight:'900', color:'#fff'}}>가상 시나리오</span>
+                  {scenarioAddRows.length > 0 && (
                     <button onClick={clearPickedRows} style={{fontSize:'9px', fontWeight:'800', color:'#1d4ed8', background:'#fff', border:'none', borderRadius:'4px', padding:'1px 5px', cursor:'pointer'}}>선택 해제</button>
                   )}
                 </div>
                 <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
                   <colgroup><col style={{width:'47%'}}/><col/></colgroup>
                   <tbody>
-                    {scenarioMode && (
-                      <tr>
-                        <td style={BL}>Ship Confirm<div style={{fontSize:'9px', color:'#64748b'}}>기본 포함 {scenarioScRows.length}건</div></td>
-                        <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioScKRW)}</div></td>
-                      </tr>
-                    )}
-                    {scenarioMode && (
-                      <tr>
-                        <td style={BL}>+ 선택 ACT(일반)<div style={{fontSize:'9px', color:'#64748b'}}>{scenarioAddRows.length}건 클릭</div></td>
-                        <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioAddKRW)}</div></td>
-                      </tr>
-                    )}
+                    <tr>
+                      <td style={BL}>Ship Confirm<div style={{fontSize:'9px', color:'#64748b'}}>기본 포함 {scenarioScRows.length}건</div></td>
+                      <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioScKRW)}</div></td>
+                    </tr>
+                    <tr>
+                      <td style={BL}>+ 선택 ACT(일반)<div style={{fontSize:'9px', color:'#64748b'}}>{scenarioAddRows.length}건 클릭</div></td>
+                      <td style={{...BV, fontWeight:'700'}}><div style={{whiteSpace:'nowrap'}}>{won(scenarioAddKRW)}</div></td>
+                    </tr>
                     <tr>
                       <td style={{...BL, fontWeight:'900'}}>합계</td>
                       <td style={BV}>
-                        <div style={{whiteSpace:'nowrap'}}>{won(boxSum)}</div>
-                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>{usd(boxSum)}</div>
+                        <div style={{whiteSpace:'nowrap'}}>{won(scenarioSumKRW)}</div>
+                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>{usd(scenarioSumKRW)}</div>
                       </td>
                     </tr>
                     <tr>
                       <td style={BL}>Target 대비</td>
-                      <td style={{...BV, color: boxTgt>=100 ? '#047857' : '#1d4ed8'}}>{boxTgt.toFixed(2)}%</td>
+                      <td style={{...BV, color: scenarioTargetPct>=100 ? '#047857' : '#1d4ed8'}}>{scenarioTargetPct.toFixed(2)}%</td>
                     </tr>
                     <tr>
                       <td style={BL}>Incentive Target 대비</td>
-                      <td style={{...BV, color: boxInc>=100 ? '#047857' : '#1d4ed8'}}>{boxInc.toFixed(2)}%</td>
+                      <td style={{...BV, color: scenarioIncentivePct>=100 ? '#047857' : '#1d4ed8'}}>{scenarioIncentivePct.toFixed(2)}%</td>
+                    </tr>
+                    {/* GMPP 예상치는 KPI 행에서 빼고 여기 시나리오 기준으로만 둔다 */}
+                    <tr>
+                      <td style={BL}>GMPP<div style={{fontSize:'9px', color:'#64748b'}}>SC + 선택 {scGmppRows.length}건</div></td>
+                      <td style={{...BV, fontWeight:'700'}}>
+                        <div style={{whiteSpace:'nowrap'}}>{won(scGmpp)}</div>
+                        <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color: scGmppPct>=100 ? '#047857' : '#94a3b8'}}>GMPP Target {scGmppPct.toFixed(1)}%</div>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -2871,7 +2880,8 @@ img,video{max-width:100%;height:auto}
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
-                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'14px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>{scenarioMode ? 'SC 전부 + 선택한 ACT(일반)' : 'Ship Confirm + ACT(일반) 포함 · Try & Buy 제외'}</span>
+                  <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'14px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>Ship Confirm + ACT(일반) · Try &amp; Buy 제외</span>
+                    {<span style={{fontSize:'15px', fontWeight:'900', color:'#15803d', marginLeft:'8px'}}>시나리오 ₩{scenarioSumKRW.toLocaleString()} (Target {scenarioTargetPct.toFixed(1)}%)</span>}
                     {applyCommission && <span style={{fontSize:'14px', fontWeight:'800', color:'#c2410c', marginLeft:'8px'}}>커미션 −₩{combinedCommission.toLocaleString()} 차감됨</span>}
                   </h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
@@ -2890,29 +2900,32 @@ img,video{max-width:100%;height:auto}
 
                 {/* ── 도구 모음: 가상 시나리오 · 행 색상 · 편집 ── */}
                 <div style={{display:'flex', flexWrap:'wrap', gap:'8px', alignItems:'center', marginBottom:'12px', padding:'8px 10px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:'10px'}}>
+                  {/* 시나리오는 토글 없이 항상 동작한다. Ship Confirm은 기본 포함이고
+                      ACT(일반) 행을 클릭하면 더해진다. 이 상태 표시가 그 사실을 알려주는 역할. */}
+                  <span style={{fontSize:'11px', fontWeight:'800', color:'#15803d', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'8px', padding:'5px 10px'}}>
+                    🧪 시나리오: SC {scenarioScRows.length}건 기본 포함
+                    {scenarioAddRows.length > 0
+                      ? ` + 클릭 ${scenarioAddRows.length}건 = ₩${scenarioSumKRW.toLocaleString()} (Target ${scenarioTargetPct.toFixed(1)}%)`
+                      : ` = ₩${scenarioSumKRW.toLocaleString()} · ACT(일반) 행을 클릭해서 더하세요`}
+                  </span>
+
+                  <button onClick={() => { resetScenario(); clearPickedRows(); }} disabled={scenarioCount===0 && pickedRowIds.length===0}
+                    style={{padding:'6px 10px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', border:'1px solid #cbd5e1', background:'#fff',
+                            color: (scenarioCount>0||pickedRowIds.length>0)?'#334155':'#cbd5e1', cursor: (scenarioCount>0||pickedRowIds.length>0)?'pointer':'not-allowed'}}>↺ 되돌리기</button>
+
+                  {/* 토글은 이제 드래그 이동 전용 */}
                   <button onClick={() => { setScenarioMode(v => !v); if (scenarioMode) resetScenario(); }}
-                    title="건을 드래그해서 담당자·상태를 바꿔보며 금액 시나리오를 봅니다. Firestore에 저장되지 않고 새로고침하면 원래대로 돌아갑니다."
+                    title="켜면 건을 끌어서 담당자·상태를 바꿔볼 수 있습니다. 클릭으로 합계에 넣는 건 토글과 무관하게 항상 됩니다. 어느 쪽도 Firestore에 저장되지 않고 새로고침하면 원래대로 돌아갑니다."
                     style={{padding:'6px 12px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', cursor:'pointer',
                             border:`1px solid ${scenarioMode?'#c2410c':'#cbd5e1'}`, background: scenarioMode?'#ea580c':'#fff', color: scenarioMode?'#fff':'#334155'}}>
-                    🧪 가상 시나리오{scenarioMode?' ON':''}
+                    ↔ 드래그 이동{scenarioMode?' ON':''}
                   </button>
-
-                  {scenarioMode && (
-                    <>
-                      <span style={{fontSize:'11px', fontWeight:'800', color:'#1d4ed8'}}>
-                        SC {scenarioScRows.length}건 기본 포함 · ACT(일반) {scenarioAddRows.length}건 추가 = ₩{scenarioSumKRW.toLocaleString()} (Target {scenarioTargetPct.toFixed(1)}%)
-                      </span>
-                      {scenarioCount>0 && (
-                        <span style={{fontSize:'11px', fontWeight:'800', color:'#c2410c'}}>· 드래그 {scenarioCount}건 이동됨</span>
-                      )}
-                      <button onClick={() => { resetScenario(); clearPickedRows(); }} disabled={scenarioCount===0 && pickedRowIds.length===0}
-                        style={{padding:'6px 10px', borderRadius:'8px', fontWeight:'800', fontSize:'12px', border:'1px solid #cbd5e1', background:'#fff',
-                                color: (scenarioCount>0||pickedRowIds.length>0)?'#334155':'#cbd5e1', cursor: (scenarioCount>0||pickedRowIds.length>0)?'pointer':'not-allowed'}}>↺ 되돌리기</button>
-                      <span style={{fontSize:'10px', fontWeight:'700', color:'#c2410c', background:'#fff7ed', border:'1px dashed #fdba74', borderRadius:'6px', padding:'3px 8px'}}>
-                        저장 안 됨 · 실제 확정은 개인별 화면에서
-                      </span>
-                    </>
+                  {scenarioMode && scenarioCount>0 && (
+                    <span style={{fontSize:'11px', fontWeight:'800', color:'#c2410c'}}>드래그 {scenarioCount}건 이동됨</span>
                   )}
+                  <span style={{fontSize:'10px', fontWeight:'700', color:'#c2410c', background:'#fff7ed', border:'1px dashed #fdba74', borderRadius:'6px', padding:'3px 8px'}}>
+                    저장 안 됨 · 실제 확정은 개인별 화면에서
+                  </span>
 
                   <span style={{width:'1px', alignSelf:'stretch', background:'#e2e8f0', margin:'0 2px'}}></span>
 
@@ -2988,6 +3001,19 @@ img,video{max-width:100%;height:auto}
                           합계: ₩{teamSumKRW.toLocaleString()}
                           {teamTargetKRW > 0 && <span style={{marginLeft:'6px', color:teamPerColor, fontWeight:'900'}}>({teamPer.toFixed(1)}%)</span>}
                         </div>
+                        {/* 팀 단위 가상 시나리오 - 클릭 전에도 SC 기준으로 표시 */}
+                        {(() => {
+                          const tScen = scenarioSumOf(teamRows);
+                          const tScenPer = teamTargetKRW > 0 ? (tScen/teamTargetKRW)*100 : 0;
+                          const tPicks = teamRows.filter(d => isActNormal(d) && isPicked(d)).length;
+                          return (
+                            <div style={{fontWeight:'bold', padding:'6px 12px', background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:'6px', color:'#15803d'}}>
+                              시나리오: ₩{tScen.toLocaleString()}
+                              {teamTargetKRW > 0 && <span style={{marginLeft:'6px', fontWeight:'900'}}>({tScenPer.toFixed(1)}%)</span>}
+                              <span style={{marginLeft:'6px', fontSize:'11px', fontWeight:'700', color:'#16a34a'}}>SC + 선택 {tPicks}건</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -3055,13 +3081,14 @@ img,video{max-width:100%;height:auto}
                                 const picked = pickedRowIds.includes(rid);
                                 const hl = ROW_HILITE[rowColors[rid]];
                                 const dragging = scenarioDrag.rowId === rid;
-                                // 시나리오 모드에서 이 건이 합계에 들어가는지: SC는 무조건, ACT(일반)은 클릭한 것만
-                                const scBase   = scenarioMode && isShipConfirm(r);
-                                const scAdded  = scenarioMode && isActNormal(r) && picked;
-                                const scNoCount = scenarioMode && isTryBuy(r);
-                                const bg = picked && !scenarioMode ? '#bfdbfe'
-                                         : scBase  ? '#eff6ff'
+                                // 이 건이 시나리오 합계에 들어가는지: SC는 무조건, ACT(일반)은 클릭한 것만.
+                                // Try & Buy와 Pending/Back up은 클릭해도 합계에 안 들어간다(색칠 대상만 됨).
+                                const scBase   = isShipConfirm(r);
+                                const scAdded  = isActNormal(r) && picked;
+                                const scNoCount = isTryBuy(r);
+                                const bg = scBase  ? '#eff6ff'
                                          : scAdded ? '#dcfce7'
+                                         : picked  ? '#bfdbfe'
                                          : (hl ? hl.bg : 'transparent');
                                 const edge = scBase ? 'inset 3px 0 0 0 #2563eb'
                                            : scAdded ? 'inset 3px 0 0 0 #16a34a'
@@ -3138,6 +3165,19 @@ img,video{max-width:100%;height:auto}
                             <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'4px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                               합계: ₩{sumKRW.toLocaleString()}{mTarget > 0 && ` (${mPer.toFixed(1)}%)`}
                             </div>
+                            {/* 가상 시나리오: SC 전부 + 이 담당자에서 클릭한 ACT(일반).
+                                클릭 전에도 보여야 'SC는 무조건 포함'이라는 게 드러난다. */}
+                            {(() => {
+                              const mScen = scenarioSumOf(rows);
+                              const mScenPer = mTarget > 0 ? (mScen/mTarget)*100 : 0;
+                              const mPicks = rows.filter(d => isActNormal(d) && isPicked(d)).length;
+                              return (
+                                <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'4px', padding:'5px 8px', background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:'6px', color:'#15803d', fontSize:'12px'}}>
+                                  시나리오: ₩{mScen.toLocaleString()}{mTarget > 0 && ` (${mScenPer.toFixed(1)}%)`}
+                                  <div style={{fontSize:'10px', fontWeight:'700', color:'#16a34a'}}>SC + 선택 {mPicks}건</div>
+                                </div>
+                              );
+                            })()}
                             <div style={{textAlign:'right', marginBottom:'8px', fontSize:'11px', color:'#64748b', fontWeight:'bold'}}>
                               {mTarget > 0 ? `목표 ₩${mTarget.toLocaleString()}` : '목표 미설정'}
                               {mCommission > 0 && <span style={{color:'#c2410c', marginLeft:'6px'}}>· 커미션 −₩{mCommission.toLocaleString()}</span>}
