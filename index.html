@@ -3333,14 +3333,25 @@ img,video{max-width:100%;height:auto}
                   // 아래 목록 변수를 dealers로 두면 같은 스코프에서 자기 자신을 선언 전에
                   // 참조하게 되어 DEALER_ORDER가 undefined가 되고 indexOf에서 화면이 죽는다.
                   const DEALER_ORDER = Array.isArray(dealers) ? dealers : [];
-                  const dealersInUse = [...new Set(rows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
+                  // 카드에 실제로 찍히는 건(SC + ACT 일반)이 있는 딜러만 남긴다.
+                  // 전체 rows 기준으로 뽑으면 Pending/Back up/Try & Buy만 가진 딜러가
+                  // "0건 · 데이터 없음" 빈 카드로 격자 자리를 잡아먹는다.
+                  const countingRows = rows.filter(countsForTotal);
+                  const dealersInUse = [...new Set(countingRows.map(d => d.dealerName || '미지정'))].sort((a, b) => {
                     const ia = DEALER_ORDER.indexOf(a), ib = DEALER_ORDER.indexOf(b);
                     if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
                     return a.localeCompare(b);
                   });
                   return (
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                      <div style={{display:'flex', gap:'16px', overflowX:'auto'}}>
+                      {/* 딜러가 15곳이라 가로 한 줄로 늘어놓으면 4,000px가 넘어 계속 오른쪽으로 끌어야 했다.
+                          이제 상하 2단이 되도록 열 수를 딜러 수의 절반으로 잡는다.
+                          다만 열을 무한정 늘리면 카드가 못 읽을 만큼 좁아지므로 6열에서 끊고,
+                          창이 좁으면 minmax의 200px 하한이 이겨서 알아서 3단·4단으로 접힌다.
+                          어느 경우에도 가로 스크롤은 생기지 않는다. */}
+                      {(() => { const gap = 12; const cols = Math.min(6, Math.max(2, Math.ceil(dealersInUse.length / 2))); return (
+                      <div style={{display:'grid', gap:`${gap}px`, alignItems:'start',
+                                   gridTemplateColumns:`repeat(auto-fill, minmax(max(200px, calc((100% - ${(cols-1)*gap}px) / ${cols})), 1fr))`}}>
                         {dealersInUse.length === 0 ? (
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealersInUse.map(dealer => {
@@ -3348,14 +3359,16 @@ img,video{max-width:100%;height:auto}
                           const dCommission = commissionFor(dRevenueRows);
                           const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - dCommission;
                           return (
-                            <div key={dealer} style={{minWidth:'280px', flex:'1 1 280px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px'}}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
+                            <div key={dealer} style={{minWidth:0, border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px'}}>
+                              <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                                 {dCommission > 0 && <div style={{fontSize:'11px', fontWeight:'bold', color:'#c2410c'}}>커미션 −₩{dCommission.toLocaleString()}</div>}
                               </div>
+                              {/* 건이 많은 딜러가 카드를 혼자 길게 늘이지 않도록 목록만 세로 스크롤 */}
+                              <div style={{maxHeight:'190px', overflowY:'auto'}}>
                               <table style={{width:'100%', fontSize:'11px', tableLayout:'fixed'}}>
-                                <colgroup><col/><col style={{width:'68px'}}/><col style={{width:'86px'}}/><col style={{width:'96px'}}/></colgroup>
+                                <colgroup><col/><col style={{width:'54px'}}/><col style={{width:'88px'}}/></colgroup>
                                 <tbody>
                                   {dRevenueRows.map(r => {
                                     const rc = Math.round(rowCommission(r));
@@ -3371,9 +3384,9 @@ img,video{max-width:100%;height:auto}
                                       title={`${picked ? '클릭: 선택 해제' : '클릭: 색칠 대상으로 선택'} · 더블클릭: ${r.member} 상세로 이동`}
                                       onClick={() => togglePickedRow(r.id)}
                                       onDoubleClick={() => { setSelectedTeam(Object.keys(teams).find(t=>(teams[t]||[]).includes(r.member)) || selectedTeam); setSelectedMember(r.member); }}>
-                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={r.account}>{r.account}</td>
+                                      {/* accType은 칸이 좁아 툴팁으로 밀었다 */}
+                                      <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={`${r.account}${r.accType ? ' · ' + r.accType : ''}`}>{r.account}</td>
                                       <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
-                                      <td style={{padding:'2px 4px', color:'#64748b'}} className="truncate" title={r.accType||''}>{r.accType||'-'}</td>
                                       <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}
                                         title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
                                                   : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)` : ''}>₩{netPrice(r).toLocaleString()}</td>
@@ -3381,14 +3394,16 @@ img,video{max-width:100%;height:auto}
                                     );
                                   })}
                                   {dRevenueRows.length === 0 && (
-                                    <tr><td colSpan="4" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
+                                    <tr><td colSpan="3" style={{padding:'6px 0', color:'#9ca3af'}}>데이터 없음</td></tr>
                                   )}
                                 </tbody>
                               </table>
+                              </div>
                             </div>
                           );
                         })}
                       </div>
+                      ); })()}
                     </div>
                   );
                 })()}
