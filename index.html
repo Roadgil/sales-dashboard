@@ -480,6 +480,10 @@ img,video{max-width:100%;height:auto}
       '제주특별자치도': ['제주시','서귀포시'],
     };
     const KR_SIDO = Object.keys(KR_REGIONS);
+
+    // 납품처 분류 - 신규 입력 시 필수
+    const CHAIN_TYPES = ['체인', '논체인'];
+    const CLINIC_TYPES = ['GP', '피부과'];
   </script>
 </head>
 <body className="bg-gray-100">
@@ -788,6 +792,8 @@ img,video{max-width:100%;height:auto}
         valSalesType:      lang==='ko' ? 'Sales Type을 선택해주세요.' : 'Please select a Sales Type.',
         valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
         valDelivery:       lang==='ko' ? '납품예정일을 입력해주세요.' : 'Please enter a Delivery Date.',
+        valChainType:      lang==='ko' ? '체인/논체인을 선택해주세요.' : 'Please select Chain / Non-chain.',
+        valClinicType:     lang==='ko' ? '병원 구분(GP/피부과)을 선택해주세요.' : 'Please select GP / Dermatology.',
         valPriceNaN:       lang==='ko' ? '가격(KRW)은 숫자만 입력 가능합니다.' : 'Price (KRW) must be a number.',
         valPriceNeg:       lang==='ko' ? '가격(KRW)은 0 이상이어야 합니다.' : 'Price (KRW) must be 0 or greater.',
         valPriceBig:       lang==='ko' ? '가격(KRW)이 너무 큽니다. 단위를 확인해주세요.' : 'Price (KRW) seems too large. Please verify.',
@@ -844,7 +850,7 @@ img,video{max-width:100%;height:auto}
       // 같은 오퍼튜니티에서 같이 딸려온 동반 시스템 후보(예: GMPP 옆의 Cryo7) - 저장 시 같은 상태/날짜/Dealer로 함께 sales에 생성됨
       const [companionCandidates, setCompanionCandidates] = useState([]);
 
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '' };
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '', chainType: '', clinicType: '' };
       const [form, setForm]         = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
@@ -1148,6 +1154,8 @@ img,video{max-width:100%;height:auto}
         if (!form.account.trim())                              errors.push(T.valAccount);
         if (!form.status)                                      errors.push(T.valStatus);
         if (!form.deliveryDate)                                errors.push(T.valDelivery);
+        if (!form.chainType)                                   errors.push(T.valChainType);
+        if (!form.clinicType)                                  errors.push(T.valClinicType);
         const krw = parseFloat(form.priceKRW);
         if (form.priceKRW !== '' && isNaN(krw))               errors.push(T.valPriceNaN);
         else if (!isNaN(krw) && krw < 0)                      errors.push(T.valPriceNeg);
@@ -1169,6 +1177,8 @@ img,video{max-width:100%;height:auto}
           dealerName:   String(form.dealerName || ''),
           sido:         String(form.sido || ''),
           sigungu:      String(form.sigungu || ''),
+          chainType:    String(form.chainType || ''),
+          clinicType:   String(form.clinicType || ''),
           priceKRW:     finalKRW,
           priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
           id:           editingId ? String(editingId) : (convertingCandidateId || crypto.randomUUID()),
@@ -1455,8 +1465,8 @@ img,video{max-width:100%;height:auto}
       const exportToCSV = (mode = 'current') => {
         let data = mode === 'all' ? rawSalesData : rawSalesData.filter(d => d.quarter === selectedQuarter);
         if (data.length === 0) return alert(T.noExportData);
-        const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','시/도','시/군/구','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
-        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,d.deliveryDate,d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
+        const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','시/도','시/군/구','체인구분','병원구분','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
+        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,d.deliveryDate,d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.chainType||'',d.clinicType||'',d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
         const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','))].join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -3731,7 +3741,17 @@ img,video{max-width:100%;height:auto}
                             <option value="">{!form.sido ? '시/도 먼저 선택' : (KR_REGIONS[form.sido]||[]).length===0 ? '하위 구역 없음' : '선택'}</option>
                             {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
                           </select></div>
-                          <div></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                            <option value="">{T.selectRequired}</option>
+                            {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                            <option value="">{T.selectRequired}</option>
+                            {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select></div>
+                          <div></div><div></div>
                         </div>
                         <div className="flex gap-3 mt-2">
                           <button type="button" onClick={handleSave} disabled={isSaving} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded shadow transition flex items-center justify-center gap-2">
@@ -3819,6 +3839,14 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/군/구)</label><select name="sigungu" value={form.sigungu} onChange={handleInputChange} disabled={!form.sido || (KR_REGIONS[form.sido]||[]).length===0} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400">
                         <option value="">{!form.sido ? '시/도 먼저 선택' : (KR_REGIONS[form.sido]||[]).length===0 ? '하위 구역 없음' : '선택'}</option>
                         {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
+                      </select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        <option value="">{T.selectRequired}</option>
+                        {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        <option value="">{T.selectRequired}</option>
+                        {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
                     </div>
                     <div className="mt-2 text-right">
