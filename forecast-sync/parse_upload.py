@@ -69,6 +69,46 @@ SYSTEM_PATTERNS = [
 ]
 
 
+# 시스템 이름이 제품명에 안 들어가는 부속 라인(옵션킷/핸드피스킷/애플리케이터)의 소속.
+# 이게 없으면 이런 라인이 전부 "대표 제품"으로 흘러가서, 예를 들어 GMPP와 Nordlys가 같이
+# 붙은 계약에서 Nordlys 애플리케이터 금액이 GMPP 매출로 잡힌다(Nordlys와 GMPP는 아예 다른 제품).
+#
+# 제품명만으로 확실한 것은 정규식(ACCESSORY_PATTERNS)으로, 제품명으로는 알 수 없는 것은
+# Product Code(ACCESSORY_CODES)로 판정한다. 두 표의 값은 제품 버킷 이름이 아니라
+# 아래 ACCESSORY_FAMILIES의 "플랫폼" 이름이다.
+ACCESSORY_PATTERNS = [
+    ("GMPP", r"\bgmpp\b"),     # "MSDS DCD Options Kit GMPP", "GMPP DCD Small Spot Option Kit" 등
+    ("Picoway", r"\bpico\b"),  # "Kit, Pico 730 HP", "Kit, Pico 532 Fusion HP" 등
+]
+
+# 부속 라인은 "어느 플랫폼의 부속인지"까지만 판정하고, 실제로 어느 제품 버킷에 붙일지는
+# 그 계약에 들어있는 시스템을 보고 정한다 - 아래 순서대로 먼저 발견된 버킷에 붙이고,
+# 하나도 없으면 마지막 값으로 새 버킷을 만든다.
+# Nordlys 계열을 이렇게 처리하지 않으면 "Nordlys Mini + Frax 애플리케이터" 계약에서
+# 애플리케이터가 별도 Nordlys 건으로 쪼개져, 가짜 Nordlys 매출이 생기고 Mini 금액이
+# 그만큼 깎인다(2026-08-27 실측: Mimisome Busan / Proper P.S Incheon 건에서 확인).
+ACCESSORY_FAMILIES = {
+    "Nordlys": ("Nordlys Mini", "Nordlys"),
+    "Picoway": ("Picoway",),
+    "GMPP": ("GMPP",),
+}
+
+# 아래 코드들의 소속은 APAC 재고 리포트(APAC_INVENTORY_ONHAND_DAILY, 2026-08-26분)의
+# Product Family 컬럼으로 확인했다. 재고 파일을 런타임에 읽지는 않는다 - 매일 새로 떨어지는
+# 다운로드 파일이고, ITEM 788개가 Family를 2개 이상 갖고 있어 조회 결과가 흔들린다.
+# 확인된 결과만 표로 고정해 두고, 새 부속 코드가 나오면 그때 재고 Family를 다시 보고 추가한다.
+# (Ellipse는 Nordlys 플랫폼의 애플리케이터 계열이라 Nordlys로 귀속시킨다.)
+ACCESSORY_CODES = {
+    "9APP7744-CNDL": "Nordlys",  # Applicator HR 600      - 재고 Family: Nordlys
+    "9APP7747-CNDL": "Nordlys",  # Applicator VL 555      - 재고 Family: Ellipse Applicator
+    "9APP7748-CNDL": "Nordlys",  # Applicator PR 530      - 재고 Family: Nordlys
+    "9APP7829-CNDL": "Nordlys",  # Applicator Frax 1550   - 재고 Family: Nordlys
+    "9APP7830": "Nordlys",       # 1550 Applicator        - 재고 Family: Ellipse Applicator
+    "9APP7908": "Nordlys",       # Applicator Frax 1940   - 재고 Family: Nordlys
+    "9APP7909": "Nordlys",       # 1940 Applicator        - 재고 Family: Ellipse Applicator
+}
+
+
 def parse_report(xls_path):
     """Salesforce에서 export한 .xls(실제로는 HTML 표) 파일을 읽어 DataFrame으로 반환."""
     tables = pd.read_html(xls_path)
@@ -116,37 +156,63 @@ def split_into_product_buckets(group):
     반환: (buckets, primary) - buckets는 {제품명: boolean mask}, primary는 이 Opportunity의
     대표 제품명. 시스템 라인이 하나도 없으면 (None, None).
 
-    규칙:
-    - MAIN_PRODUCT_CODES 라인은 무조건 GMPP 버킷 (제품명 패턴 검사를 아예 거치지 않음).
-    - 나머지는 SYSTEM_PATTERNS를 순서대로 검사해서 먼저 매치된 제품 버킷에 담는다.
-    - 대표 제품 = GMPP 메인 라인이 있으면 GMPP, 없으면 금액(Total Price 합)이 가장 큰 시스템.
-    - 어느 제품에도 안 잡힌 라인(운임 FREIGHT CHARGE ONLY, 옵션킷, 애플리케이터 등)은
-      대표 제품에 귀속시킨다 - 그래야 계약 총액이 어느 한 제품에 온전히 잡힌다.
+    규칙(위에서부터 순서대로, 먼저 잡힌 라인은 다시 검사하지 않음):
+    1. MAIN_PRODUCT_CODES 라인은 무조건 GMPP 버킷 (제품명 패턴 검사를 아예 거치지 않음).
+    2. SYSTEM_PATTERNS - 제품명에 시스템 이름이 들어간 라인(시스템 본체).
+    3. ACCESSORY_CODES / ACCESSORY_PATTERNS - 시스템 이름은 없지만 소속이 확인된 부속 라인.
+    4. 대표 제품 = GMPP 메인 라인이 있으면 GMPP, 없으면 금액(Total Price 합)이 가장 큰 제품.
+    5. 그래도 안 잡힌 라인(운임 FREIGHT CHARGE ONLY 등 계약 공통 비용)은 대표 제품에 귀속 -
+       그래야 계약 총액이 어느 한 제품에 온전히 잡히고 금액이 새지 않는다.
     """
     main_mask = group["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())
     names = group["Product Name"].astype(str).str.lower()
+    codes = group["Product Code"].astype(str).str.strip()
 
     # GMPP 메인 라인은 처음부터 "이미 가져간" 것으로 두어 다른 패턴이 채가지 못하게 한다.
     taken = main_mask.copy()
     buckets = {}
-    for sys_name, pattern in SYSTEM_PATTERNS:
-        sys_mask = names.str.contains(pattern, regex=True) & ~taken
-        if not sys_mask.any():
-            continue
-        taken = taken | sys_mask
-        buckets[sys_name] = sys_mask
+
+    def claim(product, mask):
+        nonlocal taken
+        if not mask.any():
+            return
+        buckets[product] = buckets[product] | mask if product in buckets else mask
+        taken = taken | mask
 
     if main_mask.any():
         buckets["GMPP"] = main_mask
+
+    for product, pattern in SYSTEM_PATTERNS:
+        claim(product, names.str.contains(pattern, regex=True) & ~taken)
+
+    def resolve_family(family):
+        """부속이 붙을 제품 버킷 - 이 계약에 있는 같은 플랫폼 제품, 없으면 기본값."""
+        members = ACCESSORY_FAMILIES.get(family, (family,))
+        for m in members:
+            if m in buckets:
+                return m
+        return members[-1]
+
+    for code, family in ACCESSORY_CODES.items():
+        mask = (codes == code) & ~taken
+        if mask.any():
+            claim(resolve_family(family), mask)
+    for family, pattern in ACCESSORY_PATTERNS:
+        mask = names.str.contains(pattern, regex=True) & ~taken
+        if mask.any():
+            claim(resolve_family(family), mask)
+
+    if not buckets:
+        # 제품을 판정할 라인이 전혀 없는 Opportunity(운임/미확인 부속만) - 귀속시킬 데가 없어 건너뜀
+        return None, None
+
+    if main_mask.any():
         primary = "GMPP"
-    elif buckets:
+    else:
         primary = max(
             buckets,
             key=lambda s: float(group.loc[buckets[s], "Total Price"].fillna(0).sum()),
         )
-    else:
-        # 시스템 라인이 전혀 없는 Opportunity(운임/부속만 있는 건 등) - 귀속시킬 제품이 없어 건너뜀
-        return None, None
 
     leftover = ~taken
     if leftover.any():
