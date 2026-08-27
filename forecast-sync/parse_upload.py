@@ -5,13 +5,16 @@ import pandas as pd
 
 from member_map import OWNER_TO_MEMBER, OWNER_TO_TEAM
 
-# 메인 시스템 라인의 Product Code -> 참고용 DCD/ACC 힌트.
+# GMPP 메인 시스템 라인의 Product Code -> 참고용 DCD/ACC 힌트.
 # PTO103577(DCD)/PTO103576(ACC)는 과거에 혼용되던 코드로, 현재는 PTO103576을 쓰지 않도록
 # 권장되고 있으나 미수정된 과거 데이터가 남아있을 수 있어 분석 시 둘 다 GMPP로 인식한다
 # (DCD/ACC 구분은 이 코드가 아니라 아래 ACC_TYPE_CODES 옵션킷 조합으로 판단).
+# "GMPP CE WITH DCD"는 Product Code 자리에 코드 대신 제품명이 그대로 들어온 변칙 데이터인데,
+# 실제로는 GMPP 메인 라인이라 동일하게 취급한다(2026-08-27 확인).
 MAIN_PRODUCT_CODES = {
     "PTO103577": "DCD",
     "PTO103576": "ACC",
+    "GMPP CE WITH DCD": "DCD",
 }
 
 # GMPP 옵션킷 Product Code -> Acc Type 라벨. 한 Opportunity 안에 이 코드들이 몇 종류
@@ -43,18 +46,26 @@ def compute_acc_type(group):
         return f"{count}, " + ", ".join(aio_labels)
     return str(count)
 
-# GMPP 오퍼튜니티 안에 같이 딸려오는, GMPP와는 별개의 시스템 상품 - Product Name이 이 정규식과
-# 매치되면 GMPP 합계에서 빼서 별도의 후보(같은 Account/SO, 다른 product)로 분리한다.
+# GMPP 외의 시스템 상품 - Product Name이 이 정규식과 매치되는 라인은 해당 제품 버킷으로
+# 묶여 별도의 후보(같은 Account/SO, 다른 product)가 된다. GMPP 오퍼튜니티에 딸려온 경우엔
+# GMPP 합계에서 빠지고, 이 제품만 있는 오퍼튜니티면 그 자체가 후보가 된다.
+# 제품명은 대시보드 index.html의 allProducts와 정확히 같은 8개 버킷을 쓴다.
+#
 # 순서가 중요함: 더 구체적인 패턴(Nordlys Mini)을 먼저 검사해서 일반 패턴(Nordlys)이 가로채지 않게 함.
+# Picoway를 Hand Piece보다 먼저 둔 것도 같은 이유 - 피코웨이 핸드피스 킷이 Hand Piece로 새지 않게 함.
 # "GMP"는 "GMPP"의 부분 문자열이라 반드시 단어 경계(\b)로 매칭 - 그래야 GMPP 라인이 GMP로 오인되지 않음.
-COMPANION_SYSTEMS = [
+#
+# 실제 Salesforce 리포트의 제품명은 약어가 아니라 풀네임으로 들어오므로 별칭을 같이 매칭한다
+# (2026-08-27 확인): VBP는 "VBEAM PERFECTA VT 9914-0300 with COT",
+# GMP는 "GENTLEMAX PRO LASER SYSTEM W/ DCD" 형태로 들어와서, 약어만으로는 한 건도 안 잡혔었다.
+SYSTEM_PATTERNS = [
     ("Cryo7", r"\bcryo\s?7\b"),
     ("Nordlys Mini", r"\bnordlys\s+mini\b"),
     ("Nordlys", r"\bnordlys\b"),
     ("Picoway", r"\bpicoway\b"),
-    ("VBP", r"\bvbp\b"),
+    ("VBP", r"\bvbeam\b|\bvbp\b"),
     ("Hand Piece", r"\bhand\s?piece\b"),
-    ("GMP", r"\bgmp\b"),
+    ("GMP", r"\bgentlemax\s+pro\b|\bgmp\b"),
 ]
 
 
@@ -99,6 +110,51 @@ def _build_candidate(opp_name, owner, member, team, account, so_str, product, li
     }
 
 
+def split_into_product_buckets(group):
+    """한 Opportunity의 라인들을 제품 버킷으로 나눈다.
+
+    반환: (buckets, primary) - buckets는 {제품명: boolean mask}, primary는 이 Opportunity의
+    대표 제품명. 시스템 라인이 하나도 없으면 (None, None).
+
+    규칙:
+    - MAIN_PRODUCT_CODES 라인은 무조건 GMPP 버킷 (제품명 패턴 검사를 아예 거치지 않음).
+    - 나머지는 SYSTEM_PATTERNS를 순서대로 검사해서 먼저 매치된 제품 버킷에 담는다.
+    - 대표 제품 = GMPP 메인 라인이 있으면 GMPP, 없으면 금액(Total Price 합)이 가장 큰 시스템.
+    - 어느 제품에도 안 잡힌 라인(운임 FREIGHT CHARGE ONLY, 옵션킷, 애플리케이터 등)은
+      대표 제품에 귀속시킨다 - 그래야 계약 총액이 어느 한 제품에 온전히 잡힌다.
+    """
+    main_mask = group["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())
+    names = group["Product Name"].astype(str).str.lower()
+
+    # GMPP 메인 라인은 처음부터 "이미 가져간" 것으로 두어 다른 패턴이 채가지 못하게 한다.
+    taken = main_mask.copy()
+    buckets = {}
+    for sys_name, pattern in SYSTEM_PATTERNS:
+        sys_mask = names.str.contains(pattern, regex=True) & ~taken
+        if not sys_mask.any():
+            continue
+        taken = taken | sys_mask
+        buckets[sys_name] = sys_mask
+
+    if main_mask.any():
+        buckets["GMPP"] = main_mask
+        primary = "GMPP"
+    elif buckets:
+        primary = max(
+            buckets,
+            key=lambda s: float(group.loc[buckets[s], "Total Price"].fillna(0).sum()),
+        )
+    else:
+        # 시스템 라인이 전혀 없는 Opportunity(운임/부속만 있는 건 등) - 귀속시킬 제품이 없어 건너뜀
+        return None, None
+
+    leftover = ~taken
+    if leftover.any():
+        buckets[primary] = buckets[primary] | leftover
+
+    return buckets, primary
+
+
 def build_candidates(df, prev_to, new_to, from_fixed):
     """
     df: parse_report()의 결과.
@@ -106,11 +162,13 @@ def build_candidates(df, prev_to, new_to, from_fixed):
     from_fixed 이상인 행만 대상으로 함. Stage(Closed Won 여부)는 가리지 않고 전부 포함 -
     최종 반영 여부/분기/담당자/상태는 대시보드에서 사람이 후보를 클릭해 확정한다.
 
-    가격(KRW/USD)은 PTO103577/PTO103576 라인 하나가 아니라, 같은 Opportunity에 딸린
-    라인들의 Total Price를 더한 값 - 실제 계약 총액. 단, COMPANION_SYSTEMS에 해당하는
-    라인(예: Cryo7)은 GMPP와 별개 시스템이라 합계에서 빼고 같은 Account/SO의 별도
-    후보(product=Cryo7 등)로 분리한다.
-    Opportunity 안에 PTO103577/PTO103576 라인이 하나라도 있어야 GMPP 후보로 인정한다.
+    Opportunity 하나를 split_into_product_buckets()로 제품별로 쪼갠 뒤, 각 제품마다 후보를
+    하나씩 만든다. 가격(KRW/USD)은 그 제품 버킷에 속한 라인들의 Total Price 합 - 즉 GMPP
+    후보의 금액에는 옵션킷/운임까지 포함된 실제 계약 총액이 들어가고, 같이 딸려온 Cryo7 같은
+    별개 시스템은 그 합계에서 빠져 같은 Account/SO의 별도 후보가 된다.
+
+    GMPP 라인이 없는 Opportunity(순수 Picoway/Nordlys/VBP 건 등)도 그 제품 자체를 후보로
+    만든다 - 2026-08-27 이전에는 GMPP 메인 라인이 없으면 Opportunity를 통째로 버렸다.
 
     반환: (candidates, skipped_unmapped_owners)
     """
@@ -122,56 +180,55 @@ def build_candidates(df, prev_to, new_to, from_fixed):
     now_iso = datetime.utcnow().isoformat()
 
     for opp_name, group in df.groupby("Opportunity Name"):
-        main_rows = group[group["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())]
-        if main_rows.empty:
+        buckets, primary = split_into_product_buckets(group)
+        if buckets is None:
             continue
-        main_row = main_rows.iloc[0]
 
-        close_date = main_row["_close_date"]
+        # 대표 제품의 첫 라인에서 Opportunity 공통 정보(마감일/담당자/거래처 등)를 읽는다.
+        header_row = group[buckets[primary]].iloc[0]
+
+        close_date = header_row["_close_date"]
         if pd.isna(close_date) or not (prev_to < close_date <= new_to and close_date >= from_fixed):
             continue
 
-        owner = str(main_row["Opportunity Owner"]).strip()
+        owner = str(header_row["Opportunity Owner"]).strip()
         member = OWNER_TO_MEMBER.get(owner)
         team = OWNER_TO_TEAM.get(owner)
         if member is None or team is None:
             skipped_owners.add(owner)
             continue
 
-        product_code = str(main_row["Product Code"])
-        line_type_hint = MAIN_PRODUCT_CODES[product_code]
-        so_num = main_row.get("Oracle Sales Order Number")
+        so_num = header_row.get("Oracle Sales Order Number")
         so_str = "" if pd.isna(so_num) else str(int(so_num))
-        account = str(main_row.get("Account Name", ""))
-        stage = str(main_row.get("Stage", ""))
-        sales_type = str(main_row.get("Sales Type", "") or "")
+        account = str(header_row.get("Account Name", ""))
+        stage = str(header_row.get("Stage", ""))
+        sales_type = str(header_row.get("Sales Type", "") or "")
 
-        names = group["Product Name"].astype(str).str.lower()
-        companion_mask = pd.Series(False, index=group.index)
-        companion_candidates = []
-        for sys_name, pattern in COMPANION_SYSTEMS:
-            sys_mask = names.str.contains(pattern, regex=True) & ~companion_mask
-            if not sys_mask.any():
-                continue
-            companion_mask = companion_mask | sys_mask
-            sys_price_krw = round(float(group.loc[sys_mask, "Total Price"].fillna(0).sum()))
-            sys_price_usd = round(float(group.loc[sys_mask, "Total Price (converted)"].fillna(0).sum()), 2)
-            companion_candidates.append(_build_candidate(
-                opp_name, owner, member, team, account, so_str, sys_name, "",
-                stage, sales_type, close_date, sys_price_krw, sys_price_usd, now_iso, sys_name.upper(),
+        # 대표 제품을 먼저, 나머지는 SYSTEM_PATTERNS 순서대로 - 실행할 때마다 순서가 흔들리지 않게.
+        ordered = [primary] + [n for n, _ in SYSTEM_PATTERNS if n in buckets and n != primary]
+        for product in ordered:
+            rows = group[buckets[product]]
+            price_krw = round(float(rows["Total Price"].fillna(0).sum()))
+            price_usd = round(float(rows["Total Price (converted)"].fillna(0).sum()), 2)
+
+            if product == "GMPP":
+                # 후보 id는 예전부터 GMPP 메인 라인의 Product Code로 만들어 왔다 - 이미 등록된
+                # 후보/매출과 id가 어긋나지 않도록 그대로 유지한다.
+                product_code = str(rows[rows["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())]
+                                   .iloc[0]["Product Code"])
+                id_key = product_code
+                line_type_hint = MAIN_PRODUCT_CODES[product_code]
+                acc_type = compute_acc_type(rows)
+            else:
+                id_key = product.upper()
+                line_type_hint = ""
+                acc_type = ""
+
+            candidates.append(_build_candidate(
+                opp_name, owner, member, team, account, so_str, product, line_type_hint,
+                stage, sales_type, close_date, price_krw, price_usd, now_iso, id_key,
+                acc_type=acc_type,
             ))
-
-        gmpp_rows = group[~companion_mask]
-        price_krw = round(float(gmpp_rows["Total Price"].fillna(0).sum()))
-        price_usd = round(float(gmpp_rows["Total Price (converted)"].fillna(0).sum()), 2)
-        acc_type = compute_acc_type(gmpp_rows)
-
-        candidates.append(_build_candidate(
-            opp_name, owner, member, team, account, so_str, "GMPP", line_type_hint,
-            stage, sales_type, close_date, price_krw, price_usd, now_iso, product_code,
-            acc_type=acc_type,
-        ))
-        candidates.extend(companion_candidates)
 
     return candidates, skipped_owners
 

@@ -1295,6 +1295,10 @@ img,video{max-width:100%;height:auto}
       // SO가 완전히 같으면 이미 등록된 게 확실하므로 후보 목록 자체에서 제외한다 (Account만 겹치는 건 확실치 않아 경고만)
       const isAlreadyRegisteredBySO = (c) => !!(c.so && rawSalesData.some(d => d.so === c.so));
       const visibleCandidates = candidates.filter(c => !isAlreadyRegisteredBySO(c));
+      // 같은 오퍼튜니티에 다른 후보가 같이 딸려온 경우에만 "동반 시스템"이다.
+      // 2026-08-27부터 GMPP 라인이 없는 단독 건(순수 VBP/Picoway/Nordlys 등)도 수집되므로,
+      // GMPP가 아니라고 해서 무조건 (동반)으로 표시하면 안 된다.
+      const isCompanionCandidate = c => visibleCandidates.some(x => x.id !== c.id && x.opportunityName === c.opportunityName);
 
       // Salesforce 후보를 선택하면: 분기/팀/멤버를 후보 기준으로 맞추고, 폼에 SO/Account/Product/가격을
       // 미리 채운 뒤 편집 모달을 새 항목 작성 모드(editingId=null)로 연다. 상태/계약일/납품예정일/
@@ -2927,9 +2931,9 @@ img,video{max-width:100%;height:auto}
                               <td className="py-2 px-2">
                                 <span style={{
                                   fontSize:'11px', fontWeight:'bold', padding:'2px 8px', borderRadius:'999px',
-                                  background: c.product === 'GMPP' ? '#dbeafe' : '#ede9fe',
-                                  color: c.product === 'GMPP' ? '#1d4ed8' : '#6d28d9',
-                                }}>{c.product}{c.product !== 'GMPP' ? ' (동반)' : ''}</span>
+                                  background: isCompanionCandidate(c) && c.product !== 'GMPP' ? '#ede9fe' : '#dbeafe',
+                                  color: isCompanionCandidate(c) && c.product !== 'GMPP' ? '#6d28d9' : '#1d4ed8',
+                                }}>{c.product}{isCompanionCandidate(c) && c.product !== 'GMPP' ? ' (동반)' : ''}</span>
                               </td>
                               <td className="py-2 px-2">{c.account}{(() => { const m = findExistingSalesMatch(c); return m && <span title="이미 등록된 SO/Account와 겹침" style={{marginLeft:'4px', color:'#dc2626', fontWeight:'bold'}}>⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}</td>
                               <td className="py-2 px-2">{c.so}</td>
