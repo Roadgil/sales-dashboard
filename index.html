@@ -2731,7 +2731,17 @@ img,video{max-width:100%;height:auto}
               <div className="pt-3 border-t border-slate-600 space-y-1">
                 <button onClick={() => { setShowCandidatesPage(false); setShowMemberPicker(false); setShowDealerPage(false); setShowAllTeamsCombined(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showAllTeamsCombined && !showMemberPicker && !showCandidatesPage && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>통합데이터</button>
                 <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowDealerPage(false); setShowMemberPicker(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showMemberPicker && !showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>개인별(데이터 입력란)</button>
-                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowDealerPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>딜러관리(추가 및 수정)</button>
+                <button onClick={() => { setShowCandidatesPage(false); setShowAllTeamsCombined(false); setShowMemberPicker(false); setShowDealerPage(true); setSelectedMember(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded font-semibold transition ${showDealerPage ? 'bg-blue-600 shadow-md text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>
+                  <span className="flex items-center justify-between gap-2">
+                    <span>딜러관리(추가 및 수정)</span>
+                    {/* 대기 중인 딜러 추가 요청 - 승인 권한자에게만 배지를 띄운다.
+                        요청만 할 수 있는 사용자에겐 처리할 수 없는 숫자라 알림이 되지 않는다. */}
+                    {isDealerAdmin() && dealerRequests.length > 0 && (
+                      <span style={{background:'#dc2626', color:'#fff', fontSize:'11px', fontWeight:800, minWidth:'20px', padding:'1px 6px', borderRadius:'999px', textAlign:'center', lineHeight:'18px'}}
+                        title={`대기 중인 딜러 추가 요청 ${dealerRequests.length}건`}>{dealerRequests.length}</span>
+                    )}
+                  </span>
+                </button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-600 pt-4">
