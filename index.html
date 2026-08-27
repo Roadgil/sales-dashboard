@@ -483,7 +483,7 @@ img,video{max-width:100%;height:auto}
 
     // 납품처 분류 - 신규 입력 시 필수
     const CHAIN_TYPES = ['체인', '논체인'];
-    const CLINIC_TYPES = ['GP', '피부과'];
+    const CLINIC_TYPES = ['GP', '피부과', '성형외과'];
   </script>
 </head>
 <body className="bg-gray-100">
@@ -793,7 +793,7 @@ img,video{max-width:100%;height:auto}
         valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
         valDelivery:       lang==='ko' ? '납품예정일을 입력해주세요.' : 'Please enter a Delivery Date.',
         valChainType:      lang==='ko' ? '체인/논체인을 선택해주세요.' : 'Please select Chain / Non-chain.',
-        valClinicType:     lang==='ko' ? '병원 구분(GP/피부과)을 선택해주세요.' : 'Please select GP / Dermatology.',
+        valClinicType:     lang==='ko' ? '병원 구분(GP/피부과/성형외과)을 선택해주세요.' : 'Please select GP / Dermatology / Plastic Surgery.',
         valPriceNaN:       lang==='ko' ? '가격(KRW)은 숫자만 입력 가능합니다.' : 'Price (KRW) must be a number.',
         valPriceNeg:       lang==='ko' ? '가격(KRW)은 0 이상이어야 합니다.' : 'Price (KRW) must be 0 or greater.',
         valPriceBig:       lang==='ko' ? '가격(KRW)이 너무 큽니다. 단위를 확인해주세요.' : 'Price (KRW) seems too large. Please verify.',
@@ -3719,11 +3719,15 @@ img,video{max-width:100%;height:auto}
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                             <option value="">{T.selectRequired}</option>
                             {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                          </select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                            <option value="">{T.selectRequired}</option>
+                            {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3749,13 +3753,6 @@ img,video{max-width:100%;height:auto}
                             <option value="">{T.selectRequired}</option>
                             {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
-                            <option value="">{T.selectRequired}</option>
-                            {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                          </select></div>
-                          <div></div><div></div>
                         </div>
                         <div className="flex gap-3 mt-2">
                           <button type="button" onClick={handleSave} disabled={isSaving} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded shadow transition flex items-center justify-center gap-2">
@@ -3819,11 +3816,15 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-4 md:mb-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">{T.selectRequired}</option>
                         {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                      </select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        <option value="">{T.selectRequired}</option>
+                        {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
@@ -3847,10 +3848,6 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                         <option value="">{T.selectRequired}</option>
                         {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">병원 구분 <span className="text-red-500">*</span></label><select name="clinicType" value={form.clinicType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
-                        <option value="">{T.selectRequired}</option>
-                        {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
                     </div>
                     <div className="mt-2 text-right">
