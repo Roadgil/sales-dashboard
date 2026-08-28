@@ -82,6 +82,8 @@ h1 span{color:var(--accent);}
 .kpi-row{display:grid;gap:12px;margin-bottom:16px;}
 .kpi-5{grid-template-columns:repeat(5,1fr);}
 .kpi-3{grid-template-columns:repeat(3,1fr);}
+.kpi-4{grid-template-columns:repeat(4,1fr);}
+@media(max-width:760px){.kpi-4{grid-template-columns:1fr 1fr;}}
 @media(max-width:1000px){.kpi-5{grid-template-columns:1fr 1fr;} .kpi-3{grid-template-columns:1fr 1fr;}}
 /* Neutral card chrome — one shell for every stat card, no per-card arbitrary color coding
    (composition.md rejection condition: color is reserved for status/achievement signal only).
@@ -97,6 +99,16 @@ h1 span{color:var(--accent);}
 .kpi-pbar-label{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:var(--muted);font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono);}
 .g{display:grid;gap:14px;margin-bottom:14px;}
 .g11{grid-template-columns:1fr 1fr;}
+.g111{grid-template-columns:repeat(3,1fr);}
+@media(max-width:1200px){.g111{grid-template-columns:1fr 1fr;}}
+@media(max-width:760px){.g111{grid-template-columns:1fr;}}
+/* 한 화면에 담기 위해 카드 여백과 차트 높이를 낮춘 변형. 기본 .card는 보고서
+   다른 곳에서도 쓰이므로 건드리지 않고 .compact를 덧붙이는 쪽으로 했다. */
+.card.compact{padding:14px;}
+.card.compact .ctitle{margin-bottom:10px;}
+.chart-box{position:relative;height:168px;}
+.chart-box--tall{height:216px;}
+.panel-box{max-height:216px;overflow-y:auto;}
 .g21{grid-template-columns:2fr 1fr;}
 .g12{grid-template-columns:1fr 2fr;}
 @media(max-width:900px){.g11,.g21,.g12{grid-template-columns:1fr;}}
@@ -182,60 +194,34 @@ html,body{overflow-x:hidden;max-width:100vw;}
 </div>
 <div id="quarterBreakdown" style="display:none"><div class="qbreak-grid" id="qbreakGrid"></div></div>
 
-<!-- ① 핵심 KPI -->
-<div class="section-title">핵심 지표 <span>Key Metrics · SC 기준</span></div>
-<div class="kpi-row kpi-5">
-  <div class="kpi k1">
-    <div class="klabel">Total Revenue</div>
-    <div class="kval v1" id="kpi-total">--</div>
-    <div class="ksub" id="kpi-total-sub">--</div>
-    <div class="kpi-pbar" id="kpi-pbar-wrap" style="display:none">
-      <div class="kpi-pbar-bg"><div class="kpi-pbar-fill" id="kpi-pbar-fill" style="background:var(--accent)"></div></div>
-      <div class="kpi-pbar-label"><span id="kpi-pbar-pct">--</span><span id="kpi-pbar-tgt">--</span></div>
-    </div>
-  </div>
+<!-- 분기가 끝난 뒤 "이번 분기 이렇게 했다"를 보여주는 결산 화면.
+     Target 달성 현황·파이프라인(Pending/ACT 예상)은 진행 중인 분기를 추적하는
+     지표라서 결산에는 쓰지 않는다 - 통째로 뺐다. 섹션 제목 8개도 없앴다.
+     제목마다 테두리가 깔려 화면이 잘게 쪼개져 보였고 그것만 264px를 먹었다.
+     이제 남은 건 실적 그 자체다: 얼마 / 몇 건 / 무슨 제품 / 누가. -->
+
+<!-- ① 이번 분기 실적 -->
+<div class="kpi-row kpi-4">
+  <div class="kpi k1"><div class="klabel">Total Revenue</div><div class="kval v1" id="kpi-total">--</div><div class="ksub" id="kpi-total-sub">--</div></div>
   <div class="kpi k2"><div class="klabel">건수 (SC)</div><div class="kval v2" id="kpi-count">--</div><div class="ksub">Ship Confirmed</div></div>
   <div class="kpi k4"><div class="klabel">1인당 생산성</div><div class="kval v4" id="kpi-prod">--</div><div class="ksub" id="kpi-prod-sub">담당자 평균</div></div>
   <div class="kpi k3"><div class="klabel">Top Performer</div><div class="kval v3" id="kpi-top" style="font-size:18px;padding-top:4px">--</div><div class="ksub" id="kpi-top-sub">--</div></div>
-  <div class="kpi kg"><div class="klabel">달성률 vs Target</div><div class="kval vg" id="kpi-attain">--</div><div class="ksub" id="kpi-attain-sub">--</div><div id="kpi-attain-badge" style="margin-top:6px"></div></div>
 </div>
 
-<!-- ② Achievement vs Target -->
-<div class="section-title">Target 달성 현황 <span>Achievement vs Target</span></div>
-<div class="card" style="margin-bottom:14px" id="targetCard">
-  <div class="loading"><div class="spinner"></div></div>
+<!-- ② 추이·구성 -->
+<div class="g g111">
+  <div class="card compact"><div class="ctitle" id="ct-monthly">월별 매출 추이</div><div class="chart-box"><canvas id="monthlyChart"></canvas></div></div>
+  <div class="card compact"><div class="ctitle">제품 구성비</div><div class="chart-box"><canvas id="prodChart"></canvas></div></div>
+  <div class="card compact"><div class="ctitle">월별 제품 구성 추이</div><div class="chart-box"><canvas id="prodMonthChart"></canvas></div></div>
 </div>
 
-<!-- ③ 월별 추이 + 제품 구성비 -->
-<div class="section-title">매출 추이 <span>Monthly Trend · SC 기준</span></div>
-<div class="g g21">
-  <div class="card"><div class="ctitle" id="ct-monthly">월별 매출 추이</div><div style="position:relative;height:230px"><canvas id="monthlyChart"></canvas></div></div>
-  <div class="card"><div class="ctitle">제품 구성비</div><div style="position:relative;height:230px"><canvas id="prodChart"></canvas></div></div>
-</div>
-
-<!-- ④ 담당자별 달성 -->
-<div class="section-title">담당자별 달성 현황 <span>Rep Achievement · SC 기준</span></div>
-<div class="g g12">
-  <div class="card"><div class="ctitle">달성률 비교</div><div id="memberList"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle">담당자별 매출</div><div style="position:relative;height:260px"><canvas id="memberChart"></canvas></div></div>
-</div>
-
-<!-- ⑤ 제품별 상세 -->
-<div class="section-title">제품별 매출 상세 <span>By Product · SC 기준</span></div>
+<!-- ③ 누가 / 무엇을. 제품 표는 항목 수에 따라 길어지므로 높이를 묶고 그 안에서만 스크롤 -->
 <div class="g g11">
-  <div class="card"><div class="ctitle">제품별 매출 · 건수</div><div id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
-  <div class="card"><div class="ctitle">월별 제품 구성 추이</div><div style="position:relative;height:260px"><canvas id="prodMonthChart"></canvas></div></div>
+  <div class="card compact"><div class="ctitle">담당자별 매출</div><div class="chart-box chart-box--tall"><canvas id="memberChart"></canvas></div></div>
+  <div class="card compact"><div class="ctitle">제품별 매출 · 건수</div><div class="panel-box" id="productTable"><div class="loading"><div class="spinner"></div></div></div></div>
 </div>
 
-<!-- ⑥ 파이프라인 -->
-<div class="section-title">납품 파이프라인 <span>Pipeline · 현재 분기</span></div>
-<div class="kpi-row kpi-3">
-  <div class="kpi k1"><div class="klabel">Pending 예상 매출</div><div class="kval v1" id="pipe-amt">--</div><div class="ksub" id="pipe-cnt">--</div></div>
-  <div class="kpi k4"><div class="klabel">ACT (납품완료)</div><div class="kval v4" id="act-amt">--</div><div class="ksub" id="act-cnt">--</div></div>
-  <div class="kpi kg"><div class="klabel">SC + ACT + Pending</div><div class="kval vg" id="total-pipe">--</div><div class="ksub">전체 예상치</div></div>
-</div>
-
-<!-- ⑦ 담당자별 상세 -->
+<!-- ④ 담당자별 상세 - 여기부터는 한 화면 밖. 필요할 때 내려보는 영역이다 -->
 <div class="section-title">담당자별 상세 <span>Rep Detail</span></div>
 <div class="card" style="margin-bottom:14px">
   <div class="tab-nav" id="memberTabNav"></div>
@@ -372,7 +358,7 @@ function render(salesData,memberTargets,qTargets){
       return `<div class="qbreak-card${fq===_activeQ?' active-q':''}" data-q="${fq}" onclick="jumpToQ('${fq}')">
         <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${q}</div>
         <div style="font-weight:800;font-size:22px;color:#1e293b;line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${tot>0?fmtA(tot):'-'}</div>
-        <div style="font-size:10px;color:var(--muted)">${rows.length}건${pct?` · `:''}${pctN!==null?sldBadge(pctN,pct+'%'):''}</div>
+        <div style="font-size:10px;color:var(--muted)">${rows.length}건</div>
       </div>`;}).join('');}
     document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 전체 합산 (SC만)`,`Revenue basis: ${YR} Full Year (SC only)`);
   } else if(_viewMode==='h1'){
@@ -437,66 +423,6 @@ function render(salesData,memberTargets,qTargets){
   document.getElementById('kpi-prod-sub').textContent=`${mCount}${t('명 평균 (SC)','reps avg (SC)')}`;
   document.getElementById('kpi-top').textContent=topM?topM[0]:'-';
   document.getElementById('kpi-top-sub').textContent=topM?`${fmtA(topM[1])} · ${totalKRW?(topM[1]/totalKRW*100).toFixed(1):0}%`:'-';
-  document.getElementById('kpi-attain').textContent=attain?`${attain.toFixed(1)}%`:'-';
-  document.getElementById('kpi-attain').style.color=attain!==null?zoneColor(attain):'#1e293b';
-  document.getElementById('kpi-attain-sub').textContent=qTarget?`Target: ${fmtA(qTarget)}`:t('Target 미설정','No target');
-  document.getElementById('kpi-attain-badge').innerHTML=(qTarget&&attain!==null)?sldBadge(attain,t(attain>=100?'목표 달성':'목표 미달',attain>=100?'Ahead':'Behind')):'';
-  const pbWrap=document.getElementById('kpi-pbar-wrap');
-  if(qTarget&&attain!==null){
-    pbWrap.style.display='block';
-    const f=document.getElementById('kpi-pbar-fill');
-    f.style.width=Math.min(attain,100)+'%';
-    f.style.background=zoneColor(attain);
-    document.getElementById('kpi-pbar-pct').textContent=`${attain.toFixed(1)}%`;
-    document.getElementById('kpi-pbar-tgt').textContent=fmtA(qTarget);
-  } else pbWrap.style.display='none';
-
-  // ② Target 달성 현황
-  const tCard=document.getElementById('targetCard');
-  if(qTarget){
-    const t120=qTarget*1.2,t150=qTarget*1.5;
-    const maxS=Math.max(t150,totalKRW*1.05,qTarget*1.6);
-    const scW=(totalKRW/maxS*100).toFixed(1),actW=(actKRW/maxS*100).toFixed(1),pendW=(pendKRW/maxS*100).toFixed(1);
-    const l100=(qTarget/maxS*100).toFixed(1),l120=(t120/maxS*100).toFixed(1),l150=(t150/maxS*100).toFixed(1);
-    const zone1W=l100, zone2W=(l120-l100).toFixed(1), zone3W=(100-l120).toFixed(1);
-    const totalColor=zoneColor(attain);
-    tCard.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;font-weight:700;color:#1d4ed8;background:#dbeafe;padding:3px 10px;border-radius:12px">SC: ${fmtA(totalKRW)}${attain?' ('+attain.toFixed(1)+'%)':''}</span>
-          <span style="font-size:11px;font-weight:700;color:#065f46;background:#d1fae5;padding:3px 10px;border-radius:12px">ACT: ${fmtA(actKRW)}</span>
-          <span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;padding:3px 10px;border-radius:12px">Pending: ${fmtA(pendKRW)}</span>
-        </div>
-        <span style="font-size:18px;font-weight:800;color:${totalColor}">${attain?attain.toFixed(1)+'%':'-'} ${t('달성','Attained')}</span>
-      </div>
-      <div style="position:relative;margin-bottom:28px">
-        <div style="position:absolute;top:-16px;left:${l100}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE1}">100%</div>
-        <div style="position:absolute;top:-16px;left:${l120}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE2}">120%</div>
-        <div style="position:absolute;top:-16px;left:${l150}%;transform:translateX(-50%);font-size:9px;font-weight:700;color:${ZONE3}">150%</div>
-        <div style="width:100%;height:28px;border-radius:14px;overflow:hidden;display:flex;border:1px solid var(--border);position:relative">
-          <!-- ascending zone track (context, sits behind the SC/ACT/Pending fills) -->
-          <div style="position:absolute;inset:0;display:flex" aria-hidden="true">
-            <div style="width:${Math.max(zone1W,0)}%;background:#f1f5f9"></div>
-            <div style="width:${Math.max(zone2W,0)}%;background:#eff6ff"></div>
-            <div style="width:${Math.max(zone3W,0)}%;background:#ecfdf5"></div>
-          </div>
-          <div style="width:${scW}%;height:100%;background:#3b82f6;transition:width 1.2s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;position:relative">${parseFloat(scW)>6?`<span style="color:#fff;font-size:10px;font-weight:700">${attain?attain.toFixed(0)+'%':''}</span>`:''}</div>
-          <div style="width:${actW}%;height:100%;background:#10b981;transition:width 1.2s ease;position:relative"></div>
-          <div style="width:${pendW}%;height:100%;background:#fbbf24;transition:width 1.2s ease;opacity:.7;position:relative"></div>
-        </div>
-        <div style="position:absolute;top:0;left:${l100}%;border-left:2px dashed #94a3b8;height:28px"></div>
-        <div style="position:absolute;top:0;left:${l120}%;border-left:2px dashed #93c5fd;height:28px"></div>
-        <div style="position:absolute;top:0;left:${l150}%;border-left:2px dashed #6ee7b7;height:28px"></div>
-      </div>
-      <div style="display:flex;gap:16px;font-size:11px;flex-wrap:wrap">
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#3b82f6;display:inline-block"></span>SC</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#10b981;display:inline-block"></span>ACT</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:#fbbf24;display:inline-block"></span>Pending</span>
-        <span style="color:var(--muted)">Target: ${fmtAF(qTarget)}</span>
-      </div>`;
-  } else {
-    tCard.innerHTML=`<div style="padding:20px;color:var(--muted);text-align:center;font-weight:600">${t('Target이 설정되지 않았습니다.','No target set.')}</div>`;
-  }
 
   // ③ 월별 매출 추이
   const mKRW=months.map(m=>scData.filter(d=>getM(d.deliveryDate)===m).reduce((s,d)=>s+(d.priceKRW||0),0));
@@ -512,44 +438,9 @@ function render(salesData,memberTargets,qTargets){
   const pE=Object.entries(pSum).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   mkChart('prodChart',{type:'doughnut',data:{labels:pE.map(([k])=>k),datasets:[{data:pE.map(([,v])=>totalKRW?parseFloat((v/totalKRW*100).toFixed(1)):0),backgroundColor:COLORS,borderColor:'#fff',borderWidth:3,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8a8fa8',usePointStyle:true,pointStyle:'circle',padding:10}},tooltip:{...TT,callbacks:{label:c=>` ${c.label}: ${c.raw}%`}}}}});
 
-  // ④ 담당자 달성률 리스트 (0~100% 구간은 파랑, 100% 초과분은 초록으로 색을 나누고
-  // 초과분 길이는 그룹 내 최대 초과폭 기준으로 스케일링해서 사람마다 초과폭 차이가 실제로 보이게 함
-  const maxMV=sortedM[0]?.[1]||1;
-  const memberPcts=sortedM.map(([name,val])=>{const tgt=getMemberTarget(name);return tgt?(val/tgt*100):null;});
-  const validPcts=memberPcts.filter(p=>p!==null);
-  const maxExcess=Math.max(0,...validPcts.map(p=>Math.max(p-100,0)));
-  const excessScaleMax=Math.max(50,maxExcess*1.05);
-  const BASE_FRAC=40; // 바 너비 중 0~100% 구간이 차지하는 비율(%), 나머지가 초과분 구간
-  document.getElementById('memberList').innerHTML=sortedM.map(([name,val],i)=>{
-    const col=MC[i%MC.length],tgt=getMemberTarget(name),pct=memberPcts[i];
-    let baseW,excessW,baseColor;
-    if(pct!==null){
-      baseW=Math.min(pct,100)/100*BASE_FRAC;
-      excessW=Math.max(pct-100,0)/excessScaleMax*(100-BASE_FRAC);
-      baseColor=pct>=100?'#3b82f6':'#94a3b8';
-    } else { baseW=(val/maxMV*100); excessW=0; baseColor=col; }
-    const baseRadius=excessW>0?'3px 0 0 3px':'3px';
-    return `<div class="srow">
-      <div class="savt" style="background:${col}22;color:${col}">${name[0]||'?'}</div>
-      <div class="sinfo">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-          <span class="sname">${name}</span>
-          ${sldBadge(pct)}
-        </div>
-        <div class="sbw" style="display:flex;background:transparent">
-          <div class="sbf" style="width:${baseW.toFixed(1)}%;background:${baseColor};border-radius:${baseRadius}"></div>
-          ${excessW>0?`<div class="sbf" style="width:${excessW.toFixed(1)}%;background:#059669;border-radius:0 3px 3px 0"></div>`:''}
-        </div>
-        ${tgt?`<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:600;margin-top:2px"><span>${fmtA(val)}</span><span>/ ${fmtA(tgt)}</span></div>`:''}
-      </div>
-      <div class="samt"><div style="color:${col};font-weight:700">${fmtA(val)}</div><div class="spct">${totalKRW?(val/totalKRW*100).toFixed(1):0}%</div></div>
-    </div>`;
-  }).join('')||`<div style="padding:20px;color:var(--muted);text-align:center">${t('데이터 없음','No data')}</div>`;
-
   // 담당자 바 차트
   mkChart('memberChart',{type:'bar',data:{labels:sortedM.map(([n])=>n),datasets:[
-    {label:'SC',data:sortedM.map(([,v])=>toChart(v)),backgroundColor:MC.slice(0,sortedM.length),borderRadius:8},
-    {label:t('목표','Target'),data:sortedM.map(([n])=>{const tg=getMemberTarget(n);return tg?toChart(tg):null;}),type:'line',borderColor:'#94a3b8',borderDash:[4,4],pointStyle:'crossRot',pointRadius:6,fill:false}
+    {label:'SC',data:sortedM.map(([,v])=>toChart(v)),backgroundColor:MC.slice(0,sortedM.length),borderRadius:8}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'circle',padding:12}},tooltip:{...TT,callbacks:{label:c=>` ${c.raw}${unitSuffix()}`}}},scales:{y:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},x:{grid:{display:false}}}}});
 
   // ⑤ 제품 테이블
@@ -572,13 +463,6 @@ function render(salesData,memberTargets,qTargets){
     data:months.map(m=>toChart(scData.filter(d=>d.product===prod&&getM(d.deliveryDate)===m).reduce((s,d)=>s+(d.priceKRW||0),0))),
     backgroundColor:COLORS[i],borderRadius:3
   }))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'circle',padding:10}},tooltip:{...TT,mode:'index',callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}${unitSuffix()}`}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}}}}});
-
-  // ⑥ 파이프라인
-  document.getElementById('pipe-amt').textContent=fmtA(pendKRW);
-  document.getElementById('pipe-cnt').textContent=`${pendData.length}${t('건 납품 예정','cs pending')}`;
-  document.getElementById('act-amt').textContent=fmtA(actKRW);
-  document.getElementById('act-cnt').textContent=`${actData.length}${t('건 납품완료','cs delivered')}`;
-  document.getElementById('total-pipe').textContent=fmtA(totalKRW+actKRW+pendKRW);
 
   // ⑦ 담당자 상세 탭
   const allMs=sortedM.map(([m])=>m);
@@ -604,16 +488,6 @@ function render(salesData,memberTargets,qTargets){
           <div style="font-weight:800;font-size:22px;color:#475569;line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${totalKRW?(mT/totalKRW*100).toFixed(1)+'%':'-'}</div>
           <div style="font-size:11px;color:var(--muted)">${t('전체 SC 대비','of total SC')}</div></div>
       </div>
-      ${tgt?`<div style="margin-bottom:14px;padding:12px;background:var(--surf2);border-radius:10px;border:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
-          <span style="color:var(--muted);font-weight:700;letter-spacing:0.05em">TARGET ACHIEVEMENT</span>
-          ${sldBadge(aP)}
-        </div>
-        <div class="pbar-bg"><div class="pbar-fill" style="width:${aP?Math.min(aP,100):0}%;background:${aP!==null?zoneColor(aP):'#94a3b8'}"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;font-weight:600">
-          <span>${t('현재','Current')}: ${fmtAF(mT)}</span><span>${t('목표','Target')}: ${fmtAF(tgt)}</span>
-        </div>
-      </div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div class="card" style="padding:16px">
           <div class="ctitle">${t('제품별','By Product')}</div>
@@ -654,7 +528,7 @@ const tryRender=()=>{if(_loaded.s&&_loaded.t&&_loaded.q){render(_sales,_targets,
 
 // 스피너가 있는 영역에 안내 메시지 표시 (로그인 필요 / 오류)
 function showNotice(html){
-  ['targetCard','memberList','productTable','memberTabContent'].forEach(id=>{
+  ['productTable','memberTabContent'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-weight:600;font-size:12px;line-height:1.7">${html}</div>`;
   });
