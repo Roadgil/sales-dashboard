@@ -453,6 +453,14 @@ img,video{max-width:100%;height:auto}
     //   GMPP + Cryo7 (한 계약) -> Cryo7은 부속이라 1건
     //   GMPP + VBP  (한 계약) -> 본체가 둘이라 2건
     //   Cryo7만     (기존 장비에 추가) -> 본체가 없으므로 계약 자체를 1건
+    // 납품일에서 분기를 뽑는다(역년 기준: 1~3월 Q1 … 10~12월 Q4).
+    // 문서의 quarter 필드는 '저장할 때 보고 있던 분기 탭'이라 납품 시점과 다를 수 있다
+    // - 4월 납품 / 8월 Ship Confirm이면 quarter는 Q3인데 실제 납품은 Q2다.
+    function deliveryQuarter(d) {
+      const m = String(d.deliveryDate || '').trim().match(/^(\d{4})-(\d{2})/);
+      if (!m) return '';
+      return `${m[1]} Q${Math.floor((parseInt(m[2], 10) - 1) / 3) + 1}`;
+    }
     function countDeals(rows) {
       const byContract = {};
       rows.forEach(d => { const k = contractKey(d); (byContract[k] = byContract[k] || []).push(d); });
@@ -2852,18 +2860,41 @@ img,video{max-width:100%;height:auto}
               // 분기 × 딜러 판매 건수. 줄 수가 아니라 countDeals()로 계약 안의 본체 수를 센다
               // (GMPP+Cryo7은 1건, GMPP+VBP는 2건).
               const statRows = salesData.filter(isExpected);
-              const statQuarters = [...new Set(statRows.map(d => d.quarter).filter(Boolean))].sort();
-              const dealRows = {};
+              // 두 기준으로 따로 담는다. dealRows = 등록 분기(quarter 필드), dealRowsD = 납품일 기준.
+              // 분기 열은 두 기준의 합집합이라야 한 건이 어느 쪽에서도 안 빠진다
+              // (작년 12월 납품 / 올해 1월 등록이면 열이 하나만 있으면 한쪽이 사라진다).
+              const dealRows = {}, dealRowsD = {};
+              const put = (bucket, dl, q, d) => {
+                bucket[dl] = bucket[dl] || {};
+                (bucket[dl][q] = bucket[dl][q] || []).push(d);
+              };
               statRows.forEach(d => {
                 const dl = d.dealerName || '미지정';
-                dealRows[dl] = dealRows[dl] || {};
-                (dealRows[dl][d.quarter] = dealRows[dl][d.quarter] || []).push(d);
+                if (d.quarter) put(dealRows, dl, d.quarter, d);
+                const dq = deliveryQuarter(d);
+                if (dq) put(dealRowsD, dl, dq, d);
               });
-              const countOf = (dl, q) => (dealRows[dl] && dealRows[dl][q]) ? countDeals(dealRows[dl][q]) : 0;
-              const rowTotal = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
+              const statQuarters = [...new Set([
+                ...statRows.map(d => d.quarter).filter(Boolean),
+                ...statRows.map(deliveryQuarter).filter(Boolean),
+              ])].sort();
+              const cnt  = (bucket, dl, q) => (bucket[dl] && bucket[dl][q]) ? countDeals(bucket[dl][q]) : 0;
+              const countOf  = (dl, q) => cnt(dealRows,  dl, q);   // 등록 분기 기준
+              const countDOf = (dl, q) => cnt(dealRowsD, dl, q);   // 납품일 기준
+              const rowTotal  = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
+              const rowTotalD = (dl) => statQuarters.reduce((s, q) => s + countDOf(dl, q), 0);
+              // 납품일이 비어 있어 납품일 기준에서 빠지는 건 - 괄호 합계가 안 맞는 이유를 밝혀둔다
+              const noDelivDeals = countDeals(statRows.filter(d => !deliveryQuarter(d)));
               // 설정된 딜러 순서를 따르되, 목록에 없는 이름(미지정 등)도 뒤에 붙여 빠지지 않게 한다
-              const statDealers = [...dealers, ...Object.keys(dealRows).filter(d => !dealers.includes(d))]
-                .filter(d => rowTotal(d) > 0);
+              const statDealers = [...new Set([...dealers, ...Object.keys(dealRows), ...Object.keys(dealRowsD)])]
+                .filter(d => rowTotal(d) > 0 || rowTotalD(d) > 0);
+              // 칸 하나에 두 숫자를 같이 찍는다: 큰 숫자=등록 분기 기준, 괄호=납품일 기준
+              const dualCell = (key, n, nd, opts = {}) => (
+                <td key={key} className="py-2 px-2 text-right whitespace-nowrap">
+                  <span className="font-mono" style={{color: n ? (opts.strong ? '#1d4ed8' : '#1e293b') : '#cbd5e1', fontWeight: opts.strong ? 700 : 400}}>{n || '-'}</span>
+                  <span className="font-mono" style={{color: nd ? '#64748b' : '#cbd5e1', fontSize:'11px', marginLeft:'4px'}}>({nd || '-'})</span>
+                </td>
+              );
               return (
               <div style={{marginTop:'44px'}}>
                 <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러관리(추가 및 수정)</h1>
@@ -2920,15 +2951,27 @@ img,video{max-width:100%;height:auto}
                       ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
                       : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
                   </div>
-                  <p className="text-[11px] text-gray-400 mb-3">분기별 판매 건수는 SC + ACT(일반) 기준이며, 한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.</p>
+                  <p className="text-[11px] text-gray-400 mb-3">
+                    분기별 판매 건수는 SC + ACT(일반) 기준이며, 한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.
+                    <span className="block mt-1">
+                      각 칸의 큰 숫자는 <span className="font-bold text-gray-600">등록 분기</span> 기준, 괄호 안은 <span className="font-bold text-gray-600">납품일</span> 기준입니다.
+                      4월에 납품하고 8월에 Ship Confirm한 건은 등록 분기로는 Q3, 납품일로는 Q2입니다.
+                    </span>
+                  </p>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm text-left whitespace-nowrap">
                       <thead>
                         <tr className="border-b border-gray-200 text-gray-500 text-xs">
                           <th className="py-2 px-2" style={{width:'40px'}}>순서</th>
                           <th className="py-2 px-2">딜러명</th>
-                          {statQuarters.map(q => <th key={q} className="py-2 px-2 text-right">{q}</th>)}
-                          <th className="py-2 px-2 text-right font-bold text-gray-700">합계</th>
+                          {statQuarters.map(q => (
+                            <th key={q} className="py-2 px-2 text-right">
+                              {q}<span className="block font-normal text-[10px] text-gray-400">등록 (납품일)</span>
+                            </th>
+                          ))}
+                          <th className="py-2 px-2 text-right font-bold text-gray-700">
+                            합계<span className="block font-normal text-[10px] text-gray-400">등록 (납품일)</span>
+                          </th>
                           {canEdit && <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>}
                         </tr>
                       </thead>
@@ -2940,11 +2983,8 @@ img,video{max-width:100%;height:auto}
                             <tr key={d} className="border-b border-gray-100 hover:bg-gray-50">
                               <td className="py-2 px-2 text-gray-400 font-mono text-xs">{i+1}</td>
                               <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(d)}</td>
-                              {statQuarters.map(q => {
-                                const n = countOf(d, q);
-                                return <td key={q} className="py-2 px-2 text-right font-mono" style={{color: n ? '#1e293b' : '#cbd5e1'}}>{n || '-'}</td>;
-                              })}
-                              <td className="py-2 px-2 text-right font-mono font-bold" style={{color: tot ? '#1d4ed8' : '#cbd5e1'}}>{tot || '-'}</td>
+                              {statQuarters.map(q => dualCell(q, countOf(d, q), countDOf(d, q)))}
+                              {dualCell('tot', tot, rowTotalD(d), {strong:true})}
                               {canEdit && (
                                 <td className="py-2 px-2 text-right whitespace-nowrap">
                                   <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
@@ -2962,25 +3002,20 @@ img,video{max-width:100%;height:auto}
                           <tr key={dl} className="border-b border-gray-100 bg-amber-50">
                             <td className="py-2 px-2 text-gray-400 font-mono text-xs">-</td>
                             <td className="py-2 px-2 font-bold text-amber-800">{dl} <span className="text-[10px] font-normal text-amber-600">목록에 없음</span></td>
-                            {statQuarters.map(q => {
-                              const n = countOf(dl, q);
-                              return <td key={q} className="py-2 px-2 text-right font-mono" style={{color: n ? '#1e293b' : '#cbd5e1'}}>{n || '-'}</td>;
-                            })}
-                            <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">{rowTotal(dl)}</td>
+                            {statQuarters.map(q => dualCell(q, countOf(dl, q), countDOf(dl, q)))}
+                            {dualCell('tot', rowTotal(dl), rowTotalD(dl), {strong:true})}
                             {canEdit && <td></td>}
                           </tr>
                         ))}
                         <tr className="border-t-2 border-gray-300 bg-gray-50">
                           <td></td>
                           <td className="py-2 px-2 font-bold text-gray-700">합계</td>
-                          {statQuarters.map(q => (
-                            <td key={q} className="py-2 px-2 text-right font-mono font-bold text-gray-700">
-                              {statDealers.reduce((s, dl) => s + countOf(dl, q), 0)}
-                            </td>
-                          ))}
-                          <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">
-                            {statDealers.reduce((s, dl) => s + rowTotal(dl), 0)}
-                          </td>
+                          {statQuarters.map(q => dualCell(q,
+                            statDealers.reduce((s, dl) => s + countOf(dl, q), 0),
+                            statDealers.reduce((s, dl) => s + countDOf(dl, q), 0), {strong:true}))}
+                          {dualCell('tot',
+                            statDealers.reduce((s, dl) => s + rowTotal(dl), 0),
+                            statDealers.reduce((s, dl) => s + rowTotalD(dl), 0), {strong:true})}
                           {canEdit && <td></td>}
                         </tr>
                       </tbody>
@@ -2988,6 +3023,7 @@ img,video{max-width:100%;height:auto}
                   </div>
                   <p className="text-[11px] text-gray-400 mt-3">
                     · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다. Pending·Back up·Try &amp; Buy는 빠집니다.
+                    {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호) 집계에서 빠집니다. 그만큼 괄호 합계가 작습니다.</span>}
                     {canEdit && <><br/>· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다. 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다.</>}
                   </p>
                 </div>
