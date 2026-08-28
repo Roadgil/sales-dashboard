@@ -829,7 +829,7 @@ img,video{max-width:100%;height:auto}
         valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
         valSido:           lang==='ko' ? "지역 (시/도)를 선택해주세요. 아직 개원 전이면 '개원예정'을 선택하세요." : 'Please select a region (Province/City).',
         valSigungu:        lang==='ko' ? '지역 (시/군/구)를 선택해주세요.' : 'Please select a region (District).',
-        valDelivery:       lang==='ko' ? '납품예정일을 입력해주세요.' : 'Please enter a Delivery Date.',
+        valDelivery:       lang==='ko' ? "납품예정일을 입력해주세요. 날짜가 아직 안 정해졌으면 '미정'을 체크하세요." : 'Please enter a Delivery Date, or check "TBD".',
         valChainType:      lang==='ko' ? '체인/논체인을 선택해주세요.' : 'Please select Chain / Non-chain.',
         valClinicType:     lang==='ko' ? '병원 구분(GP/피부과/성형외과)을 선택해주세요.' : 'Please select GP / Dermatology / Plastic Surgery.',
         valPriceNaN:       lang==='ko' ? '가격(KRW)은 숫자만 입력 가능합니다.' : 'Price (KRW) must be a number.',
@@ -888,7 +888,7 @@ img,video{max-width:100%;height:auto}
       // 같은 오퍼튜니티에서 같이 딸려온 동반 시스템 후보(예: GMPP 옆의 Cryo7) - 저장 시 같은 상태/날짜/Dealer로 함께 sales에 생성됨
       const [companionCandidates, setCompanionCandidates] = useState([]);
 
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '', chainType: '', clinicType: '' };
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', deliveryTBD: false, so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '', chainType: '', clinicType: '' };
       const [form, setForm]         = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
@@ -1208,7 +1208,7 @@ img,video{max-width:100%;height:auto}
         const bad = [];   // 비어있거나 잘못된 입력칸 이름 - 어디가 문제인지 화면에서 짚어주기 위함
         if (!form.account.trim())                            { errors.push(T.valAccount);   bad.push('account'); }
         if (!form.status)                                    { errors.push(T.valStatus);    bad.push('status'); }
-        if (!form.deliveryDate)                              { errors.push(T.valDelivery);  bad.push('deliveryDate'); }
+        if (!form.deliveryDate && !form.deliveryTBD)         { errors.push(T.valDelivery);  bad.push('deliveryDate'); }
         if (!form.dealerName)                                { errors.push(T.valDealer);    bad.push('dealerName'); }
         if (!form.chainType)                                 { errors.push(T.valChainType); bad.push('chainType'); }
         if (!form.clinicType)                                { errors.push(T.valClinicType);bad.push('clinicType'); }
@@ -1230,6 +1230,7 @@ img,video{max-width:100%;height:auto}
           contractType: String(form.contractType || '일반'),
           contractDate: String(form.contractDate || ''),
           deliveryDate: String(form.deliveryDate || ''),
+          deliveryTBD: !!form.deliveryTBD,
           so:           String(form.so || ''),
           account:      String(form.account || ''),
           product:      String(form.product || 'GMPP'),
@@ -1280,7 +1281,7 @@ img,video{max-width:100%;height:auto}
                 const compKRW = comp.priceKRW || 0;
                 const compPayload = {
                   status: payload.status, contractType: payload.contractType, contractDate: payload.contractDate,
-                  deliveryDate: payload.deliveryDate, dealerName: payload.dealerName,
+                  deliveryDate: payload.deliveryDate, deliveryTBD: payload.deliveryTBD, dealerName: payload.dealerName,
                   quarter: payload.quarter, team: payload.team, member: payload.member,
                   so: comp.so || '', account: comp.account || '', product: comp.product || '',
                   accType: '', priceKRW: compKRW, priceUSD: parseFloat((compKRW / (currentER || 1389)).toFixed(2)),
@@ -1521,7 +1522,15 @@ img,video{max-width:100%;height:auto}
       const handleInputChange = (e) => {
         const { name, value } = e.target;
         e.target.classList.remove('field-invalid');   // 고치는 즉시 경고 표시 해제
-        if (name === 'priceKRW') {
+        if (name === 'deliveryTBD') {
+          // 납품일 미정 - 켜면 날짜를 비운다. 날짜와 미정이 동시에 켜지면 어느 쪽이
+          // 참인지 알 수 없으므로 항상 둘 중 하나만 남긴다.
+          const on = e.target.checked;
+          setForm({ ...form, deliveryTBD: on, deliveryDate: on ? '' : form.deliveryDate });
+          document.querySelector('[name="deliveryDate"]')?.classList.remove('field-invalid');
+        } else if (name === 'deliveryDate') {
+          setForm({ ...form, deliveryDate: value, deliveryTBD: value ? false : form.deliveryTBD });
+        } else if (name === 'priceKRW') {
           const krwValue = value ? parseFloat(value) : 0;
           const usdValue = krwValue ? (krwValue / currentER).toFixed(2) : '';
           setForm({ ...form, priceKRW: value, priceUSD: usdValue });
@@ -1538,7 +1547,7 @@ img,video{max-width:100%;height:auto}
         let data = mode === 'all' ? rawSalesData : rawSalesData.filter(d => d.quarter === selectedQuarter);
         if (data.length === 0) return alert(T.noExportData);
         const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','시/도','시/군/구','체인구분','병원구분','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
-        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,d.deliveryDate,d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.chainType||'',d.clinicType||'',d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
+        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,(d.deliveryDate || (d.deliveryTBD ? '미정' : '')),d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.chainType||'',d.clinicType||'',d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
         const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','))].join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -2487,7 +2496,7 @@ img,video{max-width:100%;height:auto}
           data-region="account-table-row-actions">
           <td className="p-2 md:p-3 font-bold select-none"><span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>{row.status}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
-          <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate||'-'}</td>
+          <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || (row.deliveryTBD ? <span className="text-amber-600 font-bold">미정</span> : '-')}</td>
           <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType||'일반'}</td>
           <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName||'-'}</td>
           <td className="p-2 md:p-3 font-mono text-gray-500">{row.so||'-'}</td>
@@ -3045,7 +3054,7 @@ img,video{max-width:100%;height:auto}
                     · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.
                     <span className="block">· 괄호가 큰 숫자보다 클 수 있습니다 - 아직 매출로 안 잡힌 Pending·Back up이 괄호에는 들어갑니다.</span>
                     <span className="block">· {STAT_FROM} 이전 분기는 표에서 감춥니다. 데이터는 그대로 있습니다.</span>
-                    {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호)으로 셀 수 없어 빠집니다.</span>}
+                    {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 없거나 미정인 {noDelivDeals}건은 납품일 기준(괄호)으로 셀 수 없어 빠집니다.</span>}
                     {outDelivDeals > 0 && <span className="block text-amber-600">· 납품일이 {STAT_FROM} 이전인 {outDelivDeals}건은 괄호에서 빠집니다.</span>}
                     {outRegDeals > 0 && <span className="block text-amber-600">· 등록 분기가 {STAT_FROM} 이전인 {outRegDeals}건은 큰 숫자에서 빠집니다.</span>}
                     {canEdit && <><br/>· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다. 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다.</>}
@@ -3917,7 +3926,7 @@ img,video{max-width:100%;height:auto}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
@@ -4019,7 +4028,7 @@ img,video{max-width:100%;height:auto}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
