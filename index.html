@@ -2862,7 +2862,7 @@ img,video{max-width:100%;height:auto}
               const countOf = (dl, q) => (dealRows[dl] && dealRows[dl][q]) ? countDeals(dealRows[dl][q]) : 0;
               const rowTotal = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
               // 설정된 딜러 순서를 따르되, 목록에 없는 이름(미지정 등)도 뒤에 붙여 빠지지 않게 한다
-              const statDealers = [...dealers, ...Object.keys(dealCounts).filter(d => !dealers.includes(d))]
+              const statDealers = [...dealers, ...Object.keys(dealRows).filter(d => !dealers.includes(d))]
                 .filter(d => rowTotal(d) > 0);
               return (
               <div style={{marginTop:'44px'}}>
