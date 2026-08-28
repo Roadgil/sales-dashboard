@@ -1295,6 +1295,13 @@ img,video{max-width:100%;height:auto}
       // SO가 완전히 같으면 이미 등록된 게 확실하므로 후보 목록 자체에서 제외한다 (Account만 겹치는 건 확실치 않아 경고만)
       const isAlreadyRegisteredBySO = (c) => !!(c.so && rawSalesData.some(d => d.so === c.so));
       const visibleCandidates = candidates.filter(c => !isAlreadyRegisteredBySO(c));
+      // forecast-sync는 후보를 절대 지우지 않는다. 그래서 Salesforce에서 오퍼튜니티가 취소되거나
+      // 이름/담당자가 바뀌어 후보 id가 달라지면, 옛 후보가 목록에 계속 남아 같은 거래처가 두 번
+      // 보인다(그대로 등록하면 매출 이중계상). 마지막 동기화 시각과 비교해 그런 후보를 표시만 한다.
+      const latestSyncAt = visibleCandidates.reduce(
+        (mx, c) => { const t = c._lastSeenAt || c.importedAt || ''; return t > mx ? t : mx; }, '');
+      const isStaleCandidate = c => !!latestSyncAt && (c._lastSeenAt || c.importedAt || '') < latestSyncAt;
+      const staleCount = visibleCandidates.filter(isStaleCandidate).length;
       // 같은 오퍼튜니티에 다른 후보가 같이 딸려온 경우에만 "동반 시스템"이다.
       // 2026-08-27부터 GMPP 라인이 없는 단독 건(순수 VBP/Picoway/Nordlys 등)도 수집되므로,
       // GMPP가 아니라고 해서 무조건 (동반)으로 표시하면 안 된다.
@@ -2884,6 +2891,13 @@ img,video{max-width:100%;height:auto}
                   <h1 className="text-2xl font-extrabold text-gray-800">📥 Salesforce 신규 후보 ({visibleCandidates.length}건)</h1>
                   <button onClick={() => setShowCandidatesPage(false)} style={{background:'#334155', color:'#fff', fontWeight:'bold', padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer'}}>← 대시보드로</button>
                 </div>
+                {staleCount > 0 && (
+                  <div style={{marginBottom:'16px', padding:'12px 14px', borderRadius:'8px', background:'#fff7ed', border:'1px solid #fed7aa', fontSize:'13px', color:'#9a3412', lineHeight:'1.6'}}>
+                    <b>Salesforce에 없음 {staleCount}건</b> — 마지막 동기화 리포트에 없던 후보입니다.
+                    오퍼튜니티가 취소됐거나, 이름·담당자가 바뀌어 새 후보가 따로 생긴 경우예요.
+                    같은 거래처가 두 번 보이면 <b>배지가 없는 쪽</b>이 최신입니다.
+                  </div>
+                )}
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border border-gray-100">
                   <div style={{overflowX:'auto'}}>
                     <table className="w-full text-xs md:text-sm">
@@ -2945,7 +2959,7 @@ img,video{max-width:100%;height:auto}
                                   color: isCompanionCandidate(c) && c.product !== 'GMPP' ? '#6d28d9' : '#1d4ed8',
                                 }}>{c.product}{isCompanionCandidate(c) && c.product !== 'GMPP' ? ' (동반)' : ''}</span>
                               </td>
-                              <td className="py-2 px-2">{c.account}{(() => { const m = findExistingSalesMatch(c); return m && <span title="이미 등록된 SO/Account와 겹침" style={{marginLeft:'4px', color:'#dc2626', fontWeight:'bold'}}>⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}</td>
+                              <td className="py-2 px-2">{c.account}{isStaleCandidate(c) && <span title="마지막 동기화 리포트에 없던 후보 - 취소됐거나 이름/담당자가 바뀌어 새 후보가 따로 생긴 건일 수 있음" style={{marginLeft:'4px', fontSize:'11px', fontWeight:'bold', padding:'2px 6px', borderRadius:'999px', background:'#ffedd5', color:'#9a3412', whiteSpace:'nowrap'}}>Salesforce에 없음</span>}{(() => { const m = findExistingSalesMatch(c); return m && <span title="이미 등록된 SO/Account와 겹침" style={{marginLeft:'4px', color:'#dc2626', fontWeight:'bold'}}>⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}</td>
                               <td className="py-2 px-2">{c.so}</td>
                               <td className="py-2 px-2">{c.closeDate}</td>
                               <td className="py-2 px-2">
@@ -3815,7 +3829,7 @@ img,video{max-width:100%;height:auto}
                                     }}>{c.product}</span>
                                     {(() => { const m = findExistingSalesMatch(c); return m && <span style={{color:'#dc2626', fontWeight:'bold'}}> ⚠️{m.quarter} · {m.member}에 등록됨</span>; })()}
                                   </div>
-                                  <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}</div>
+                                  <div className="text-gray-500">SO {c.so || '-'} · {c.closeDate} · ₩{(c.priceKRW || 0).toLocaleString()}{isStaleCandidate(c) && <span style={{marginLeft:'6px', fontWeight:'bold', color:'#9a3412'}}>· Salesforce에 없음</span>}</div>
                                 </div>
                               ))}
                             {visibleCandidates.filter(c => c.suggestedMember === selectedMember).length === 0 && (

@@ -163,6 +163,11 @@ def _build_candidate(opp_name, owner, member, team, account, so_str, product, li
         "opportunityName": opp_name,
         "closeDate": close_date.isoformat(),
         "importedAt": now_iso,
+        # 이번 동기화에서 Salesforce 리포트에 실제로 있었다는 표시. 후보는 지우지 않으므로,
+        # Salesforce에서 오퍼튜니티가 없어지거나 이름/담당자가 바뀌어 id가 달라지면 옛 후보는
+        # 다시 쓰이지 않아 이 값이 옛날에 멈춘다 - 대시보드는 가장 최신 값과 비교해서
+        # "Salesforce에 없음"으로 표시한다(값을 지우지 않고 눈으로만 구분).
+        "_lastSeenAt": now_iso,
     }
 
 
