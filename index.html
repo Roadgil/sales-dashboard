@@ -1178,6 +1178,7 @@ img,video{max-width:100%;height:auto}
         if (!form.account.trim())                            { errors.push(T.valAccount);   bad.push('account'); }
         if (!form.status)                                    { errors.push(T.valStatus);    bad.push('status'); }
         if (!form.deliveryDate)                              { errors.push(T.valDelivery);  bad.push('deliveryDate'); }
+        if (!form.dealerName)                                { errors.push(T.valDealer);    bad.push('dealerName'); }
         if (!form.chainType)                                 { errors.push(T.valChainType); bad.push('chainType'); }
         if (!form.clinicType)                                { errors.push(T.valClinicType);bad.push('clinicType'); }
         const krw = parseFloat(form.priceKRW);
