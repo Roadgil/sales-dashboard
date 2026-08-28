@@ -2859,8 +2859,12 @@ img,video{max-width:100%;height:auto}
               const canEdit = isDealerAdmin();
               // 분기 × 딜러 판매 건수. 줄 수가 아니라 countDeals()로 계약 안의 본체 수를 센다
               // (GMPP+Cryo7은 1건, GMPP+VBP는 2건).
-              const statRows = salesData.filter(isExpected);
-              // 두 기준으로 따로 담는다. dealRows = 등록 분기(quarter 필드), dealRowsD = 납품일 기준.
+              // 두 기준은 대상 자체가 다르다.
+              //  · 등록 분기 기준(큰 숫자) = 매출로 인식한 건만 = SC + ACT(일반)
+              //  · 납품일 기준(괄호)      = 상태 무관 전부 = Pending·Back up·Try & Buy 포함
+              // 딜러에게 요청받은 시점을 보려는 거라, 아직 매출로 안 잡힌 건도 세야 한다.
+              const statRows  = salesData.filter(isExpected);
+              const delivRows = salesData;
               // 분기 열은 두 기준의 합집합이라야 한 건이 어느 쪽에서도 안 빠진다
               // (작년 12월 납품 / 올해 1월 등록이면 열이 하나만 있으면 한쪽이 사라진다).
               const dealRows = {}, dealRowsD = {};
@@ -2869,14 +2873,15 @@ img,video{max-width:100%;height:auto}
                 (bucket[dl][q] = bucket[dl][q] || []).push(d);
               };
               statRows.forEach(d => {
-                const dl = d.dealerName || '미지정';
-                if (d.quarter) put(dealRows, dl, d.quarter, d);
+                if (d.quarter) put(dealRows, d.dealerName || '미지정', d.quarter, d);
+              });
+              delivRows.forEach(d => {
                 const dq = deliveryQuarter(d);
-                if (dq) put(dealRowsD, dl, dq, d);
+                if (dq) put(dealRowsD, d.dealerName || '미지정', dq, d);
               });
               const statQuarters = [...new Set([
                 ...statRows.map(d => d.quarter).filter(Boolean),
-                ...statRows.map(deliveryQuarter).filter(Boolean),
+                ...delivRows.map(deliveryQuarter).filter(Boolean),
               ])].sort();
               const cnt  = (bucket, dl, q) => (bucket[dl] && bucket[dl][q]) ? countDeals(bucket[dl][q]) : 0;
               const countOf  = (dl, q) => cnt(dealRows,  dl, q);   // 등록 분기 기준
@@ -2884,7 +2889,7 @@ img,video{max-width:100%;height:auto}
               const rowTotal  = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
               const rowTotalD = (dl) => statQuarters.reduce((s, q) => s + countDOf(dl, q), 0);
               // 납품일이 비어 있어 납품일 기준에서 빠지는 건 - 괄호 합계가 안 맞는 이유를 밝혀둔다
-              const noDelivDeals = countDeals(statRows.filter(d => !deliveryQuarter(d)));
+              const noDelivDeals = countDeals(delivRows.filter(d => !deliveryQuarter(d)));
               // 설정된 딜러 순서를 따르되, 목록에 없는 이름(미지정 등)도 뒤에 붙여 빠지지 않게 한다
               const statDealers = [...new Set([...dealers, ...Object.keys(dealRows), ...Object.keys(dealRowsD)])]
                 .filter(d => rowTotal(d) > 0 || rowTotalD(d) > 0);
@@ -2952,9 +2957,14 @@ img,video{max-width:100%;height:auto}
                       : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
                   </div>
                   <p className="text-[11px] text-gray-400 mb-3">
-                    분기별 판매 건수는 SC + ACT(일반) 기준이며, 한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.
+                    한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다. 칸마다 두 숫자를 같이 적었습니다.
                     <span className="block mt-1">
-                      각 칸의 큰 숫자는 <span className="font-bold text-gray-600">등록 분기</span> 기준, 괄호 안은 <span className="font-bold text-gray-600">납품일</span> 기준입니다.
+                      큰 숫자 = <span className="font-bold text-gray-600">등록 분기</span> 기준, <span className="font-bold text-gray-600">SC + ACT(일반)</span>만.
+                    </span>
+                    <span className="block">
+                      괄호 = <span className="font-bold text-gray-600">납품일</span> 기준, <span className="font-bold text-gray-600">상태 무관 전부</span>(Pending·Back up·Try &amp; Buy 포함).
+                    </span>
+                    <span className="block mt-1">
                       4월에 납품하고 8월에 Ship Confirm한 건은 등록 분기로는 Q3, 납품일로는 Q2입니다.
                     </span>
                   </p>
@@ -3022,8 +3032,9 @@ img,video{max-width:100%;height:auto}
                     </table>
                   </div>
                   <p className="text-[11px] text-gray-400 mt-3">
-                    · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다. Pending·Back up·Try &amp; Buy는 빠집니다.
-                    {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호) 집계에서 빠집니다. 그만큼 괄호 합계가 작습니다.</span>}
+                    · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.
+                    <span className="block">· 괄호가 큰 숫자보다 클 수 있습니다 - 아직 매출로 안 잡힌 Pending·Back up·Try &amp; Buy가 괄호에는 들어갑니다.</span>
+                    {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호)으로 셀 수 없어 빠집니다.</span>}
                     {canEdit && <><br/>· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다. 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다.</>}
                   </p>
                 </div>
