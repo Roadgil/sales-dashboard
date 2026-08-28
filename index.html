@@ -438,12 +438,28 @@ img,video{max-width:100%;height:auto}
     function isActNormal(d) { return isACT(d) && !isTryBuy(d); }
     // 통합데이터의 기본 집계 기준: Ship Confirm + ACT(일반)
     function isExpected(d)  { return isShipConfirm(d) || isActNormal(d); }
-    // 계약 식별자 - "몇 건 팔았나"를 셀 때 쓴다. 한 계약에 GMPP와 Cryo7이 같이 들어가면
-    // 대시보드에는 두 줄로 있지만 판매는 1건이므로, 줄 수가 아니라 이 키의 종류 수를 센다.
-    // SO가 있으면 SO가 곧 계약이고, 없으면(오라클 오더 전) 같은 분기·같은 병원을 한 건으로 본다.
+    // 계약 식별자 - SO가 있으면 SO가 곧 계약이고, 없으면(오라클 오더 전) 같은 분기·같은 병원을
+    // 한 계약으로 본다. countDeals()에서 계약을 묶는 데만 쓴다.
     function contractKey(d) {
       const so = String(d.so || '').trim();
       return so ? 'so:' + so : 'acct:' + String(d.account || '').trim();
+    }
+    // 건수를 셀 때 본체로 치지 않는 제품 - 본체에 얹어 파는 부속이다.
+    // 매출에서는 Cryo7/Hand Piece도 각자 제품 버킷을 갖지만(forecast-sync의 SYSTEM_PATTERNS),
+    // "몇 건 팔았나"에서는 본체가 아니므로 따로 세지 않는다.
+    const ADDON_PRODUCTS = ['Cryo7', 'Hand Piece'];
+    const isAddonProduct = (d) => ADDON_PRODUCTS.includes(String(d.product || '').trim());
+    // "몇 건 팔았나" - 줄 수가 아니라 계약 안의 본체 종류 수를 센다.
+    //   GMPP + Cryo7 (한 계약) -> Cryo7은 부속이라 1건
+    //   GMPP + VBP  (한 계약) -> 본체가 둘이라 2건
+    //   Cryo7만     (기존 장비에 추가) -> 본체가 없으므로 계약 자체를 1건
+    function countDeals(rows) {
+      const byContract = {};
+      rows.forEach(d => { const k = contractKey(d); (byContract[k] = byContract[k] || []).push(d); });
+      return Object.values(byContract).reduce((sum, group) => {
+        const systems = new Set(group.filter(d => !isAddonProduct(d)).map(d => String(d.product || '').trim()));
+        return sum + (systems.size || 1);
+      }, 0);
     }
     // 통합데이터 카드용 상태별 묶음 순서·라벨 - Back up도 목록엔 보이지만 카드 상단 합계(SC+ACT+Pending)에는 안 들어감
     const STATUS_BREAKDOWN_ORDER = [['Ship Confirm','Ship Confirm'], ['ACT','ACT (납품완료)'], ['Pending','Pending (납품예정)'], ['Back up','Back up']];
@@ -2823,17 +2839,17 @@ img,video{max-width:100%;height:auto}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
             {showDealerPage ? (() => {
               const canEdit = isDealerAdmin();
-              // 분기 × 딜러 판매 건수. 줄 수가 아니라 계약(contractKey) 종류 수를 세므로
-              // GMPP+Cryo7처럼 한 계약이 두 줄인 경우도 1건으로 잡힌다.
+              // 분기 × 딜러 판매 건수. 줄 수가 아니라 countDeals()로 계약 안의 본체 수를 센다
+              // (GMPP+Cryo7은 1건, GMPP+VBP는 2건).
               const statRows = salesData.filter(isExpected);
               const statQuarters = [...new Set(statRows.map(d => d.quarter).filter(Boolean))].sort();
-              const dealCounts = {};
+              const dealRows = {};
               statRows.forEach(d => {
                 const dl = d.dealerName || '미지정';
-                dealCounts[dl] = dealCounts[dl] || {};
-                (dealCounts[dl][d.quarter] = dealCounts[dl][d.quarter] || new Set()).add(contractKey(d));
+                dealRows[dl] = dealRows[dl] || {};
+                (dealRows[dl][d.quarter] = dealRows[dl][d.quarter] || []).push(d);
               });
-              const countOf = (dl, q) => (dealCounts[dl] && dealCounts[dl][q]) ? dealCounts[dl][q].size : 0;
+              const countOf = (dl, q) => (dealRows[dl] && dealRows[dl][q]) ? countDeals(dealRows[dl][q]) : 0;
               const rowTotal = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
               // 설정된 딜러 순서를 따르되, 목록에 없는 이름(미지정 등)도 뒤에 붙여 빠지지 않게 한다
               const statDealers = [...dealers, ...Object.keys(dealCounts).filter(d => !dealers.includes(d))]
