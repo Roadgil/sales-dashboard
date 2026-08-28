@@ -503,6 +503,11 @@ img,video{max-width:100%;height:auto}
       '제주특별자치도': ['제주시','서귀포시'],
     };
     const KR_SIDO = Object.keys(KR_REGIONS);
+    // 아직 개원 전이라 지역이 안 정해진 건. 실제 시/도가 아니므로 KR_REGIONS에는 넣지 않는다
+    // - 그래야 KR_REGIONS[sido]가 undefined가 되어 시/군/구가 자동으로 잠기고 필수에서도 빠진다.
+    const SIDO_TBD = '개원예정';
+    // 시/군/구까지 골라야 하는 시/도인가 (세종처럼 하위 구역이 없거나 개원예정이면 아님)
+    const needsSigungu = (sido) => (KR_REGIONS[sido] || []).length > 0;
 
     // 납품처 분류 - 신규 입력 시 필수
     const CHAIN_TYPES = ['체인', '논체인'];
@@ -814,6 +819,8 @@ img,video{max-width:100%;height:auto}
         valStatus:         lang==='ko' ? 'Status를 선택해주세요.' : 'Please select a Status.',
         valSalesType:      lang==='ko' ? 'Sales Type을 선택해주세요.' : 'Please select a Sales Type.',
         valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
+        valSido:           lang==='ko' ? "지역 (시/도)를 선택해주세요. 아직 개원 전이면 '개원예정'을 선택하세요." : 'Please select a region (Province/City).',
+        valSigungu:        lang==='ko' ? '지역 (시/군/구)를 선택해주세요.' : 'Please select a region (District).',
         valDelivery:       lang==='ko' ? '납품예정일을 입력해주세요.' : 'Please enter a Delivery Date.',
         valChainType:      lang==='ko' ? '체인/논체인을 선택해주세요.' : 'Please select Chain / Non-chain.',
         valClinicType:     lang==='ko' ? '병원 구분(GP/피부과/성형외과)을 선택해주세요.' : 'Please select GP / Dermatology / Plastic Surgery.',
@@ -1197,6 +1204,9 @@ img,video{max-width:100%;height:auto}
         if (!form.dealerName)                                { errors.push(T.valDealer);    bad.push('dealerName'); }
         if (!form.chainType)                                 { errors.push(T.valChainType); bad.push('chainType'); }
         if (!form.clinicType)                                { errors.push(T.valClinicType);bad.push('clinicType'); }
+        if (!form.sido)                                      { errors.push(T.valSido);      bad.push('sido'); }
+        // 개원예정이거나 세종처럼 하위 구역이 없는 시/도면 시/군/구는 받지 않는다
+        else if (needsSigungu(form.sido) && !form.sigungu)   { errors.push(T.valSigungu);   bad.push('sigungu'); }
         const krw = parseFloat(form.priceKRW);
         if (form.priceKRW !== '' && isNaN(krw))              { errors.push(T.valPriceNaN);  bad.push('priceKRW'); }
         else if (!isNaN(krw) && krw < 0)                     { errors.push(T.valPriceNeg);  bad.push('priceKRW'); }
@@ -3870,12 +3880,13 @@ img,video{max-width:100%;height:auto}
                             </div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/도)</label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                            <option value="">선택</option>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                            <option value="">선택 (필수)</option>
+                            <option value={SIDO_TBD}>{SIDO_TBD}</option>
                             {KR_SIDO.map(s => <option key={s} value={s}>{s}</option>)}
                           </select></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/군/구)</label><select name="sigungu" value={form.sigungu} onChange={handleInputChange} disabled={!form.sido || (KR_REGIONS[form.sido]||[]).length===0} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400">
-                            <option value="">{!form.sido ? '시/도 먼저 선택' : (KR_REGIONS[form.sido]||[]).length===0 ? '하위 구역 없음' : '선택'}</option>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/군/구) {needsSigungu(form.sido) && <span className="text-red-500">*</span>}</label><select name="sigungu" value={form.sigungu} onChange={handleInputChange} disabled={!form.sido || !needsSigungu(form.sido)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400">
+                            <option value="">{!form.sido ? '시/도 먼저 선택' : form.sido===SIDO_TBD ? '선택 불필요' : !needsSigungu(form.sido) ? '하위 구역 없음' : '선택 (필수)'}</option>
                             {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
                           </select></div>
                           <div></div>
@@ -3971,12 +3982,13 @@ img,video{max-width:100%;height:auto}
                         </div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/도)</label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                        <option value="">선택</option>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="">선택 (필수)</option>
+                        <option value={SIDO_TBD}>{SIDO_TBD}</option>
                         {KR_SIDO.map(s => <option key={s} value={s}>{s}</option>)}
                       </select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/군/구)</label><select name="sigungu" value={form.sigungu} onChange={handleInputChange} disabled={!form.sido || (KR_REGIONS[form.sido]||[]).length===0} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400">
-                        <option value="">{!form.sido ? '시/도 먼저 선택' : (KR_REGIONS[form.sido]||[]).length===0 ? '하위 구역 없음' : '선택'}</option>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/군/구) {needsSigungu(form.sido) && <span className="text-red-500">*</span>}</label><select name="sigungu" value={form.sigungu} onChange={handleInputChange} disabled={!form.sido || !needsSigungu(form.sido)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400">
+                        <option value="">{!form.sido ? '시/도 먼저 선택' : form.sido===SIDO_TBD ? '선택 불필요' : !needsSigungu(form.sido) ? '하위 구역 없음' : '선택 (필수)'}</option>
                         {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
                       </select></div>
                       <div></div>
