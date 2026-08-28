@@ -438,6 +438,13 @@ img,video{max-width:100%;height:auto}
     function isActNormal(d) { return isACT(d) && !isTryBuy(d); }
     // 통합데이터의 기본 집계 기준: Ship Confirm + ACT(일반)
     function isExpected(d)  { return isShipConfirm(d) || isActNormal(d); }
+    // 계약 식별자 - "몇 건 팔았나"를 셀 때 쓴다. 한 계약에 GMPP와 Cryo7이 같이 들어가면
+    // 대시보드에는 두 줄로 있지만 판매는 1건이므로, 줄 수가 아니라 이 키의 종류 수를 센다.
+    // SO가 있으면 SO가 곧 계약이고, 없으면(오라클 오더 전) 같은 분기·같은 병원을 한 건으로 본다.
+    function contractKey(d) {
+      const so = String(d.so || '').trim();
+      return so ? 'so:' + so : 'acct:' + String(d.account || '').trim();
+    }
     // 통합데이터 카드용 상태별 묶음 순서·라벨 - Back up도 목록엔 보이지만 카드 상단 합계(SC+ACT+Pending)에는 안 들어감
     const STATUS_BREAKDOWN_ORDER = [['Ship Confirm','Ship Confirm'], ['ACT','ACT (납품완료)'], ['Pending','Pending (납품예정)'], ['Back up','Back up']];
     const STATUS_PILL_STYLE = {
@@ -2796,6 +2803,21 @@ img,video{max-width:100%;height:auto}
           <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 main-content min-w-0" onClick={() => { if (memberTableFilterOpen) setMemberTableFilterOpen(null); if (showCsvMenu) setShowCsvMenu(false); if (candidatesFilterOpen) setCandidatesFilterOpen(null); }}>
             {showDealerPage ? (() => {
               const canEdit = isDealerAdmin();
+              // 분기 × 딜러 판매 건수. 줄 수가 아니라 계약(contractKey) 종류 수를 세므로
+              // GMPP+Cryo7처럼 한 계약이 두 줄인 경우도 1건으로 잡힌다.
+              const statRows = salesData.filter(isExpected);
+              const statQuarters = [...new Set(statRows.map(d => d.quarter).filter(Boolean))].sort();
+              const dealCounts = {};
+              statRows.forEach(d => {
+                const dl = d.dealerName || '미지정';
+                dealCounts[dl] = dealCounts[dl] || {};
+                (dealCounts[dl][d.quarter] = dealCounts[dl][d.quarter] || new Set()).add(contractKey(d));
+              });
+              const countOf = (dl, q) => (dealCounts[dl] && dealCounts[dl][q]) ? dealCounts[dl][q].size : 0;
+              const rowTotal = (dl) => statQuarters.reduce((s, q) => s + countOf(dl, q), 0);
+              // 설정된 딜러 순서를 따르되, 목록에 없는 이름(미지정 등)도 뒤에 붙여 빠지지 않게 한다
+              const statDealers = [...dealers, ...Object.keys(dealCounts).filter(d => !dealers.includes(d))]
+                .filter(d => rowTotal(d) > 0);
               return (
               <div style={{marginTop:'44px'}}>
                 <h1 className="text-2xl font-extrabold text-gray-800 mb-1">딜러관리(추가 및 수정)</h1>
@@ -2803,6 +2825,8 @@ img,video{max-width:100%;height:auto}
                   여기에 등록된 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.
                   {!canEdit && <span className="block mt-1 text-amber-700 font-bold">목록 편집은 담당자(박윤아)만 가능합니다. 필요한 딜러가 없으면 아래에서 추가 요청해 주세요.</span>}
                 </p>
+                <div className="flex flex-col xl:flex-row gap-4 items-start">
+                <div style={{flex:'0 0 auto', maxWidth:'720px', width:'100%'}}>
 
                 {/* 추가 요청 목록 - 관리자에겐 승인/반려, 나머지에겐 진행 상황 */}
                 {(canEdit || dealerRequests.length > 0) && (
@@ -2882,6 +2906,56 @@ img,video{max-width:100%;height:auto}
                     </tbody>
                   </table>
                   {canEdit && <p className="text-[11px] text-gray-400 mt-3">· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다.<br/>· 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다. 먼저 해당 건의 딜러를 바꿔주세요.</p>}
+                </div>
+                </div>
+
+                {/* 분기별 · 딜러별 판매 건수 */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6" style={{flex:'1 1 380px', minWidth:0, width:'100%'}}>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <span className="text-sm font-bold text-gray-700">분기별 · 딜러별 판매 건수</span>
+                    <span className="text-[11px] text-gray-400">SC + ACT(일반) 기준</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mb-3">한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.</p>
+                  {statDealers.length === 0 ? (
+                    <div className="text-gray-400 text-sm">집계할 데이터가 없습니다.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                          <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                            <th className="py-2 px-2">딜러</th>
+                            {statQuarters.map(q => <th key={q} className="py-2 px-2 text-right">{q.replace(' ', ' ')}</th>)}
+                            <th className="py-2 px-2 text-right font-bold text-gray-700">합계</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statDealers.map(dl => (
+                            <tr key={dl} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(dl)}</td>
+                              {statQuarters.map(q => {
+                                const n = countOf(dl, q);
+                                return <td key={q} className="py-2 px-2 text-right font-mono" style={{color: n ? '#1e293b' : '#cbd5e1'}}>{n || '-'}</td>;
+                              })}
+                              <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">{rowTotal(dl)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-gray-300 bg-gray-50">
+                            <td className="py-2 px-2 font-bold text-gray-700">합계</td>
+                            {statQuarters.map(q => (
+                              <td key={q} className="py-2 px-2 text-right font-mono font-bold text-gray-700">
+                                {statDealers.reduce((s, dl) => s + countOf(dl, q), 0)}
+                              </td>
+                            ))}
+                            <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">
+                              {statDealers.reduce((s, dl) => s + rowTotal(dl), 0)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-3">· SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.<br/>· Pending·Back up·Try &amp; Buy는 빠져 있습니다.</p>
+                </div>
                 </div>
               </div>
               );
