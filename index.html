@@ -2825,12 +2825,9 @@ img,video{max-width:100%;height:auto}
                   여기에 등록된 딜러가 매출 입력 화면의 <span className="font-bold text-purple-700">Dealer Name</span> 목록에 나옵니다. 순서도 그대로 반영됩니다.
                   {!canEdit && <span className="block mt-1 text-amber-700 font-bold">목록 편집은 담당자(박윤아)만 가능합니다. 필요한 딜러가 없으면 아래에서 추가 요청해 주세요.</span>}
                 </p>
-                <div className="flex flex-col xl:flex-row gap-4 items-start">
-                <div style={{flex:'0 0 auto', maxWidth:'720px', width:'100%'}}>
-
                 {/* 추가 요청 목록 - 관리자에겐 승인/반려, 나머지에겐 진행 상황 */}
                 {(canEdit || dealerRequests.length > 0) && (
-                  <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4 md:p-6 mb-4" style={{maxWidth:'720px'}}>
+                  <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4 md:p-6 mb-4">
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-sm font-bold text-amber-800">추가 요청 {dealerRequests.length}건</span>
                       {!canEdit && <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
@@ -2867,95 +2864,86 @@ img,video{max-width:100%;height:auto}
                   </div>
                 )}
 
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6" style={{maxWidth:'720px'}}>
-                  <div className="flex justify-between items-center mb-3">
+                {/* 딜러 목록 + 분기별 판매 건수를 한 표로 합침. 딜러명이 두 번 나오지 않게 했고,
+                    기존 "사용 건수"(줄 수)는 계약 기준 합계로 대체 - 같은 계약의 GMPP/Cryo7이
+                    2건으로 세지던 숫자라 실제 판매 건수와 어긋났다. */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-1 flex-wrap gap-2">
                     <span className="text-sm font-bold text-gray-600">등록된 딜러 {dealers.length}개</span>
                     {canEdit
                       ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
                       : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
                   </div>
-                  <table className="min-w-full text-sm text-left">
-                    <thead>
-                      <tr className="border-b border-gray-200 text-gray-500 text-xs">
-                        <th className="py-2 px-2" style={{width:'44px'}}>순서</th>
-                        <th className="py-2 px-2">딜러명</th>
-                        <th className="py-2 px-2 text-right" style={{width:'90px'}}>사용 건수</th>
-                        {canEdit && <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dealers.map((d, i) => {
-                        const used = dealerUseCount(d);
-                        return (
-                          <tr key={d} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-2 px-2 text-gray-400 font-mono text-xs">{i+1}</td>
-                            <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(d)}</td>
-                            <td className="py-2 px-2 text-right font-mono text-xs" style={{color: used ? '#1d4ed8' : '#94a3b8'}}>{used ? `${used}건` : '-'}</td>
-                            {canEdit && (
-                              <td className="py-2 px-2 text-right whitespace-nowrap">
-                                <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
-                                <button onClick={() => moveDealer(i, 1)} disabled={i===dealers.length-1} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30 ml-1" title="아래로">▼</button>
-                                <button onClick={() => renameDealer(d)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
-                                <button onClick={() => deleteDealer(d)} disabled={used>0} title={used>0 ? '매출에 쓰이고 있어 삭제할 수 없습니다' : ''}
-                                  className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1 disabled:opacity-30 disabled:cursor-not-allowed">삭제</button>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {canEdit && <p className="text-[11px] text-gray-400 mt-3">· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다.<br/>· 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다. 먼저 해당 건의 딜러를 바꿔주세요.</p>}
-                </div>
-                </div>
-
-                {/* 분기별 · 딜러별 판매 건수 */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6" style={{flex:'1 1 380px', minWidth:0, width:'100%'}}>
-                  <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-sm font-bold text-gray-700">분기별 · 딜러별 판매 건수</span>
-                    <span className="text-[11px] text-gray-400">SC + ACT(일반) 기준</span>
-                  </div>
-                  <p className="text-[11px] text-gray-400 mb-3">한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.</p>
-                  {statDealers.length === 0 ? (
-                    <div className="text-gray-400 text-sm">집계할 데이터가 없습니다.</div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm text-left whitespace-nowrap">
-                        <thead>
-                          <tr className="border-b border-gray-200 text-gray-500 text-xs">
-                            <th className="py-2 px-2">딜러</th>
-                            {statQuarters.map(q => <th key={q} className="py-2 px-2 text-right">{q.replace(' ', ' ')}</th>)}
-                            <th className="py-2 px-2 text-right font-bold text-gray-700">합계</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {statDealers.map(dl => (
-                            <tr key={dl} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(dl)}</td>
+                  <p className="text-[11px] text-gray-400 mb-3">분기별 판매 건수는 SC + ACT(일반) 기준이며, 한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.</p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm text-left whitespace-nowrap">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                          <th className="py-2 px-2" style={{width:'40px'}}>순서</th>
+                          <th className="py-2 px-2">딜러명</th>
+                          {statQuarters.map(q => <th key={q} className="py-2 px-2 text-right">{q}</th>)}
+                          <th className="py-2 px-2 text-right font-bold text-gray-700">합계</th>
+                          {canEdit && <th className="py-2 px-2 text-right" style={{width:'190px'}}>관리</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dealers.map((d, i) => {
+                          const used = dealerUseCount(d);
+                          const tot = rowTotal(d);
+                          return (
+                            <tr key={d} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 px-2 text-gray-400 font-mono text-xs">{i+1}</td>
+                              <td className="py-2 px-2 font-bold text-gray-800">{dealerLabel(d)}</td>
                               {statQuarters.map(q => {
-                                const n = countOf(dl, q);
+                                const n = countOf(d, q);
                                 return <td key={q} className="py-2 px-2 text-right font-mono" style={{color: n ? '#1e293b' : '#cbd5e1'}}>{n || '-'}</td>;
                               })}
-                              <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">{rowTotal(dl)}</td>
+                              <td className="py-2 px-2 text-right font-mono font-bold" style={{color: tot ? '#1d4ed8' : '#cbd5e1'}}>{tot || '-'}</td>
+                              {canEdit && (
+                                <td className="py-2 px-2 text-right whitespace-nowrap">
+                                  <button onClick={() => moveDealer(i, -1)} disabled={i===0} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30" title="위로">▲</button>
+                                  <button onClick={() => moveDealer(i, 1)} disabled={i===dealers.length-1} className="text-[11px] px-1.5 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-30 ml-1" title="아래로">▼</button>
+                                  <button onClick={() => renameDealer(d)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
+                                  <button onClick={() => deleteDealer(d)} disabled={used>0} title={used>0 ? `매출 ${used}줄에 쓰이고 있어 삭제할 수 없습니다` : ''}
+                                    className="text-[11px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1 disabled:opacity-30 disabled:cursor-not-allowed">삭제</button>
+                                </td>
+                              )}
                             </tr>
-                          ))}
-                          <tr className="border-t-2 border-gray-300 bg-gray-50">
-                            <td className="py-2 px-2 font-bold text-gray-700">합계</td>
-                            {statQuarters.map(q => (
-                              <td key={q} className="py-2 px-2 text-right font-mono font-bold text-gray-700">
-                                {statDealers.reduce((s, dl) => s + countOf(dl, q), 0)}
-                              </td>
-                            ))}
-                            <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">
-                              {statDealers.reduce((s, dl) => s + rowTotal(dl), 0)}
-                            </td>
+                          );
+                        })}
+                        {/* 목록엔 없는데 매출 데이터에는 남아있는 딜러명 - 이름이 바뀌었거나 지워진 경우 */}
+                        {statDealers.filter(dl => !dealers.includes(dl)).map(dl => (
+                          <tr key={dl} className="border-b border-gray-100 bg-amber-50">
+                            <td className="py-2 px-2 text-gray-400 font-mono text-xs">-</td>
+                            <td className="py-2 px-2 font-bold text-amber-800">{dl} <span className="text-[10px] font-normal text-amber-600">목록에 없음</span></td>
+                            {statQuarters.map(q => {
+                              const n = countOf(dl, q);
+                              return <td key={q} className="py-2 px-2 text-right font-mono" style={{color: n ? '#1e293b' : '#cbd5e1'}}>{n || '-'}</td>;
+                            })}
+                            <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">{rowTotal(dl)}</td>
+                            {canEdit && <td></td>}
                           </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-gray-400 mt-3">· SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.<br/>· Pending·Back up·Try &amp; Buy는 빠져 있습니다.</p>
-                </div>
+                        ))}
+                        <tr className="border-t-2 border-gray-300 bg-gray-50">
+                          <td></td>
+                          <td className="py-2 px-2 font-bold text-gray-700">합계</td>
+                          {statQuarters.map(q => (
+                            <td key={q} className="py-2 px-2 text-right font-mono font-bold text-gray-700">
+                              {statDealers.reduce((s, dl) => s + countOf(dl, q), 0)}
+                            </td>
+                          ))}
+                          <td className="py-2 px-2 text-right font-mono font-bold text-blue-700">
+                            {statDealers.reduce((s, dl) => s + rowTotal(dl), 0)}
+                          </td>
+                          {canEdit && <td></td>}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-3">
+                    · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다. Pending·Back up·Try &amp; Buy는 빠집니다.
+                    {canEdit && <><br/>· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다. 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다.</>}
+                  </p>
                 </div>
               </div>
               );
