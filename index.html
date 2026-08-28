@@ -2879,10 +2879,17 @@ img,video{max-width:100%;height:auto}
                 const dq = deliveryQuarter(d);
                 if (dq) put(dealRowsD, d.dealerName || '미지정', dq, d);
               });
+              // 표에 넣을 첫 분기. 이전 연도 건은 데이터에 그대로 두고 화면에서만 감춘다.
+              // 나중에 2027년부터만 보고 싶으면 이 값만 바꾸면 된다.
+              const STAT_FROM = '2026 Q1';
               const statQuarters = [...new Set([
                 ...statRows.map(d => d.quarter).filter(Boolean),
                 ...delivRows.map(deliveryQuarter).filter(Boolean),
-              ])].sort();
+              ])].sort().filter(q => q >= STAT_FROM);
+              // 감춘 건은 조용히 사라지지 않게 건수를 표 아래에 밝힌다
+              const outOfRange = (q) => q && q < STAT_FROM;
+              const outDelivDeals = countDeals(delivRows.filter(d => outOfRange(deliveryQuarter(d))));
+              const outRegDeals   = countDeals(statRows.filter(d => outOfRange(d.quarter)));
               const cnt  = (bucket, dl, q) => (bucket[dl] && bucket[dl][q]) ? countDeals(bucket[dl][q]) : 0;
               const countOf  = (dl, q) => cnt(dealRows,  dl, q);   // 등록 분기 기준
               const countDOf = (dl, q) => cnt(dealRowsD, dl, q);   // 납품일 기준
@@ -3034,7 +3041,10 @@ img,video{max-width:100%;height:auto}
                   <p className="text-[11px] text-gray-400 mt-3">
                     · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.
                     <span className="block">· 괄호가 큰 숫자보다 클 수 있습니다 - 아직 매출로 안 잡힌 Pending·Back up·Try &amp; Buy가 괄호에는 들어갑니다.</span>
+                    <span className="block">· {STAT_FROM} 이전 분기는 표에서 감춥니다. 데이터는 그대로 있습니다.</span>
                     {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호)으로 셀 수 없어 빠집니다.</span>}
+                    {outDelivDeals > 0 && <span className="block text-amber-600">· 납품일이 {STAT_FROM} 이전인 {outDelivDeals}건은 괄호에서 빠집니다.</span>}
+                    {outRegDeals > 0 && <span className="block text-amber-600">· 등록 분기가 {STAT_FROM} 이전인 {outRegDeals}건은 큰 숫자에서 빠집니다.</span>}
                     {canEdit && <><br/>· 이름을 수정하면 그 딜러로 등록된 매출 건의 딜러명도 함께 바뀝니다. 매출에 쓰이고 있는 딜러는 삭제할 수 없습니다.</>}
                   </p>
                 </div>
