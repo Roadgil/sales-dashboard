@@ -2860,10 +2860,13 @@ img,video{max-width:100%;height:auto}
               // 분기 × 딜러 판매 건수. 줄 수가 아니라 countDeals()로 계약 안의 본체 수를 센다
               // (GMPP+Cryo7은 1건, GMPP+VBP는 2건).
               // 두 기준은 대상 자체가 다르다.
-              //  · 등록 분기 기준(큰 숫자) = 매출로 인식한 건만 = SC + ACT(일반)
-              //  · 납품일 기준(괄호)      = 상태 무관 전부 = Pending·Back up·Try & Buy 포함
+              //  · 등록 분기 기준(큰 숫자) = SC + ACT (Try & Buy도 ACT로 함께)
+              //  · 납품일 기준(괄호)      = 상태 무관 전부 = Pending·Back up까지
               // 딜러에게 요청받은 시점을 보려는 거라, 아직 매출로 안 잡힌 건도 세야 한다.
-              const statRows  = salesData.filter(isExpected);
+              //
+              // isExpected를 쓰지 않는 이유: 그건 금액 예상치 기준이라 Try & Buy를 뺀다.
+              // 건수는 금액이 아니라 "딜러가 물어온 계약 수"라서 체험 계약도 1건으로 센다.
+              const statRows  = salesData.filter(d => isShipConfirm(d) || isACT(d));
               const delivRows = salesData;
               // 분기 열은 두 기준의 합집합이라야 한 건이 어느 쪽에서도 안 빠진다
               // (작년 12월 납품 / 올해 1월 등록이면 열이 하나만 있으면 한쪽이 사라진다).
@@ -2966,10 +2969,10 @@ img,video{max-width:100%;height:auto}
                   <p className="text-[11px] text-gray-400 mb-3">
                     한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다. 칸마다 두 숫자를 같이 적었습니다.
                     <span className="block mt-1">
-                      큰 숫자 = <span className="font-bold text-gray-600">등록 분기</span> 기준, <span className="font-bold text-gray-600">SC + ACT(일반)</span>만.
+                      큰 숫자 = <span className="font-bold text-gray-600">등록 분기</span> 기준, <span className="font-bold text-gray-600">SC + ACT</span>만 (Try &amp; Buy도 ACT로 셉니다).
                     </span>
                     <span className="block">
-                      괄호 = <span className="font-bold text-gray-600">납품일</span> 기준, <span className="font-bold text-gray-600">상태 무관 전부</span>(Pending·Back up·Try &amp; Buy 포함).
+                      괄호 = <span className="font-bold text-gray-600">납품일</span> 기준, <span className="font-bold text-gray-600">상태 무관 전부</span>(Pending·Back up까지).
                     </span>
                     <span className="block mt-1">
                       4월에 납품하고 8월에 Ship Confirm한 건은 등록 분기로는 Q3, 납품일로는 Q2입니다.
@@ -3040,7 +3043,7 @@ img,video{max-width:100%;height:auto}
                   </div>
                   <p className="text-[11px] text-gray-400 mt-3">
                     · 건수는 SO가 있으면 SO를, 없으면 같은 분기·같은 병원을 한 계약으로 봅니다.
-                    <span className="block">· 괄호가 큰 숫자보다 클 수 있습니다 - 아직 매출로 안 잡힌 Pending·Back up·Try &amp; Buy가 괄호에는 들어갑니다.</span>
+                    <span className="block">· 괄호가 큰 숫자보다 클 수 있습니다 - 아직 매출로 안 잡힌 Pending·Back up이 괄호에는 들어갑니다.</span>
                     <span className="block">· {STAT_FROM} 이전 분기는 표에서 감춥니다. 데이터는 그대로 있습니다.</span>
                     {noDelivDeals > 0 && <span className="block text-amber-600">· 납품예정일이 비어 있는 {noDelivDeals}건은 납품일 기준(괄호)으로 셀 수 없어 빠집니다.</span>}
                     {outDelivDeals > 0 && <span className="block text-amber-600">· 납품일이 {STAT_FROM} 이전인 {outDelivDeals}건은 괄호에서 빠집니다.</span>}
