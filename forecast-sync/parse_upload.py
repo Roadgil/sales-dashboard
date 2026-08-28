@@ -99,14 +99,30 @@ ACCESSORY_FAMILIES = {
 # 확인된 결과만 표로 고정해 두고, 새 부속 코드가 나오면 그때 재고 Family를 다시 보고 추가한다.
 # (Ellipse는 Nordlys 플랫폼의 애플리케이터 계열이라 Nordlys로 귀속시킨다.)
 ACCESSORY_CODES = {
-    "9APP7744-CNDL": "Nordlys",  # Applicator HR 600      - 재고 Family: Nordlys
-    "9APP7747-CNDL": "Nordlys",  # Applicator VL 555      - 재고 Family: Ellipse Applicator
-    "9APP7748-CNDL": "Nordlys",  # Applicator PR 530      - 재고 Family: Nordlys
-    "9APP7829-CNDL": "Nordlys",  # Applicator Frax 1550   - 재고 Family: Nordlys
-    "9APP7830": "Nordlys",       # 1550 Applicator        - 재고 Family: Ellipse Applicator
-    "9APP7908": "Nordlys",       # Applicator Frax 1940   - 재고 Family: Nordlys
-    "9APP7909": "Nordlys",       # 1940 Applicator        - 재고 Family: Ellipse Applicator
+    "9APP7744-CNDL": "Nordlys",  # Applicator HR 600     - 재고 Family: Nordlys 37 / Ellipse 30
+    "9APP7748-CNDL": "Nordlys",  # Applicator PR 530     - 재고 Family: Nordlys 152 / Ellipse 119
+    "9APP7829-CNDL": "Nordlys",  # Applicator Frax 1550  - 재고 Family: Nordlys 5
+    "9APP7908": "Nordlys",       # Applicator Frax 1940  - 재고 Family: Nordlys 1
 }
+
+# 판매 종료된 제품의 라인 - 어느 제품 버킷에도 넣지 않고 후보 금액에서 통째로 뺀다.
+# Ellipse는 더 이상 판매하지 않고 Nordlys만 관리하므로, 재고 Product Family가 주로
+# Ellipse Applicator로 잡히는 아래 코드는 제외한다(2026-08-27 사용자 확인).
+# 그냥 두면 leftover로 흘러 같은 계약의 대표 제품(Nordlys 등) 금액에 합쳐져 버리기 때문에,
+# "빼는" 처리는 반드시 leftover 귀속보다 먼저 일어나야 한다.
+# 이 코드들이 빠지면 계약 총액과 후보 합계가 그만큼 차이 나는 게 정상이다.
+EXCLUDED_CODES = {
+    "9APP7747-CNDL",  # Applicator VL 555  - 재고 Family: Ellipse Applicator 181 / Nordlys 128
+    "9APP7830",       # 1550 Applicator    - 재고 Family: Ellipse Applicator 55 / (빈값) 34
+    "9APP7909",       # 1940 Applicator    - 재고 Family: (빈값) 58 / Ellipse Applicator 22
+}
+
+# 대시보드의 VBP 버킷은 Vbeam "Perfecta" 하나를 가리킨다(2026-08-27 확인, 현재 Perfecta만 판매).
+# 재고에는 VBEAM2 / VBEAM Prima / Vbeam Prima Pro / VBeam Prima NXT 등 다른 Vbeam 계열이
+# 같이 있어서, 그런 모델이 팔리기 시작하면 제품명의 "vbeam"만 보고 전부 VBP로 뭉뚱그리게 된다.
+# 값을 임의로 바꾸지는 않고, 그런 라인이 보이면 경고로 알려 버킷을 나눌지 판단할 수 있게 한다.
+VBEAM_ANY_RE = r"\bvbeam\b"
+VBEAM_PERFECTA_RE = r"\bperfecta\b"
 
 
 def parse_report(xls_path):
@@ -157,6 +173,7 @@ def split_into_product_buckets(group):
     대표 제품명. 시스템 라인이 하나도 없으면 (None, None).
 
     규칙(위에서부터 순서대로, 먼저 잡힌 라인은 다시 검사하지 않음):
+    0. EXCLUDED_CODES(판매 종료 제품) 라인은 어느 버킷에도 안 들어가고 그대로 버려진다.
     1. MAIN_PRODUCT_CODES 라인은 무조건 GMPP 버킷 (제품명 패턴 검사를 아예 거치지 않음).
     2. SYSTEM_PATTERNS - 제품명에 시스템 이름이 들어간 라인(시스템 본체).
     3. ACCESSORY_CODES / ACCESSORY_PATTERNS - 시스템 이름은 없지만 소속이 확인된 부속 라인.
@@ -168,8 +185,9 @@ def split_into_product_buckets(group):
     names = group["Product Name"].astype(str).str.lower()
     codes = group["Product Code"].astype(str).str.strip()
 
-    # GMPP 메인 라인은 처음부터 "이미 가져간" 것으로 두어 다른 패턴이 채가지 못하게 한다.
-    taken = main_mask.copy()
+    # GMPP 메인 라인은 "이미 가져간" 것으로, 판매 종료 제품은 "버린" 것으로 두고 시작한다.
+    # 둘 다 taken에 넣어야 뒤의 패턴 검사와 leftover 귀속에서 모두 빠진다.
+    taken = main_mask | codes.isin(EXCLUDED_CODES)
     buckets = {}
 
     def claim(product, mask):
@@ -236,10 +254,23 @@ def build_candidates(df, prev_to, new_to, from_fixed):
     GMPP 라인이 없는 Opportunity(순수 Picoway/Nordlys/VBP 건 등)도 그 제품 자체를 후보로
     만든다 - 2026-08-27 이전에는 GMPP 메인 라인이 없으면 Opportunity를 통째로 버렸다.
 
-    반환: (candidates, skipped_unmapped_owners)
+    반환: (candidates, skipped_unmapped_owners, warnings)
+    warnings는 사람이 봐야 하는 알림 문자열 목록 - 지금은 Perfecta가 아닌 Vbeam 모델이
+    리포트에 나타난 경우(=VBP 버킷을 나눠야 할 시점)를 알린다.
     """
     df = df.copy()
     df["_close_date"] = pd.to_datetime(df["Close Date"], format="%Y. %m. %d", errors="coerce").dt.date
+
+    warnings = []
+    _names = df["Product Name"].astype(str).str.lower()
+    other_vbeam = df[_names.str.contains(VBEAM_ANY_RE, regex=True)
+                     & ~_names.str.contains(VBEAM_PERFECTA_RE, regex=True)]
+    if len(other_vbeam):
+        found = sorted(set(other_vbeam["Product Name"].astype(str)))
+        warnings.append(
+            "Perfecta가 아닌 Vbeam 모델이 리포트에 있습니다. 지금은 전부 VBP(=Perfecta) 버킷으로 "
+            "들어가므로 버킷을 나눌지 확인이 필요합니다: " + ", ".join(found[:5])
+        )
 
     candidates = []
     skipped_owners = set()
@@ -296,7 +327,7 @@ def build_candidates(df, prev_to, new_to, from_fixed):
                 acc_type=acc_type,
             ))
 
-    return candidates, skipped_owners
+    return candidates, skipped_owners, warnings
 
 
 def upload_candidates(candidates, db):

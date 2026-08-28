@@ -32,8 +32,10 @@ def main():
         scan_from = config.FROM_FIXED - timedelta(days=1)
         print(f"[dry-run] 대상 구간: (전체 {config.FROM_FIXED} ~ {new_to}]")
         df = parse_upload.parse_report(xls_path)
-        candidates, skipped_owners = parse_upload.build_candidates(df, scan_from, new_to, config.FROM_FIXED)
+        candidates, skipped_owners, warns = parse_upload.build_candidates(df, scan_from, new_to, config.FROM_FIXED)
         print(f"[dry-run] 대상 후보 수: {len(candidates)}")
+        for w in warns:
+            print(f"[dry-run][경고] {w}")
         if skipped_owners:
             print(f"[dry-run] 매핑 안 된 Owner (member_map.py에 추가 필요): {skipped_owners}")
         for d in candidates[:5]:
@@ -51,8 +53,10 @@ def main():
     xls_path = selenium_export.run_export(config.FROM_FIXED, new_to)
 
     df = parse_upload.parse_report(xls_path)
-    candidates, skipped_owners = parse_upload.build_candidates(df, scan_from, new_to, config.FROM_FIXED)
+    candidates, skipped_owners, warns = parse_upload.build_candidates(df, scan_from, new_to, config.FROM_FIXED)
     print(f"파싱된 대상 후보 수: {len(candidates)}")
+    for w in warns:
+        print(f"[경고] {w}")
     if skipped_owners:
         print(f"[경고] 매핑되지 않은 Owner가 있어 건너뛰었습니다: {skipped_owners}")
         print("        member_map.py의 OWNER_TO_MEMBER / OWNER_TO_TEAM 에 추가해주세요.")
