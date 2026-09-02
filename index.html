@@ -477,6 +477,9 @@ img,video{max-width:100%;height:auto}
       'Pending':      { bg:'#dbeafe', text:'#1d4ed8' },
       'Back up':      { bg:'#ffedd5', text:'#c2410c' },
     };
+    // d.status 값 -> rowOrders에 저장된 버킷 키. 개인별 화면의 드래그 순서를
+    // 통합데이터 화면에서도 같은 키로 조회하기 위한 매핑.
+    const STATUS_TO_ORDERKEY = { 'Ship Confirm':'ShipConfirm', 'ACT':'ACT', 'Pending':'Pending', 'Back up':'Backup' };
     // 딜러 목록 기본값 - settings/layout의 dealers가 비어있을 때만 쓰는 초기 시드.
     // 실제 목록은 '딜러관리(추가 및 수정)' 화면에서 편집하며 Firestore에 저장된다.
     // 배열 순서가 곧 화면 표시 순서. '병원'은 딜러 경유 없이 병원에 직접 판매한 건.
@@ -1627,8 +1630,9 @@ img,video{max-width:100%;height:auto}
       }, [currentUser]);
 
       const saveRowOrders = (next) => { if (!auth.currentUser) { setShowLoginModal(true); return; } setRowOrders(next); db.collection("settings").doc("rowOrders").set(next); };
-      const getOrderedRows = (status, rawRows) => {
-        const key = `${selectedQuarter}__${selectedMember}__${status}`;
+      const getOrderedRows = (status, rawRows, memberOverride) => {
+        const mem = memberOverride !== undefined ? memberOverride : selectedMember;
+        const key = `${selectedQuarter}__${mem}__${status}`;
         const orderMap = rowOrders[status]?.[key];
         if (!orderMap || !Array.isArray(orderMap) || orderMap.length === 0) return rawRows;
         const mapped = {}; rawRows.forEach(r => { mapped[String(r.id)] = r; });
@@ -3468,7 +3472,9 @@ img,video{max-width:100%;height:auto}
                             </div>
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
-                                const stRows = rows.filter(d=>d.status===st).sort(sortByContract);
+                                // 개인별 화면에서 드래그로 정한 순서(rowOrders)를 그대로 적용 -
+                                // 순서가 없으면 기존 계약 단위 정렬로 fallback.
+                                const stRows = getOrderedRows(STATUS_TO_ORDERKEY[st], rows.filter(d=>d.status===st).sort(sortByContract), member);
                                 // 시나리오 모드에서는 빈 상태 그룹도 남겨둬야 그 칸으로 끌어다 놓을 수 있다
                                 if (stRows.length===0 && !scenarioMode) return null;
                                 const stSum = stRows.reduce((s,d)=>s+netPrice(d),0);
