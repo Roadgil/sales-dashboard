@@ -1970,7 +1970,25 @@ img,video{max-width:100%;height:auto}
 
       // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────
       const renderProgressBar = (scAmt, actAmt, tgtKRW, er) => {
-        if (!tgtKRW) return null;
+        if (!tgtKRW) {
+          // 목표 미설정 담당자는 달성률을 못 그리니, SC/ACT 금액 비중만 막대로 보여준다.
+          const total = scAmt + actAmt;
+          const scPct  = total > 0 ? (scAmt/total)*100 : 0;
+          const actPct = total > 0 ? (actAmt/total)*100 : 0;
+          return (
+            <div className="w-full mt-6 md:mt-8" data-region="achievement-bar-no-target">
+              <div className="flex flex-wrap gap-2 items-center mb-2">
+                <span className="toss-tnum text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SC: ₩ {scAmt.toLocaleString()}</span>
+                <span className="toss-tnum text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ACT: ₩ {actAmt.toLocaleString()}</span>
+                <span className="text-xs font-bold text-gray-400">목표 미설정 · SC/ACT 비중만 표시</span>
+              </div>
+              <div className="relative w-full h-6 md:h-8 rounded-full overflow-hidden border border-gray-200" style={{display:'flex'}}>
+                <div className="h-full flex items-center justify-end pr-1 text-white font-bold text-xs bg-blue-500" style={{width:`${scPct}%`, overflow:'hidden'}}>{scPct>10 && `${scPct.toFixed(0)}%`}</div>
+                <div className="h-full flex items-center justify-end pr-1 text-white font-bold text-xs bg-emerald-500" style={{width:`${actPct}%`, overflow:'hidden'}}>{actPct>10 && `${actPct.toFixed(0)}%`}</div>
+              </div>
+            </div>
+          );
+        }
         const usedER = er || activeER || 1389;
         const target120 = tgtKRW * 1.2; const target150 = tgtKRW * 1.5;
         const maxScale = Math.max(target150, scAmt + actAmt);
