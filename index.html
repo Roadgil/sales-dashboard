@@ -3601,7 +3601,8 @@ img,video{max-width:100%;height:auto}
                           return (
                             <div key={dealer} style={{minWidth:0, border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px',
                                                       breakInside:'avoid', WebkitColumnBreakInside:'avoid', marginBottom:`${gap}px`}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
+                              <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}
+                                title={`계약 ${countDeals(dRevenueRows)}건 · 목록 ${dRevenueRows.length}줄 (GMPP+Cryo7 한 계약은 두 줄이지만 1건)`}>({countDeals(dRevenueRows)}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                                 {dCommission > 0 && <div style={{fontSize:'11px', fontWeight:'bold', color:'#c2410c'}}>커미션 −₩{dCommission.toLocaleString()}</div>}
