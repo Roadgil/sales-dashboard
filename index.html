@@ -3584,12 +3584,6 @@ img,video{max-width:100%;height:auto}
                   });
                   return (
                     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-6">
-                      <p className="text-[11px] text-gray-400 mb-3">
-                        딜러명 옆 건수는 딜러관리 화면과 같은 기준입니다. 한 계약에 GMPP·Cryo7이 같이 있어도 <span className="font-bold text-gray-600">1건</span>으로 셉니다.
-                        <span className="block mt-1">큰 숫자 = <span className="font-bold text-gray-600">등록 분기</span> 기준, <span className="font-bold text-gray-600">Ship Confirm</span>만.</span>
-                        <span className="block">괄호 = <span className="font-bold text-gray-600">납품일</span> 기준, <span className="font-bold text-gray-600">상태 무관 전부</span>(Pending·Back up까지).</span>
-                        <span className="block mt-1">카드의 <span className="font-bold text-gray-600">합계 금액</span>과 아래 목록은 매출 기준(SC + ACT 일반)입니다. 건수는 Ship Confirm만 세므로, ACT 건이 있는 딜러는 금액·목록이 있는데도 큰 숫자가 그보다 작게 나옵니다.</span>
-                      </p>
                       {/* 딜러가 15곳이라 가로 한 줄로 늘어놓으면 4,000px가 넘어 계속 오른쪽으로 끌어야 했다.
                           카드를 CSS 다단(column)에 흘려 넣는다. 그리드로 짜면 행 높이가 가장 큰 카드에
                           맞춰져 짧은 카드 아래가 통째로 비고, 긴 카드는 카드 안에서 또 스크롤해야 했다.
@@ -3601,24 +3595,13 @@ img,video{max-width:100%;height:auto}
                         {dealersInUse.length === 0 ? (
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealersInUse.map(dealer => {
-                          const sameDealer = (d) => (d.dealerName || '미지정') === dealer;
-                          const dRevenueRows = rows.filter(d => sameDealer(d) && countsForTotal(d)).sort(sortByContract);
-                          // 건수는 딜러관리 표와 같은 규칙으로 센다.
-                          //  · 큰 숫자 = 등록 분기 기준, Ship Confirm만 (선적 확정된 건)
-                          //  · 괄호   = 납품일 기준, 상태 무관 전부 (Pending·Back up까지)
-                          // 납품일 기준은 quarter 필드가 아니라 납품일로 분기를 따지므로 rows가
-                          // 아니라 salesData 전체에서 걸러야 한다 - 다른 분기에 등록됐지만 이
-                          // 분기에 납품한 건이 rows에는 없다.
-                          const dRegCount   = countDeals(salesData.filter(d => sameDealer(d) && d.quarter === selectedQuarter && isShipConfirm(d)));
-                          const dDelivCount = countDeals(salesData.filter(d => sameDealer(d) && deliveryQuarter(d) === selectedQuarter));
+                          const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && countsForTotal(d)).sort(sortByContract);
                           const dCommission = commissionFor(dRevenueRows);
                           const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - dCommission;
                           return (
                             <div key={dealer} style={{minWidth:0, border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px',
                                                       breakInside:'avoid', WebkitColumnBreakInside:'avoid', marginBottom:`${gap}px`}}>
-                              <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#334155', fontWeight:'bold', fontSize:'12px'}}
-                                title={`등록 분기 기준 ${dRegCount}건 (Ship Confirm) · 납품일 기준 ${dDelivCount}건 (상태 무관 전부) · 아래 목록은 ${dRevenueRows.length}줄 (GMPP+Cryo7 한 계약은 두 줄이지만 1건)`}>{dRegCount}건</span>
-                                <span style={{color:'#94a3b8', fontWeight:'normal', fontSize:'11px', marginLeft:'3px'}}>({dDelivCount})</span></div>
+                              <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
                                 {dCommission > 0 && <div style={{fontSize:'11px', fontWeight:'bold', color:'#c2410c'}}>커미션 −₩{dCommission.toLocaleString()}</div>}
