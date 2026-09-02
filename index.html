@@ -920,7 +920,7 @@ img,video{max-width:100%;height:auto}
         if (!hasRole(list)) { showToast(lang==='ko' ? '⛔ 권한이 없습니다 (관리자 전용)' : '⛔ Admin only', 'error'); return false; }
         return true;
       };
-      // 딜러 목록 편집자 - 딜러명이 커미션·집계의 기준 값이라 한 사람이 관리한다.
+      // 딜러 목록 편집자 - 딜러명이 집계의 기준 값이라 한 사람이 관리한다.
       // 나머지 사용자는 '딜러 추가 요청'만 남기고, 이 사람이 승인해야 목록에 들어간다.
       const DEALER_ADMIN_EMAILS = ['yunap@candelamedical.com'];
       const requireTargetAdmin = () => requireRole(TARGET_ADMIN_EMAILS);
@@ -1116,18 +1116,6 @@ img,video{max-width:100%;height:auto}
           }
         });
         return () => { unsubSales(); unsubCandidates(); unsubTargets(); unsubMemberTargets(); unsubTeamTargets(); unsubLayout(); unsubDealerReq(); };
-      }, [currentUser]);
-
-      // 커미션 참조 데이터 - { SO번호: 수수료 } 맵. 금액 정보라 정적 파일로 두면 인증 없이
-      // 공개되므로(저장소가 public) settings 컬렉션에 보관해 로그인 사용자만 읽게 한다.
-      // 없거나 깨져도 대시보드는 그대로 동작해야 하므로 실패는 조용히 무시(커미션 토글만 0원 처리됨).
-      React.useEffect(() => {
-        if (!currentUser) return;
-        const unsub = db.collection("settings").doc("commissions").onSnapshot(
-          doc => { const d = doc.exists ? (doc.data() || {}).bySo : null; if (d && typeof d === 'object') setCommissions(d); },
-          () => {}
-        );
-        return () => unsub();
       }, [currentUser]);
 
       // ── 미선적 자동 이월 (분기 시작일 감지): 이전 분기 ACT·Pending·Back up → 현재 분기로 이동 ──
@@ -1567,9 +1555,6 @@ img,video{max-width:100%;height:auto}
       // 팀/멤버 추가·이름변경·삭제와 팀 목표 입력은 원래 '팀별 대시보드'에 있던 것.
       // 통합데이터로 옮겨왔지만 평소 화면이 지저분해지지 않게 이 토글을 켤 때만 노출한다.
       const [combinedEditMode, setCombinedEditMode] = useState(false);
-      // 외부 커미션(ext. commission) - SO별 수수료(부가세 별도). commissions.json은 재무 엑셀에서 추출한 참조 데이터.
-      const [commissions, setCommissions] = useState({});
-      const [applyCommission, setApplyCommission] = useState(false);
       const [showMemberPicker, setShowMemberPicker] = useState(false);
       const [showDealerPage, setShowDealerPage] = useState(false);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
@@ -1857,52 +1842,8 @@ img,video{max-width:100%;height:auto}
         dealerStats[dealer].sumKRW += (cur.priceKRW||0);
       });
 
-      // 주어진 매출 행들에 걸린 외부 커미션 합계.
-      // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 같은 SO를 GMPP/Cryo7 등 여러 줄로
-      // 쪼개서 들고 있으므로, SO를 중복 제거하고 SO당 한 번만 더해야 이중 차감이 안 된다.
-      // SO가 비어있는 행은 매칭 자체가 불가능하므로 그냥 0원 취급(= 커미션 없는 것으로 표시).
-      // 커미션은 계약(SO) 단위로 한 번 지급되는데 대시보드는 한 계약을 GMPP/Cryo7 등 여러 줄로
-      // 쪼개 갖고 있다. 커미션은 주력 장비(GMPP) 판매에 대해 나가는 것이고 Cryo7 등은 딸려간
-      // 구성품이므로, 금액 비율로 안분하지 않고 GMPP 줄에서 전액 차감한다
-      // (GMPP가 없는 계약이면 금액이 가장 큰 줄). 합계는 어느 줄에 붙이든 같다.
-      const commissionBearerId = {};
-      {
-        const bySo = {};
-        salesData.forEach(d => {
-          // 집계에 들어가는 줄(SC + ACT 일반) 중에서만 커미션 부담 줄을 고른다.
-          // Try & Buy 줄이 대표로 뽑히면 그 계약 커미션이 아예 차감되지 않는다.
-          if (!isExpected(d)) return;
-          const so = String(d.so || '').trim();
-          if (!so || !commissions[so]) return;
-          (bySo[so] = bySo[so] || []).push(d);
-        });
-        Object.keys(bySo).forEach(so => {
-          const best = bySo[so].slice().sort((a, b) => {
-            const ag = a.product === 'GMPP' ? 0 : 1, bg = b.product === 'GMPP' ? 0 : 1;
-            if (ag !== bg) return ag - bg;
-            return (b.priceKRW || 0) - (a.priceKRW || 0);
-          })[0];
-          commissionBearerId[so] = best.id;
-        });
-      }
-
-      // 실제로 이 행에서 빠지는 커미션 (계약당 대표 줄 하나만 부담)
-      const rowCommission = (row) => {
-        if (!applyCommission || !isExpected(row)) return 0;
-        const so = String(row.so || '').trim();
-        if (!so) return 0;
-        return commissionBearerId[so] === row.id ? (commissions[so] || 0) : 0;
-      };
-
-      // 색 표기용 - 차감을 지지 않는 같은 계약의 다른 줄(Cryo7 등)도 빨갛게 보여준다
-      const inCommissionContract = (row) => {
-        if (!applyCommission || !isExpected(row)) return 0;
-        const so = String(row.so || '').trim();
-        return so ? (commissions[so] || 0) : 0;
-      };
-
       // 한 계약(같은 병원/SO)의 GMPP·Cryo7 줄이 목록에서 흩어지지 않고 붙어 나오도록.
-      // Firestore 반환 순서 그대로 뿌리면 같은 계약이 멀찍이 떨어져 커미션 차감분을 대조하기 어렵다.
+      // Firestore 반환 순서 그대로 뿌리면 같은 계약이 멀찍이 떨어져 대조하기 어렵다.
       const sortByContract = (a, b) => {
         const ax = (a.account || ''), bx = (b.account || '');
         if (ax !== bx) return ax.localeCompare(bx, 'ko');
@@ -1910,10 +1851,6 @@ img,video{max-width:100%;height:auto}
         if (as !== bs) return as.localeCompare(bs);
         return (a.product || '').localeCompare(b.product || '');
       };
-
-      // 화면 표기용 - 커미션 차감 후 금액
-      const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
-      const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
 
       // ── 집계 기준 ───────────────────────────────────────────────────────────
       // 실제 집계(합계·예상치·GAP): Ship Confirm + ACT(일반). Try & Buy는 제외.
@@ -1936,7 +1873,7 @@ img,video{max-width:100%;height:auto}
       // 시나리오 표시를 켤 시점: 뭔가 클릭했거나 드래그 모드일 때
       const scenarioView = scenarioMode || pickedRowIds.length > 0;
       // 주어진 행 묶음의 시나리오 합계 (담당자·팀 카드에서 재사용)
-      const scenarioSumOf = (rowsArr) => rowsArr.filter(inScenario).reduce((s,d) => s + netPrice(d), 0);
+      const scenarioSumOf = (rowsArr) => rowsArr.filter(inScenario).reduce((s,d) => s + (d.priceKRW || 0), 0);
 
       // 시나리오 박스에 쓰는 값들. 더한 분은 일반/Try & Buy를 나눠 보여준다 -
       // 시나리오 금액이 Try & Buy에 얼마나 기대고 있는지 한눈에 보여야 하기 때문.
@@ -1944,16 +1881,16 @@ img,video{max-width:100%;height:auto}
       const scenarioAddNormalRows = currentQData.filter(d => isActNormal(d) && isPicked(d));
       const scenarioAddTbRows     = currentQData.filter(d => isACT(d) && isTryBuy(d) && isPicked(d));
       const scenarioAddRows = [...scenarioAddNormalRows, ...scenarioAddTbRows];
-      const scenarioScKRW   = scenarioScRows.reduce((s,d) => s + netPrice(d), 0);
-      const scenarioAddNormalKRW = scenarioAddNormalRows.reduce((s,d) => s + netPrice(d), 0);
-      const scenarioAddTbKRW     = scenarioAddTbRows.reduce((s,d) => s + netPrice(d), 0);
+      const scenarioScKRW   = scenarioScRows.reduce((s,d) => s + (d.priceKRW || 0), 0);
+      const scenarioAddNormalKRW = scenarioAddNormalRows.reduce((s,d) => s + (d.priceKRW || 0), 0);
+      const scenarioAddTbKRW     = scenarioAddTbRows.reduce((s,d) => s + (d.priceKRW || 0), 0);
       const scenarioAddKRW  = scenarioAddNormalKRW + scenarioAddTbKRW;
       const scenarioSumKRW  = scenarioScKRW + scenarioAddKRW;
       const scenarioTargetPct    = targetKRW          ? (scenarioSumKRW / targetKRW) * 100 : 0;
       const scenarioIncentivePct = incentiveTargetKRW ? (scenarioSumKRW / incentiveTargetKRW) * 100 : 0;
       // 시나리오 모드가 꺼져 있을 때 색칠용으로 고른 건들의 소계
       const pickedRowsInQ = currentQData.filter(isPicked);
-      const pickedSumKRW  = pickedRowsInQ.reduce((s,d) => s + netPrice(d), 0);
+      const pickedSumKRW  = pickedRowsInQ.reduce((s,d) => s + (d.priceKRW || 0), 0);
       const pickedTargetPct    = targetKRW          ? (pickedSumKRW / targetKRW) * 100 : 0;
       const pickedIncentivePct = incentiveTargetKRW ? (pickedSumKRW / incentiveTargetKRW) * 100 : 0;
 
@@ -2146,21 +2083,19 @@ img,video{max-width:100%;height:auto}
       // 옛 대시보드의 "분기 요약 지표" KPI 카드 9개를, 엑셀 납품처 FCST 시트의
       // 세로 라벨|값 격자 모양으로만 바꿔 옮긴 것. 값·산식은 카드와 동일하다.
       //  · 순서는 cardOrder(대시보드에서 저장해둔 카드 순서)를 그대로 따른다.
-      //  · 커미션 토글이 꺼져 있으면(기본) rowCommission이 0이라 카드 값과 정확히 일치하고,
-      //    켜면 화면 상단 총액과 어긋나지 않도록 커미션을 뺀 금액으로 보여준다.
       const renderFcstSummaryPanel = () => {
         const revRows   = currentQData.filter(countsForTotal);
-        const pExpected = revRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(revRows);
+        const pExpected = revRows.reduce((s,d)=>s+(d.priceKRW||0),0);
         const pGap      = targetKRW - pExpected;
         // GMPP 예상치도 같은 기준 - 시나리오 모드면 SC 전부 + 클릭한 ACT(일반) 중 GMPP만
         const pGmppRows = revRows.filter(d => d.product==='GMPP');
-        const pGmppExp  = pGmppRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pGmppRows);
+        const pGmppExp  = pGmppRows.reduce((s,d)=>s+(d.priceKRW||0),0);
         const pGmppGap  = gmppTargetKRW - pGmppExp;
         // ACT 예상치는 Try & Buy를 뺀 ACT(일반)만
         const pActRows  = revRows.filter(isActNormal);
-        const pAct      = pActRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pActRows);
+        const pAct      = pActRows.reduce((s,d)=>s+(d.priceKRW||0),0);
         const pScRows   = currentQData.filter(isShipConfirm);
-        const pSc       = pScRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pScRows);
+        const pSc       = pScRows.reduce((s,d)=>s+(d.priceKRW||0),0);
 
         const won = (n) => '₩ ' + Math.round(n).toLocaleString();
         const usd = (n) => '$ ' + Math.round(n / activeER).toLocaleString();
@@ -2248,7 +2183,7 @@ img,video{max-width:100%;height:auto}
               const BL = {...L, background:'#eff6ff', color:'#1d4ed8'};
               const BV = {...V, background:'#eff6ff', color:'#1d4ed8', fontWeight:'900'};
               const scGmppRows = currentQData.filter(d => inScenario(d) && d.product==='GMPP');
-              const scGmpp     = scGmppRows.reduce((s,d)=>s+netPrice(d),0);
+              const scGmpp     = scGmppRows.reduce((s,d)=>s+(d.priceKRW || 0),0);
               const scGmppPct  = gmppTargetKRW ? (scGmpp / gmppTargetKRW) * 100 : 0;
               return (
               <div style={{marginBottom:'8px', border:'2px solid #2563eb', borderRadius:'8px', overflow:'hidden'}}>
@@ -2318,9 +2253,6 @@ img,video{max-width:100%;height:auto}
               <div style={{marginTop:'8px', padding:'6px 8px', borderRadius:'6px', background:'#fff7ed', border:'1px dashed #fdba74', fontSize:'10px', fontWeight:'800', color:'#c2410c'}}>
                 시나리오 {scenarioCount}건 반영된 숫자입니다 (저장 안 됨)
               </div>
-            )}
-            {applyCommission && (
-              <div style={{marginTop:'6px', fontSize:'10px', fontWeight:'700', color:'#c2410c'}}>커미션 차감 반영됨</div>
             )}
           </div>
         );
@@ -3157,23 +3089,17 @@ img,video{max-width:100%;height:auto}
               </div>
             ) : !selectedMember && !showMemberPicker ? (() => {
               const combinedRows = salesData.filter(d => d.quarter===selectedQuarter && countsForTotal(d));
-              const combinedCommission = commissionFor(combinedRows);
-              const combinedGrandTotalKRW = combinedRows.reduce((s,d)=>s+(d.priceKRW||0),0) - combinedCommission;
+              const combinedGrandTotalKRW = combinedRows.reduce((s,d)=>s+(d.priceKRW||0),0);
               return (
               <div>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', marginTop:'44px', flexWrap:'wrap', gap:'8px'}}>
                   <h1 className="text-2xl font-extrabold text-gray-800">{selectedQuarter} 통합데이터 <span style={{fontSize:'16px', fontWeight:'bold', color:'#1d4ed8'}}>(총액: ₩{combinedGrandTotalKRW.toLocaleString()})</span> <span style={{fontSize:'14px', fontWeight:'900', color:'#000000', background:'#fef08a', padding:'2px 8px', borderRadius:'4px'}}>Ship Confirm + ACT(일반) · Try &amp; Buy 제외</span>
                     {<span style={{fontSize:'15px', fontWeight:'900', color:'#15803d', marginLeft:'8px'}}>시나리오 ₩{scenarioSumKRW.toLocaleString()} (Target {scenarioTargetPct.toFixed(1)}%)</span>}
-                    {applyCommission && <span style={{fontSize:'14px', fontWeight:'800', color:'#c2410c', marginLeft:'8px'}}>커미션 −₩{combinedCommission.toLocaleString()} 차감됨</span>}
                   </h1>
                   <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                     {[['team','팀별'],['dealer','딜러별']].map(([key,label]) => (
                       <button key={key} onClick={() => setAllTeamsViewMode(key)} style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:'1px solid #cbd5e1', background: allTeamsViewMode===key?'#2563eb':'#fff', color: allTeamsViewMode===key?'#fff':'#334155', cursor:'pointer'}}>{label}</button>
                     ))}
-                    <button onClick={() => setApplyCommission(v => !v)} title="SO가 등록된 건에 한해 외부 커미션(수수료, 부가세 별도)을 매출에서 차감합니다"
-                      style={{padding:'8px 16px', borderRadius:'8px', fontWeight:'bold', border:`1px solid ${applyCommission?'#c2410c':'#cbd5e1'}`, background: applyCommission?'#ea580c':'#fff', color: applyCommission?'#fff':'#334155', cursor:'pointer'}}>
-                      커미션 적용{applyCommission?' ✓':''}
-                    </button>
                     <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} className="p-2 border border-gray-300 rounded font-bold text-sm bg-white">
                       {Object.keys(groupedQuarters).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => <option key={fq} value={fq}>{fq}</option>)}
                     </select>
@@ -3249,7 +3175,7 @@ img,video{max-width:100%;height:auto}
                   const teamMembers = teams[team]||[];
                   const teamRows = salesData.filter(d => d.quarter===selectedQuarter && teamMembers.includes(d.member));
                   const teamRevenueRows = teamRows.filter(countsForTotal);
-                  const teamSumKRW = teamRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamRevenueRows);
+                  const teamSumKRW = teamRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                   // ↓ 원래 '팀별 대시보드'에 있던 팀 요약 (목표 대비 달성률 + 장비별 대수)
                   const teamTargetKRW = teamTargets[team]?.[selectedQuarter] || 0;
                   const teamPer = teamTargetKRW > 0 ? (teamSumKRW/teamTargetKRW)*100 : 0;
@@ -3257,8 +3183,8 @@ img,video{max-width:100%;height:auto}
                   const teamPerColor = teamZone===3?'#047857':teamZone===2?'#1d4ed8':'#475569';
                   const teamScRows  = teamRevenueRows.filter(isShipConfirm);
                   const teamActRows = teamRevenueRows.filter(isACT);
-                  const teamScKRW  = teamScRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamScRows);
-                  const teamActKRW = teamActRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(teamActRows);
+                  const teamScKRW  = teamScRows.reduce((s,d)=>s+(d.priceKRW||0),0);
+                  const teamActKRW = teamActRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                   const teamBarScale = Math.max(teamTargetKRW, teamSumKRW, 1);
                   const teamByProduct = {};
                   teamRevenueRows.forEach(d => { const p = d.product || '미지정'; teamByProduct[p] = (teamByProduct[p]||0) + 1; });
@@ -3340,8 +3266,7 @@ img,video{max-width:100%;height:auto}
                       ) : (teams[team]||[]).map(member => {
                         const rows = salesData.filter(d => d.quarter===selectedQuarter && d.member===member);
                         const revenueRows = rows.filter(countsForTotal);
-                        const mCommission = commissionFor(revenueRows);
-                        const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - mCommission;
+                        const sumKRW = revenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                         const mTarget = currentMemberTargets[member] || 0;
                         const mPer = mTarget > 0 ? (sumKRW/mTarget)*100 : 0;
                         const colKey = `col__${member}`;
@@ -3357,8 +3282,6 @@ img,video{max-width:100%;height:auto}
                               : <colgroup><col/><col style={{width:'56px'}}/><col style={{width:'92px'}}/></colgroup>}
                             <tbody>
                               {rowsArr.map(r => {
-                                const rc = Math.round(rowCommission(r));
-                                const inC = inCommissionContract(r);
                                 const rid = String(r.id);
                                 const picked = pickedRowIds.includes(rid);
                                 const hl = ROW_HILITE[rowColors[rid]];
@@ -3389,8 +3312,6 @@ img,video{max-width:100%;height:auto}
                                         : scAddedTb ? 'Try & Buy - 클릭해서 시나리오에 넣은 건 (다시 클릭하면 빠짐)'
                                         : scAdded ? '클릭해서 시나리오에 넣은 건 (다시 클릭하면 빠짐)'
                                         : scenarioMode ? '클릭하면 합계에 포함 · 드래그하면 담당자/상태 이동'
-                                        : rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
-                                        : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)`
                                         : '클릭하면 색칠 대상으로 선택'}
                                   style={{
                                     borderBottom:'1px solid #f1f5f9',
@@ -3407,7 +3328,7 @@ img,video{max-width:100%;height:auto}
                                       </div>
                                       <div style={{display:'flex', justifyContent:'space-between', gap:'4px', fontSize:'10px'}}>
                                         <span style={{color:'#94a3b8'}} className="truncate">{r.product}</span>
-                                        <span style={{whiteSpace:'nowrap', fontFamily:'monospace', color: inC?'#dc2626':'#1e293b', fontWeight: inC?'bold':'600'}}>₩{netPrice(r).toLocaleString()}</span>
+                                        <span style={{whiteSpace:'nowrap', fontFamily:'monospace', color:'#1e293b', fontWeight:'600'}}>₩{(r.priceKRW || 0).toLocaleString()}</span>
                                       </div>
                                     </td>
                                   ) : (
@@ -3417,7 +3338,7 @@ img,video{max-width:100%;height:auto}
                                     {r.account}
                                   </td>
                                   <td style={{padding:'2px 4px'}} className="truncate" title={`${r.product} ${r.accType||''}`}>{r.product}</td>
-                                  <td style={{padding:'2px 4px 2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}>₩{netPrice(r).toLocaleString()}</td>
+                                  <td style={{padding:'2px 4px 2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW || 0).toLocaleString()}</td>
                                   </>
                                   )}
                                 </tr>
@@ -3464,14 +3385,13 @@ img,video{max-width:100%;height:auto}
                             })()}
                             <div style={{textAlign:'right', marginBottom:'8px', fontSize:'11px', color:'#64748b', fontWeight:'bold'}}>
                               {mTarget > 0 ? `목표 ₩${mTarget.toLocaleString()}` : '목표 미설정'}
-                              {mCommission > 0 && <span style={{color:'#c2410c', marginLeft:'6px'}}>· 커미션 −₩{mCommission.toLocaleString()}</span>}
                             </div>
                             <div style={{fontSize:'11px'}}>
                               {STATUS_BREAKDOWN_ORDER.map(([st,label]) => {
                                 const stRows = rows.filter(d=>d.status===st).sort(sortByContract);
                                 // 시나리오 모드에서는 빈 상태 그룹도 남겨둬야 그 칸으로 끌어다 놓을 수 있다
                                 if (stRows.length===0 && !scenarioMode) return null;
-                                const stSum = stRows.reduce((s,d)=>s+netPrice(d),0);
+                                const stSum = stRows.reduce((s,d)=>s+(d.priceKRW || 0),0);
                                 const pill = STATUS_PILL_STYLE[st];
                                 const excluded = st==='Back up' || st==='Pending';
                                 const dropKey = `st__${member}__${st}`;
@@ -3481,7 +3401,7 @@ img,video{max-width:100%;height:auto}
                                 const isActGroup = st === 'ACT';
                                 const tbRows = isActGroup ? stRows.filter(d => (d.contractType||'일반') === 'Try & Buy') : [];
                                 const normalRows = isActGroup ? stRows.filter(d => (d.contractType||'일반') !== 'Try & Buy') : stRows;
-                                const sumOf = (arr) => arr.reduce((s,d)=>s+netPrice(d),0);
+                                const sumOf = (arr) => arr.reduce((s,d)=>s+(d.priceKRW || 0),0);
 
                                 return (
                                   <div key={st}
@@ -3572,15 +3492,13 @@ img,video{max-width:100%;height:auto}
                           <div className="text-gray-400 text-sm p-4">데이터가 없습니다.</div>
                         ) : dealersInUse.map(dealer => {
                           const dRevenueRows = rows.filter(d => (d.dealerName||'미지정')===dealer && countsForTotal(d)).sort(sortByContract);
-                          const dCommission = commissionFor(dRevenueRows);
-                          const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0) - dCommission;
+                          const sumKRW = dRevenueRows.reduce((s,d)=>s+(d.priceKRW||0),0);
                           return (
                             <div key={dealer} style={{minWidth:0, border:'1px solid #e5e7eb', borderRadius:'8px', padding:'10px',
                                                       breakInside:'avoid', WebkitColumnBreakInside:'avoid', marginBottom:`${gap}px`}}>
                               <div style={{fontWeight:'bold', marginBottom:'6px'}} className="truncate" title={dealer}>{dealer} <span style={{color:'#64748b', fontWeight:'normal', fontSize:'12px'}}>({dRevenueRows.length}건)</span></div>
                               <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'8px', padding:'6px 8px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'6px', color:'#1d4ed8'}}>
                                 합계: ₩{sumKRW.toLocaleString()}
-                                {dCommission > 0 && <div style={{fontSize:'11px', fontWeight:'bold', color:'#c2410c'}}>커미션 −₩{dCommission.toLocaleString()}</div>}
                               </div>
                               {/* 상한은 화면 높이에 맞춰 잡는다. 지금 데이터로는 어느 카드도 여기 안 걸려
                                   전부 펼쳐 보이고, 한 딜러가 화면보다 길어질 만큼 늘어나면 그 카드만 스크롤된다.
@@ -3590,8 +3508,6 @@ img,video{max-width:100%;height:auto}
                                 <colgroup><col/><col style={{width:'54px'}}/><col style={{width:'88px'}}/></colgroup>
                                 <tbody>
                                   {dRevenueRows.map(r => {
-                                    const rc = Math.round(rowCommission(r));
-                                    const inC = inCommissionContract(r);
                                     const rid = String(r.id);
                                     const picked = pickedRowIds.includes(rid);
                                     const hl = ROW_HILITE[rowColors[rid]];
@@ -3606,9 +3522,7 @@ img,video{max-width:100%;height:auto}
                                       {/* accType은 칸이 좁아 툴팁으로 밀었다 */}
                                       <td style={{padding:'2px 4px 2px 0'}} className="truncate" title={`${r.account}${r.accType ? ' · ' + r.accType : ''}`}>{r.account}</td>
                                       <td style={{padding:'2px 4px'}} className="truncate" title={r.product}>{r.product}</td>
-                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap', color: inC?'#dc2626':'inherit', fontWeight: inC?'bold':'normal'}}
-                                        title={rc ? `SO ${r.so} · 원금액 ₩${(r.priceKRW||0).toLocaleString()} · 커미션 −₩${rc.toLocaleString()}`
-                                                  : inC ? `SO ${r.so} 커미션 계약 (차감은 주력 장비 줄에서)` : ''}>₩{netPrice(r).toLocaleString()}</td>
+                                      <td style={{padding:'2px 0', textAlign:'right', whiteSpace:'nowrap'}}>₩{(r.priceKRW || 0).toLocaleString()}</td>
                                     </tr>
                                     );
                                   })}
