@@ -1434,7 +1434,29 @@ img,video{max-width:100%;height:auto}
       };
       const deleteMember = (memberName, e, teamArg) => { if (e && e.stopPropagation) e.stopPropagation(); if (!requireAuth()) return; const tm = teamArgOr(teamArg); if (!window.confirm(`'${memberName}' ${T.confirmDelMember}`)) return; const nt = { ...teams }; nt[tm] = (nt[tm]||[]).filter(m => m!==memberName); setTeams(nt); db.collection("settings").doc("layout").set({ teams: nt }, { merge: true }); };
       // ── 딜러 관리 ─────────────────────────────────────────────────────────
-      const saveDealers = (next) => { setDealers(next); db.collection("settings").doc("layout").set({ dealers: next }, { merge: true }); };
+      // 목록을 통째로 덮어쓰면 안 된다. 오래된 목록이 떠 있는 창에서 순서만 바꿔도, 그 사이
+      // 다른 창·다른 사람이 추가한 딜러가 조용히 사라진다(실제로 '블리비홀딩스'가 이렇게
+      // 없어졌다). 그래서 "이 창이 무엇을 바꿨는지"만 서버의 최신 목록에 다시 적용한다.
+      //   · next에 있는 것 = 이 창이 남기려는 목록(순서까지)
+      //   · removed        = 이 창이 의도적으로 지운 것 (삭제·이름변경의 옛 이름)
+      //   · 그 외에 서버에만 있는 이름 = 그 사이 남이 추가한 것이므로 살려서 뒤에 붙인다
+      const mergeDealerLists = (before, next, server) => {
+        const removed = before.filter(d => !next.includes(d));
+        return [...next, ...server.filter(d => !next.includes(d) && !removed.includes(d))];
+      };
+      const saveDealers = (next) => {
+        const before = dealers;
+        setDealers(next);                 // 화면은 먼저 반영하고
+        const ref = db.collection("settings").doc("layout");
+        return db.runTransaction(tx => tx.get(ref).then(snap => {
+          const data = snap.exists ? (snap.data() || {}) : {};
+          const server = Array.isArray(data.dealers) ? data.dealers : before;
+          const merged = mergeDealerLists(before, next, server);
+          tx.set(ref, { dealers: merged }, { merge: true });
+          return merged;
+        })).then(merged => setDealers(merged))
+          .catch(() => { /* 실패하면 onSnapshot이 서버 값으로 되돌려준다 */ });
+      };
       const dealerUseCount = (name) => salesData.filter(d => (d.dealerName || '') === name).length;
 
       const addDealer = () => {
