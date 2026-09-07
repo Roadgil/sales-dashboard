@@ -387,16 +387,6 @@ Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable'
 const CI={};
 function mkChart(id,cfg){if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
 
-// ── 3-zone ascending achievement family (ported from index.html): zone1 slate <100%,
-// zone2 blue 100-120%, zone3 emerald 120%+ — the only status color vocabulary this page uses. ──
-const ZONE1='#475569', ZONE2='#1d4ed8', ZONE3='#047857';
-function zoneColor(pct){ if(pct===null||pct===undefined) return '#94a3b8'; return pct>=120?ZONE3:pct>=100?ZONE2:ZONE1; }
-function sldBadge(pct,label){
-  if(pct===null||pct===undefined) return `<span class="sld-badge sld-badge--neutral">${label||'-'}</span>`;
-  const ahead=pct>=100;
-  return `<span class="sld-badge ${ahead?'sld-badge--ahead':'sld-badge--behind'}">${label!==undefined?label:pct.toFixed(1)+'%'}</span>`;
-}
-
 function render(salesData,memberTargets,qTargets){
   const SC=['Ship Confirm'];
   const selQs = selectedQuarters();
@@ -427,21 +417,7 @@ function render(salesData,memberTargets,qTargets){
   // ACT·Pending·Back up 합계도 계산해 뒀었는데, Target 달성 현황과 파이프라인 섹션을
   // 빼면서 쓰는 곳이 없어졌다(scData 외에 salesData를 훑던 allQ도 함께 정리).
   const totalKRW=scData.reduce((s,d)=>s+(d.priceKRW||0),0);
-  const qTarget=selQs.reduce((s,q)=>s+(qTargets?.[q]?.target||0),0);
-  const attain=qTarget?(totalKRW/qTarget*100):null;
 
-  // [FIX #분기별 개인목표] memberTargets는 이제 {분기:{멤버:목표}} 구조. index.html에서 아직
-  // 마이그레이션 전이라면(레거시 {멤버:목표} 형태) 예전처럼 모든 분기 동일 값으로 취급한다.
-  const _isLegacyFlatTargets=memberTargets&&Object.values(memberTargets).some(v=>typeof v==='number');
-  const memberTargetFor=(name,q)=>{
-    if(!memberTargets) return 0;
-    if(_isLegacyFlatTargets) return memberTargets[name]||0;
-    return memberTargets?.[q]?.[name]||0;
-  };
-  const getMemberTarget=(name)=>{
-    return selQs.reduce((s,q)=>s+memberTargetFor(name,q),0);
-    return memberTargetFor(name,QUARTER);
-  };
   // 'YYYY-MM' 구간 키. 연도가 여럿일 때 같은 월이 섞이지 않도록 연도까지 본다.
   const getM=dStr=>dStr?String(dStr).slice(0,7):'';
   const mLabels=months.map(monthLabel);
@@ -509,7 +485,7 @@ function render(salesData,memberTargets,qTargets){
   nav.innerHTML=allMs.map((m,i)=>`<button class="tab-btn${i===0?' active':''}" onclick="switchMTab('${m.replace(/'/g,"\\'")}',this)">${m}</button>`).join('');
   cont.innerHTML=allMs.map((m,mi)=>{
     const mD=scData.filter(d=>d.member===m),mT=mD.reduce((s,d)=>s+(d.priceKRW||0),0);
-    const tgt=getMemberTarget(m),aP=tgt?(mT/tgt*100):null,col=MC[mi%MC.length];
+    const col=MC[mi%MC.length];
     const mp={},mc={};mD.forEach(d=>{mp[d.product]=(mp[d.product]||0)+(d.priceKRW||0);mc[d.product]=(mc[d.product]||0)+1;});
     const mpe=Object.entries(mp).sort((a,b)=>b[1]-a[1]),mmp=mpe[0]?.[1]||1;
     const sid=m.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
@@ -519,9 +495,6 @@ function render(salesData,memberTargets,qTargets){
           <div class="klabel">Total (SC)</div>
           <div style="font-weight:800;font-size:22px;color:#1e293b;line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${fmtA(mT)}</div>
           <div style="font-size:11px;color:var(--muted)">${mD.length}${t('건','cs')}</div></div>
-        <div class="sr-kpi"><div class="klabel">${t('달성률','Attainment')}</div>
-          <div style="font-weight:800;font-size:22px;color:${aP!==null?zoneColor(aP):'#1e293b'};line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${aP?aP.toFixed(1)+'%':'-'}</div>
-          <div style="font-size:11px;color:var(--muted)">${tgt?'Target: '+fmtA(tgt):t('목표 미설정','No target')}</div></div>
         <div class="sr-kpi"><div class="klabel">${t('팀 비중','Share')}</div>
           <div style="font-weight:800;font-size:22px;color:#475569;line-height:1;margin-bottom:4px;font-variant-numeric:tabular-nums;font-family:var(--num-mono)">${totalKRW?(mT/totalKRW*100).toFixed(1)+'%':'-'}</div>
           <div style="font-size:11px;color:var(--muted)">${t('전체 SC 대비','of total SC')}</div></div>
