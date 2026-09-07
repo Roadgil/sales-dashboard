@@ -346,10 +346,9 @@ function sldBadge(pct,label){
 
 function render(salesData,memberTargets,qTargets){
   const SC=['Ship Confirm'];
-  let scData,allQ,months;
+  let scData,months;
   if(_viewMode==='year'){
     scData=salesData.filter(d=>d.quarter&&d.quarter.startsWith(YR+' ')&&SC.includes(d.status));
-    allQ=salesData.filter(d=>d.quarter&&d.quarter.startsWith(YR+' '));
     months=[1,2,3,4,5,6,7,8,9,10,11,12];
     const grid=document.getElementById('qbreakGrid');
     if(grid){grid.innerHTML=['Q1','Q2','Q3','Q4'].map(q=>{
@@ -364,27 +363,23 @@ function render(salesData,memberTargets,qTargets){
   } else if(_viewMode==='h1'){
     const h1Qs=[`${YR} Q1`,`${YR} Q2`];
     scData=salesData.filter(d=>h1Qs.includes(d.quarter)&&SC.includes(d.status));
-    allQ=salesData.filter(d=>h1Qs.includes(d.quarter));
     months=[1,2,3,4,5,6];
     document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 상반기(1~2분기) 합산 (SC만)`,`Revenue basis: ${YR} H1 (Q1+Q2, SC only)`);
   } else if(_viewMode==='h2'){
     const h2Qs=[`${YR} Q3`,`${YR} Q4`];
     scData=salesData.filter(d=>h2Qs.includes(d.quarter)&&SC.includes(d.status));
-    allQ=salesData.filter(d=>h2Qs.includes(d.quarter));
     months=[7,8,9,10,11,12];
     document.getElementById('dataNoteBar').textContent=t(`집계 기준: ${YR} 하반기(3~4분기) 합산 (SC만)`,`Revenue basis: ${YR} H2 (Q3+Q4, SC only)`);
   } else {
     scData=salesData.filter(d=>d.quarter===QUARTER&&SC.includes(d.status));
-    allQ=salesData.filter(d=>d.quarter===QUARTER);
     months=Q_MONTHS;
     document.getElementById('dataNoteBar').textContent=t('집계 기준: Ship Confirm만 매출 반영 (ACT · Pending · Back up 제외)','Revenue basis: Ship Confirm only');
   }
 
-  const pendData=allQ.filter(d=>d.status==='Pending');
-  const actData=allQ.filter(d=>d.status==='ACT');
+  // 이 보고서는 분기가 끝난 뒤 결산으로 보는 화면이라 Ship Confirm만 집계한다.
+  // ACT·Pending·Back up 합계도 계산해 뒀었는데, Target 달성 현황과 파이프라인 섹션을
+  // 빼면서 쓰는 곳이 없어졌다(scData 외에 salesData를 훑던 allQ도 함께 정리).
   const totalKRW=scData.reduce((s,d)=>s+(d.priceKRW||0),0);
-  const pendKRW=pendData.reduce((s,d)=>s+(d.priceKRW||0),0);
-  const actKRW=actData.reduce((s,d)=>s+(d.priceKRW||0),0);
   const qTgtKey=(_viewMode==='year'||_viewMode==='h1'||_viewMode==='h2')?null:QUARTER;
   let qTarget=qTgtKey?(qTargets?.[qTgtKey]?.target||0):0;
   if(_viewMode==='h1') qTarget=(qTargets?.[`${YR} Q1`]?.target||0)+(qTargets?.[`${YR} Q2`]?.target||0);
