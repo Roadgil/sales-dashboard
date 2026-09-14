@@ -2336,7 +2336,7 @@ img,video{max-width:100%;height:auto}
                     {/* GMPP 예상치는 KPI 행에서 빼고 여기 시나리오 기준으로만 둔다.
                         퍼센트는 Target 대비 / Incentive Target 대비와 같은 급으로 별도 행. */}
                     <tr>
-                      <td style={BL}>GMPP<div style={{fontSize:'9px', color:'#64748b'}}>SC + 선택 {scGmppRows.length}건</div></td>
+                      <td style={BL}>GMPP<div style={{fontSize:'9px', color:'#64748b'}} title="Ship Confirm 전부 + 클릭해서 더한 ACT 중, 제품이 GMPP인 줄 수의 합계입니다">SC + 클릭 = {scGmppRows.length}건</div></td>
                       <td style={{...BV, fontWeight:'700'}}>
                         <div style={{whiteSpace:'nowrap'}}>{won(scGmpp)}</div>
                         <div style={{textAlign:'right', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>{usd(scGmpp)}</div>
@@ -3337,7 +3337,7 @@ img,video{max-width:100%;height:auto}
                             <div style={{fontWeight:'bold', padding:'6px 12px', background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:'6px', color:'#15803d'}}>
                               시나리오: ₩{tScen.toLocaleString()}
                               {teamTargetKRW > 0 && <span style={{marginLeft:'6px', fontWeight:'900'}}>({tScenPer.toFixed(1)}%)</span>}
-                              <span style={{marginLeft:'6px', fontSize:'11px', fontWeight:'700', color:'#16a34a'}}>SC + 선택 {tPicks}건</span>
+                              <span style={{marginLeft:'6px', fontSize:'11px', fontWeight:'700', color:'#16a34a'}} title="Ship Confirm은 클릭 없이 전부 포함되고, 여기 숫자는 그 위에 클릭해서 더한 ACT 건수입니다">SC 전부 + 클릭 {tPicks}건</span>
                             </div>
                           );
                         })()}
@@ -3503,7 +3503,7 @@ img,video{max-width:100%;height:auto}
                               return (
                                 <div style={{textAlign:'right', fontWeight:'bold', marginBottom:'4px', padding:'5px 8px', background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:'6px', color:'#15803d', fontSize:'12px'}}>
                                   시나리오: ₩{mScen.toLocaleString()}{mTarget > 0 && ` (${mScenPer.toFixed(1)}%)`}
-                                  <div style={{fontSize:'10px', fontWeight:'700', color:'#16a34a'}}>SC + 선택 {mPicks}건</div>
+                                  <div style={{fontSize:'10px', fontWeight:'700', color:'#16a34a'}} title="Ship Confirm은 클릭 없이 전부 포함되고, 여기 숫자는 그 위에 클릭해서 더한 ACT 건수입니다">SC 전부 + 클릭 {mPicks}건</div>
                                 </div>
                               );
                             })()}
