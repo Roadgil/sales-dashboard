@@ -438,6 +438,18 @@ img,video{max-width:100%;height:auto}
     function isActNormal(d) { return isACT(d) && !isTryBuy(d); }
     // 통합데이터의 기본 집계 기준: Ship Confirm + ACT(일반)
     function isExpected(d)  { return isShipConfirm(d) || isActNormal(d); }
+    // GMPP Target 대비 집계에 들어가는 줄 - 핸드피스 금액은 GMPP로 흡수한다(2026-09-14 사용자 확인).
+    // 버킷은 따로 남겨 두어 무슨 부속이 팔렸는지는 목록·제품별 표에서 그대로 보이고,
+    // GMPP 예상치/GAP/시나리오 퍼센트에서만 GMPP와 함께 센다.
+    // (2026-09-14 실측: 밴스의원 부산/울산 AIO(ACC) HP 각 5,463,636원이 엑셀 납품처 FCST의
+    //  GMPP 예상치에는 들어 있는데 대시보드 GMPP에서는 빠져 있었다.)
+    //
+    // 핸드피스가 GMPP 것만 있는 게 아니라서 플랫폼별로 나눠 둔다 - HP(GMPP)는 GMPP에 합산,
+    // HP(GMP)는 GMP 부속이라 GMPP 집계에 넣지 않는다(GMP는 GMPP와 다른 제품).
+    // 'Hand Piece'는 플랫폼을 안 나누던 시절의 예전 문서용이고, 그때 들어온 건 전부 GMPP
+    // 핸드피스였으므로 GMPP로 센다. 새로 입력할 때는 HP(GMPP)/HP(GMP) 중에서 고른다.
+    const GMPP_REVENUE_PRODUCTS = ['GMPP', 'HP(GMPP)', 'Hand Piece'];
+    function isGmppRevenue(d) { return GMPP_REVENUE_PRODUCTS.includes(String(d.product || '').trim()); }
     // 계약 식별자 - SO가 있으면 SO가 곧 계약이고, 없으면(오라클 오더 전) 같은 분기·같은 병원을
     // 한 계약으로 본다. countDeals()에서 계약을 묶는 데만 쓴다.
     function contractKey(d) {
@@ -447,7 +459,7 @@ img,video{max-width:100%;height:auto}
     // 건수를 셀 때 본체로 치지 않는 제품 - 본체에 얹어 파는 부속이다.
     // 매출에서는 Cryo7/Hand Piece도 각자 제품 버킷을 갖지만(forecast-sync의 SYSTEM_PATTERNS),
     // "몇 건 팔았나"에서는 본체가 아니므로 따로 세지 않는다.
-    const ADDON_PRODUCTS = ['Cryo7', 'Hand Piece'];
+    const ADDON_PRODUCTS = ['Cryo7', 'Hand Piece', 'HP(GMPP)', 'HP(GMP)'];
     const isAddonProduct = (d) => ADDON_PRODUCTS.includes(String(d.product || '').trim());
     // "몇 건 팔았나" - 줄 수가 아니라 계약 안의 본체 종류 수를 센다.
     //   GMPP + Cryo7 (한 계약) -> Cryo7은 부속이라 1건
@@ -1840,7 +1852,7 @@ img,video{max-width:100%;height:auto}
       const expectedUSD    = expectedKRW / activeER;
       const percent        = targetKRW ? (expectedKRW / targetKRW) * 100 : 0;
       const gapKRW         = targetKRW - expectedKRW;
-      const gmppExpectedKRW = expectedData.filter(d => d.product==='GMPP').reduce((s, d) => s + (d.priceKRW||0), 0);
+      const gmppExpectedKRW = expectedData.filter(isGmppRevenue).reduce((s, d) => s + (d.priceKRW||0), 0);
       const gmppGapKRW      = gmppTargetKRW - gmppExpectedKRW;
       const gmppTargetUSD   = gmppTargetKRW / activeER;
       const gapUSD          = gapKRW / activeER;
@@ -1869,7 +1881,7 @@ img,video{max-width:100%;height:auto}
       // SC 기준 집계 데이터
       const scData = currentQData.filter(d => d.status === 'Ship Confirm');
 
-      const allProducts = ['GMPP','Picoway','Cryo7','VBP','Hand Piece','Nordlys','Nordlys Mini','GMP'];
+      const allProducts = ['GMPP','HP(GMPP)','Picoway','Cryo7','VBP','Nordlys','Nordlys Mini','GMP','HP(GMP)','Hand Piece'];
       const productStats = {};
       allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
       scData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
@@ -2198,7 +2210,7 @@ img,video{max-width:100%;height:auto}
         const pExpected = revRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(revRows);
         const pGap      = targetKRW - pExpected;
         // GMPP 예상치도 같은 기준 - 시나리오 모드면 SC 전부 + 클릭한 ACT(일반) 중 GMPP만
-        const pGmppRows = revRows.filter(d => d.product==='GMPP');
+        const pGmppRows = revRows.filter(isGmppRevenue);
         const pGmppExp  = pGmppRows.reduce((s,d)=>s+(d.priceKRW||0),0) - commissionFor(pGmppRows);
         const pGmppGap  = gmppTargetKRW - pGmppExp;
         // ACT 예상치는 Try & Buy를 뺀 ACT(일반)만
@@ -2292,7 +2304,7 @@ img,video{max-width:100%;height:auto}
             {(() => {
               const BL = {...L, background:'#eff6ff', color:'#1d4ed8'};
               const BV = {...V, background:'#eff6ff', color:'#1d4ed8', fontWeight:'900'};
-              const scGmppRows = currentQData.filter(d => inScenario(d) && d.product==='GMPP');
+              const scGmppRows = currentQData.filter(d => inScenario(d) && isGmppRevenue(d));
               const scGmpp     = scGmppRows.reduce((s,d)=>s+netPrice(d),0);
               const scGmppPct  = gmppTargetKRW ? (scGmpp / gmppTargetKRW) * 100 : 0;
               return (
@@ -3990,7 +4002,7 @@ img,video{max-width:100%;height:auto}
                           </select></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Hand Piece">Hand Piece (구)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                             <div className="flex gap-2">
@@ -4092,7 +4104,7 @@ img,video{max-width:100%;height:auto}
                       </select></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="Hand Piece">Hand Piece</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Hand Piece">Hand Piece (구)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                         <div className="flex gap-2">

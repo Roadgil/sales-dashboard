@@ -53,19 +53,45 @@ def compute_acc_type(group):
 #
 # 순서가 중요함: 더 구체적인 패턴(Nordlys Mini)을 먼저 검사해서 일반 패턴(Nordlys)이 가로채지 않게 함.
 # Picoway를 Hand Piece보다 먼저 둔 것도 같은 이유 - 피코웨이 핸드피스 킷이 Hand Piece로 새지 않게 함.
-# "GMP"는 "GMPP"의 부분 문자열이라 반드시 단어 경계(\b)로 매칭 - 그래야 GMPP 라인이 GMP로 오인되지 않음.
+# GMPP도 같은 이유로 Hand Piece 앞에 둔다 - "GMPP AIO ACC Hand Piece"처럼 이름에 GMPP가 박힌
+# 부속은 Hand Piece가 아니라 GMPP로 잡는 게 정확하다.
+#
+# 핸드피스 금액 자체는 대시보드에서 GMPP에 합산한다(2026-09-14 사용자 확인). 버킷은 Hand Piece로
+# 남겨서 어떤 부속이 팔렸는지는 보이게 두고, GMPP Target 대비 집계에서만 GMPP와 함께 센다
+# (index.html의 isGmppRevenue 참조). 예전에는 Hand Piece가 GMPP 집계에서 통째로 빠져 있었다
+# (2026-09-14 실측: 밴스의원 부산/울산 AIO(ACC) HP 각 5,463,636원이 엑셀 납품처 FCST에서는
+# GMPP 예상치에 들어 있는데 대시보드 GMPP에서는 빠져 있었다).
+#
+# GMP(GentleMax Pro)는 GMPP와 다른 제품이라 절대 GMPP로 합치지 않는다(2026-09-14 사용자 확인).
+# 그래서 GMP를 GMPP보다 먼저 검사하고, MAIN_PRODUCT_CODES보다도 우선한다(split_products 참조) -
+# 같은 계약이 Product Code로는 GMPP, 제품명으로는 GMP로 갈리면 GMPP 매출이 흔들리기 때문이다
+# (실측: 25/9/1_올리브피부과 부산 127,294,182원 - 엑셀은 GMP인데 대시보드에서 GMPP로 잡혀 있었다).
 #
 # 실제 Salesforce 리포트의 제품명은 약어가 아니라 풀네임으로 들어오므로 별칭을 같이 매칭한다
 # (2026-08-27 확인): VBP는 "VBEAM PERFECTA VT 9914-0300 with COT",
 # GMP는 "GENTLEMAX PRO LASER SYSTEM W/ DCD" 형태로 들어와서, 약어만으로는 한 건도 안 잡혔었다.
+#
+# GMP 정규식에 plus 제외 lookahead가 필요한 이유: "GENTLEMAX PRO PLUS"가 "GENTLEMAX PRO"를
+# 문자열로 포함한다. 이게 없으면 GMPP 본체 라인이 GMP로 오인된다.
+GMP_CORE = r"(?:\bgentlemax\s+pro\b(?!\s*plus)|\bgmp\b)"
+GMP_RE = GMP_CORE
+GMPP_CORE = r"(?:\bgmpp\b|\bgentlemax\s+pro\s+plus\b)"
+HP_CORE = r"(?:\bhand\s?piece\b)"
+
 SYSTEM_PATTERNS = [
     ("Cryo7", r"\bcryo\s?7\b"),
     ("Nordlys Mini", r"\bnordlys\s+mini\b"),
     ("Nordlys", r"\bnordlys\b"),
     ("Picoway", r"\bpicoway\b"),
     ("VBP", r"\bvbeam\b|\bvbp\b"),
-    ("Hand Piece", r"\bhand\s?piece\b"),
-    ("GMP", r"\bgentlemax\s+pro\b|\bgmp\b"),
+    # 핸드피스는 플랫폼별로 나눈다 - HP(GMPP)만 GMPP 매출에 합산되고 HP(GMP)는 안 된다.
+    # 이름에 GMPP/GMP가 같이 박힌 라인을 먼저 걸러내고, 플랫폼을 알 수 없는 나머지만
+    # 아래 "Hand Piece"로 떨어뜨린다(대시보드에서 예전 문서와 같은 취급 = GMPP에 합산).
+    ("HP(GMPP)", GMPP_CORE + r".*" + HP_CORE + r"|" + HP_CORE + r".*" + GMPP_CORE),
+    ("HP(GMP)", GMP_CORE + r".*" + HP_CORE + r"|" + HP_CORE + r".*" + GMP_CORE),
+    ("GMP", GMP_RE),
+    ("GMPP", GMPP_CORE),
+    ("Hand Piece", HP_CORE),
 ]
 
 
@@ -186,9 +212,12 @@ def split_into_product_buckets(group):
     5. 그래도 안 잡힌 라인(운임 FREIGHT CHARGE ONLY 등 계약 공통 비용)은 대표 제품에 귀속 -
        그래야 계약 총액이 어느 한 제품에 온전히 잡히고 금액이 새지 않는다.
     """
-    main_mask = group["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())
     names = group["Product Name"].astype(str).str.lower()
     codes = group["Product Code"].astype(str).str.strip()
+    # GMP(GentleMax Pro)는 GMPP가 아니다. Product Code가 MAIN_PRODUCT_CODES에 있어도 제품명이
+    # GMP면 GMPP 메인 라인으로 치지 않고 아래 SYSTEM_PATTERNS의 GMP 버킷으로 보낸다 - 이름이
+    # 코드보다 우선. 이 가드가 없으면 GMP 시스템이 DCD/ACC 코드를 달고 들어올 때 GMPP 매출로 섞인다.
+    main_mask = codes.isin(MAIN_PRODUCT_CODES.keys()) & ~names.str.contains(GMP_RE, regex=True)
 
     # GMPP 메인 라인은 "이미 가져간" 것으로, 판매 종료 제품은 "버린" 것으로 두고 시작한다.
     # 둘 다 taken에 넣어야 뒤의 패턴 검사와 leftover 귀속에서 모두 빠진다.

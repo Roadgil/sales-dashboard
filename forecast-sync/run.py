@@ -3,7 +3,7 @@
 1) state.py로 이번 실행의 Time Frame 상한(new_to) 계산 - 처음 2028-12-31, 이후 +30일씩
 2) Selenium으로 Salesforce 리포트 Time Frame을 From=고정, To=new_to 로 설정 후 export
 3) 다운로드된 파일을 파싱해서 Close Date가 From 고정값 ~ new_to 사이인 Opportunity 전부
-   (Stage 무관)를 제품 버킷(GMPP/Picoway/Cryo7/VBP/Hand Piece/Nordlys/Nordlys Mini/GMP)별로
+   (Stage 무관)를 제품 버킷(GMPP/Picoway/Cryo7/VBP/Nordlys/Nordlys Mini/GMP)별로
    쪼개 후보로 만듦 - 매번 전체 구간을 다시 훑는다
    (이미 있는 후보/이미 sales로 넘어간 건은 아래 4)/5)에서 각각 안전하게 처리되므로 괜찮음)
 4) Firestore sf_candidates 컬렉션에 반영 - 신규 후보는 생성, 아직 안 쓴(used=false) 기존
