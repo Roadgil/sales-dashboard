@@ -1070,6 +1070,46 @@ img,video{max-width:100%;height:auto}
           })
           .catch(e => showToast((lang==='ko' ? '이동 실패: ' : 'Move failed: ') + e.message, 'error'));
       };
+      // ── 분기 이동 (전체 일괄) ── Try & Buy / Pending / Back up 테이블에서 필터된 행 전체를 한번에 이동
+      const [showBulkQuarterMoveModal, setShowBulkQuarterMoveModal] = useState(false);
+      const [bulkQuarterMoveRows, setBulkQuarterMoveRows]           = useState([]);
+      const [bulkQuarterMoveLabel, setBulkQuarterMoveLabel]         = useState('');
+      const [bulkQuarterMoveTarget, setBulkQuarterMoveTarget]       = useState('');
+      const handleBulkQuarterMoveOpen = (rows, label) => {
+        if (!requireAuth()) return;
+        if (!rows || rows.length === 0) return;
+        setBulkQuarterMoveRows(rows);
+        setBulkQuarterMoveLabel(label);
+        setBulkQuarterMoveTarget(rows[0].quarter);
+        setShowBulkQuarterMoveModal(true);
+      };
+      const handleBulkQuarterMoveConfirm = () => {
+        if (!bulkQuarterMoveTarget || bulkQuarterMoveRows.length === 0) return;
+        const rows = bulkQuarterMoveRows.filter(r => r.quarter !== bulkQuarterMoveTarget);
+        if (rows.length === 0) { setShowBulkQuarterMoveModal(false); setBulkQuarterMoveRows([]); return; }
+        if (!quarters.includes(bulkQuarterMoveTarget)) {
+          const nq = [...quarters, bulkQuarterMoveTarget].sort();
+          setQuarters(nq);
+          db.collection("settings").doc("layout").set({ quarters: nq }, { merge: true });
+        }
+        const batch = db.batch();
+        rows.forEach(r => batch.update(db.collection("sales").doc(String(r.id)), { quarter: bulkQuarterMoveTarget }));
+        batch.commit().then(() => {
+          rows.forEach(before => {
+            db.collection("audit_logs").add({
+              action: 'edit', actor: (auth.currentUser?.email || ''), timestamp: new Date().toISOString(),
+              member: before.member, team: before.team, quarter: bulkQuarterMoveTarget, account: before.account,
+              before: before, after: { ...before, quarter: bulkQuarterMoveTarget },
+            }).catch(()=>{});
+          });
+          showToast(
+            lang==='ko' ? `${bulkQuarterMoveLabel} ${rows.length}건 → ${bulkQuarterMoveTarget}으로 이동됐습니다 ✓`
+                        : `${bulkQuarterMoveLabel} moved: ${rows.length} → ${bulkQuarterMoveTarget} ✓`,
+            'success'
+          );
+          setShowBulkQuarterMoveModal(false); setBulkQuarterMoveRows([]);
+        }).catch(e => showToast((lang==='ko' ? '일괄 이동 실패: ' : 'Bulk move failed: ') + e.message, 'error'));
+      };
       const requestScAction = (type, data) => {
         if (!requireScAdmin()) return;
         if (type === 'edit')   handleEdit(data);
@@ -2749,6 +2789,37 @@ img,video{max-width:100%;height:auto}
             </div>
           )}
 
+          {/* 분기 이동 모달 (전체 일괄) */}
+          {showBulkQuarterMoveModal && (
+            <div style={{position:'fixed',inset:0,zIndex:9400,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}
+              onMouseDown={(e)=>{ e.currentTarget.dataset.downOnBackdrop = (e.target===e.currentTarget) ? '1' : '0'; }}
+              onClick={(e)=>{ if(e.target===e.currentTarget && e.currentTarget.dataset.downOnBackdrop==='1'){ setShowBulkQuarterMoveModal(false); setBulkQuarterMoveRows([]); } }}>
+              <div style={{background:'#fff',borderRadius:'16px',padding:'28px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',width:'100%',maxWidth:'360px'}}>
+                <div style={{fontSize:'28px',textAlign:'center',marginBottom:'8px'}}>📦</div>
+                <h3 style={{fontWeight:'800',fontSize:'17px',color:'#1e293b',marginBottom:'12px',textAlign:'center'}}>{lang==='ko' ? '전체 분기 이동' : 'Move All'}</h3>
+                <div style={{background:'#f8fafc',padding:'10px 14px',borderRadius:'10px',marginBottom:'16px',textAlign:'center'}}>
+                  <div style={{fontWeight:'700',color:'#1e293b',fontSize:'14px'}}>{bulkQuarterMoveLabel}</div>
+                  <div style={{color:'#94a3b8',fontSize:'12px',marginTop:'2px'}}>{bulkQuarterMoveRows.length}{lang==='ko' ? '건' : ' items'}</div>
+                </div>
+                <div style={{marginBottom:'8px',fontSize:'12px',fontWeight:'700',color:'#475569'}}>{lang==='ko' ? '이동할 분기 선택' : 'Target quarter'}</div>
+                <select value={bulkQuarterMoveTarget} onChange={e => setBulkQuarterMoveTarget(e.target.value)}
+                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'2px solid #7dd3fc',fontSize:'15px',fontWeight:'700',color:'#1e293b',marginBottom:'20px',outline:'none',boxSizing:'border-box'}}>
+                  {[...new Set([...Object.keys(groupedQuarters), selectedQuarter.split(' ')[0]])].filter(Boolean).sort().flatMap(y => ['Q1','Q2','Q3','Q4'].map(q => `${y} ${q}`)).map(fq => (
+                    <option key={fq} value={fq}>{fq}{fq===selectedQuarter ? (lang==='ko' ? ' (현재)' : ' (current)') : ''}</option>
+                  ))}
+                </select>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <button onClick={() => { setShowBulkQuarterMoveModal(false); setBulkQuarterMoveRows([]); }}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
+                  <button onClick={handleBulkQuarterMoveConfirm} disabled={!bulkQuarterMoveTarget}
+                    style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:!bulkQuarterMoveTarget?'#bae6fd':'#0369a1',color:'white',fontWeight:'800',cursor:!bulkQuarterMoveTarget?'default':'pointer',fontSize:'14px'}}>
+                    {lang==='ko' ? `${bulkQuarterMoveRows.length}건 이동` : `Move ${bulkQuarterMoveRows.length}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ER 환율 편집 모달 */}
           {showErModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
@@ -4169,7 +4240,15 @@ img,video{max-width:100%;height:auto}
                       <div className="mt-10">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
                           <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-800">{T.deliveryStatus} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('ACT')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          <div className="flex gap-2 flex-wrap">
+                            {(() => { const tbRows = filteredRows.filter(isTryBuy); return tbRows.length > 0 && (
+                              <button onClick={()=>handleBulkQuarterMoveOpen(tbRows, lang==='ko' ? 'Try & Buy 전체' : 'All Try & Buy')}
+                                className="text-xs font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-200 transition w-fit">
+                                📅 {lang==='ko' ? `Try&Buy 전체 이동 (${tbRows.length})` : `Move All Try&Buy (${tbRows.length})`}
+                              </button>
+                            );})()}
+                            {hasFilter && <button onClick={()=>clearMemberTableFilters('ACT')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          </div>
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-blue-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
@@ -4192,7 +4271,15 @@ img,video{max-width:100%;height:auto}
                       <div className="mt-10">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
                           <h4 className="text-lg md:text-xl font-bold flex items-center text-blue-700">{T.pendingList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Pending')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          <div className="flex gap-2 flex-wrap">
+                            {filteredRows.length > 0 && (
+                              <button onClick={()=>handleBulkQuarterMoveOpen(filteredRows, lang==='ko' ? 'Pending 전체' : 'All Pending')}
+                                className="text-xs font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-200 transition w-fit">
+                                📅 {lang==='ko' ? `전체 이동 (${filteredRows.length})` : `Move All (${filteredRows.length})`}
+                              </button>
+                            )}
+                            {hasFilter && <button onClick={()=>clearMemberTableFilters('Pending')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          </div>
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-blue-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
@@ -4215,7 +4302,15 @@ img,video{max-width:100%;height:auto}
                       <div className="mt-10">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
                           <h4 className="text-lg md:text-xl font-bold flex items-center text-orange-600">{T.backupList} <span className="text-sm font-normal text-gray-500 ml-2">{hasFilter ? `(${filteredRows.length} / ${rawRows.length}${T.cases})` : ''}</span></h4>
-                          {hasFilter && <button onClick={()=>clearMemberTableFilters('Backup')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          <div className="flex gap-2 flex-wrap">
+                            {filteredRows.length > 0 && (
+                              <button onClick={()=>handleBulkQuarterMoveOpen(filteredRows, lang==='ko' ? 'Back up 전체' : 'All Back up')}
+                                className="text-xs font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-200 transition w-fit">
+                                📅 {lang==='ko' ? `전체 이동 (${filteredRows.length})` : `Move All (${filteredRows.length})`}
+                              </button>
+                            )}
+                            {hasFilter && <button onClick={()=>clearMemberTableFilters('Backup')} className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition w-fit">🗑 {lang==='ko'?'필터 초기화':'Clear Filters'}</button>}
+                          </div>
                         </div>
                         <div className="overflow-x-auto rounded-lg border border-orange-200">
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
