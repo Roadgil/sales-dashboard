@@ -2264,6 +2264,20 @@ img,video{max-width:100%;height:auto}
         const won = (n) => '₩ ' + Math.round(n).toLocaleString();
         const usd = (n) => '$ ' + Math.round(n / activeER).toLocaleString();
 
+        // 장비별 대수 - 줄 하나가 장비 한 대다(계약 단위로 묶지 않는다).
+        // 기준은 이 패널의 다른 값들과 같은 SC + ACT(일반). 시나리오 클릭에 따라
+        // 흔들리면 '총 대수'로 읽기 어려워서 시나리오 기준은 쓰지 않는다.
+        const unitCount = {};
+        revRows.forEach(d => {
+          const k = String(d.product || '').trim() || '미지정';
+          unitCount[k] = (unitCount[k] || 0) + 1;
+        });
+        // allProducts 순서를 따르고, 목록에 없는 제품명이 데이터에 있으면 뒤에 붙인다
+        const unitRows = [...allProducts, ...Object.keys(unitCount).filter(k => !allProducts.includes(k))]
+          .filter(k => unitCount[k] > 0)
+          .map(k => [k, unitCount[k]]);
+        const unitTotal = unitRows.reduce((s2, [, n]) => s2 + n, 0);
+
         // 라벨은 줄바꿈을 허용한다 (nowrap이면 "Incentive Target" 같은 긴 라벨이 칸을 넘친다)
         const L = { padding:'5px 6px', border:'1px solid #cbd5e1', fontSize:'11px', fontWeight:'700', color:'#334155', background:'#f1f5f9', lineHeight:'1.25', wordBreak:'keep-all' };
         const V = { padding:'5px 6px', border:'1px solid #cbd5e1', fontSize:'11px', fontWeight:'700', textAlign:'right', fontFamily:'monospace' };
@@ -2412,6 +2426,31 @@ img,video{max-width:100%;height:auto}
                 {cardOrder.filter(id => KPI[id]).map(id => KPI[id]())}
               </tbody>
             </table>
+
+            {/* 장비별 대수 - 금액만 보다가 "몇 대 팔았나"를 따로 세지 않아도 되게 */}
+            <div style={{marginTop:'10px'}}>
+              <div style={{fontSize:'10px', fontWeight:'800', color:'#334155', marginBottom:'3px'}}>
+                장비별 대수
+                <span style={{fontWeight:'700', color:'#94a3b8', marginLeft:'4px'}}>SC + ACT(일반)</span>
+              </div>
+              <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
+                <colgroup><col style={{width:'47%'}}/><col/></colgroup>
+                <tbody>
+                  {unitRows.length === 0 ? (
+                    <tr><td colSpan="2" style={{...L, textAlign:'center', color:'#94a3b8'}}>데이터 없음</td></tr>
+                  ) : unitRows.map(([prod, n]) => (
+                    <tr key={prod}>
+                      <td style={L}>{prod}</td>
+                      <td style={V}>{n}대</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{...L, background:'#e2e8f0', fontWeight:'800'}}>합계</td>
+                    <td style={{...V, background:'#e2e8f0', fontWeight:'800', color:'#1d4ed8'}}>{unitTotal}대</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             {scenarioCount > 0 && (
               <div style={{marginTop:'8px', padding:'6px 8px', borderRadius:'6px', background:'#fff7ed', border:'1px dashed #fdba74', fontSize:'10px', fontWeight:'800', color:'#c2410c'}}>
