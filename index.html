@@ -1626,8 +1626,16 @@ img,video{max-width:100%;height:auto}
       const exportToCSV = (mode = 'current') => {
         let data = mode === 'all' ? rawSalesData : rawSalesData.filter(d => d.quarter === selectedQuarter);
         if (data.length === 0) return alert(T.noExportData);
-        const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','시/도','시/군/구','체인구분','병원구분','Product','Acc Type','Price(KRW)','Price(USD)','Ship Confirm'];
-        const rows = data.map(d => [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,(d.deliveryDate || (d.deliveryTBD ? '미정' : '')),d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.chainType||'',d.clinicType||'',d.product,d.accType,d.priceKRW,d.priceUSD,d.shipConfirm||'']);
+        // 커미션 3열은 화면 토글과 무관하게 항상 실제 값이 들어간다.
+        // 커미션은 계약(SO) 단위로 한 번 나가므로 GMPP 줄에만 금액이 찍히고,
+        // 같은 계약의 Cryo7 줄은 '계약에 커미션 있음'만 Y로 표시된다.
+        const headers = ['Quarter','Team','Member','Status','Contract Type','Contract Date','Delivery Date','Sales Type','Dealer Name','SO','Account','시/도','시/군/구','체인구분','병원구분','Product','Acc Type','Price(KRW)','Price(USD)','커미션(KRW)','커미션 차감 후(KRW)','커미션 계약','Ship Confirm'];
+        const rows = data.map(d => {
+          const rc = Math.round(rowCommissionRaw(d));
+          const so = String(d.so || '').trim();
+          const inC = isExpected(d) && so && commissions[so] ? 'Y' : '';
+          return [d.quarter,d.team,d.member,d.status,d.contractType,d.contractDate,(d.deliveryDate || (d.deliveryTBD ? '미정' : '')),d.salesType,d.dealerName,d.so,d.account,d.sido||'',d.sigungu||'',d.chainType||'',d.clinicType||'',d.product,d.accType,d.priceKRW,d.priceUSD,rc||0,Math.round((d.priceKRW||0)-rc),inC,d.shipConfirm||''];
+        });
         const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','))].join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -1997,6 +2005,14 @@ img,video{max-width:100%;height:auto}
 
       // 화면 표기용 - 커미션 차감 후 금액
       const netPrice = (row) => Math.round((row.priceKRW || 0) - rowCommission(row));
+      // CSV용 - 화면의 '커미션 적용' 토글과 무관하게 항상 실제 커미션을 내보낸다.
+      // rowCommission은 토글이 꺼져 있으면 0을 주므로 파일에 그대로 쓰면 안 된다.
+      const rowCommissionRaw = (row) => {
+        if (!isExpected(row)) return 0;
+        const so = String(row.so || '').trim();
+        if (!so) return 0;
+        return commissionBearerId[so] === row.id ? (commissions[so] || 0) : 0;
+      };
       const commissionFor = (rows) => Math.round(rows.reduce((s, r) => s + rowCommission(r), 0));
 
       // ── 집계 기준 ───────────────────────────────────────────────────────────
