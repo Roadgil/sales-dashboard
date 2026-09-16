@@ -1661,6 +1661,27 @@ img,video{max-width:100%;height:auto}
       // 장비별 대수 표에만 쓰는 기준. SC·ACT를 따로 보거나 같이 볼 수 있게 한다.
       // 패널의 금액 값들은 이 토글과 무관하게 항상 SC + ACT(일반)이다.
       const [unitBasis, setUnitBasis] = useState({ sc: true, act: true });
+      // 요약 패널 폭. 기준 310px에서 넓힐수록 내용도 같이 커진다(zoom).
+      // 폭만 넓히면 글씨는 그대로라 읽기 편해지지 않아서 배율로 묶었다.
+      const PANEL_W0 = 310, PANEL_MIN = 300, PANEL_MAX = 760;
+      const [panelW, setPanelW] = useState(() => {
+        const v = parseInt(localStorage.getItem('fcstPanelW') || '', 10);
+        return (v >= PANEL_MIN && v <= PANEL_MAX) ? v : PANEL_W0;
+      });
+      const setPanelWidth = (w) => {
+        const v = Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, w)));
+        setPanelW(v);
+        try { localStorage.setItem('fcstPanelW', String(v)); } catch {}
+      };
+      // 손잡이를 잡고 왼쪽으로 끌면 넓어진다(패널이 오른쪽에 붙어 있으므로 부호가 반대).
+      const startPanelDrag = (e) => {
+        e.preventDefault();
+        const x0 = e.clientX, w0 = panelW;
+        const move = (ev) => setPanelWidth(w0 - (ev.clientX - x0));
+        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+      };
       const [showMemberPicker, setShowMemberPicker] = useState(false);
       const [showDealerPage, setShowDealerPage] = useState(false);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
@@ -2499,6 +2520,13 @@ img,video{max-width:100%;height:auto}
                 시나리오 {scenarioCount}건 반영된 숫자입니다 (저장 안 됨)
               </div>
             )}
+            <div style={{marginTop:'6px', display:'flex', gap:'4px', alignItems:'center', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>
+              <span>크기 {Math.round(panelW / PANEL_W0 * 100)}%</span>
+              <button onClick={() => setPanelWidth(panelW + 60)} title="크게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>＋</button>
+              <button onClick={() => setPanelWidth(panelW - 60)} title="작게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>－</button>
+              {panelW !== PANEL_W0 && <button onClick={() => setPanelWidth(PANEL_W0)} title="기본 크기로" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'700', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#64748b', cursor:'pointer'}}>기본</button>}
+              <span style={{marginLeft:'auto'}}>왼쪽 테두리를 끌어도 됩니다</span>
+            </div>
             {applyCommission && (
               <div style={{marginTop:'6px', fontSize:'10px', fontWeight:'700', color:'#c2410c'}}>커미션 차감 반영됨</div>
             )}
@@ -3842,8 +3870,20 @@ img,video{max-width:100%;height:auto}
 
                 </div>{/* 본문 끝 */}
 
-                <aside style={{flex:'0 0 310px', width:'310px', position:'sticky', top:'12px', alignSelf:'flex-start'}}>
-                  {renderFcstSummaryPanel()}
+                {/* 요약 패널 - 왼쪽 테두리를 잡고 끌면 넓어지고, 내용도 같은 배율로 커진다.
+                    손잡이는 zoom 바깥에 둬야 마우스 좌표가 배율에 어긋나지 않는다. */}
+                <aside style={{flex:`0 0 ${panelW}px`, width:`${panelW}px`, position:'sticky', top:'12px', alignSelf:'flex-start', display:'flex', alignItems:'stretch'}}>
+                  <div onMouseDown={startPanelDrag}
+                    onDoubleClick={() => setPanelWidth(PANEL_W0)}
+                    title="끌어서 크기 조절 · 더블클릭하면 기본 크기"
+                    style={{flex:'0 0 10px', cursor:'col-resize', display:'flex', alignItems:'center', justifyContent:'center', userSelect:'none'}}>
+                    <div style={{width:'3px', height:'46px', borderRadius:'2px', background:'#cbd5e1'}}/>
+                  </div>
+                  <div style={{flex:'1 1 auto', minWidth:0}}>
+                    <div style={{width:`${PANEL_W0}px`, zoom: panelW === PANEL_W0 ? 1 : (panelW - 10) / PANEL_W0}}>
+                      {renderFcstSummaryPanel()}
+                    </div>
+                  </div>
                 </aside>
                 </div>{/* 좌우 2단 끝 */}
               </div>
