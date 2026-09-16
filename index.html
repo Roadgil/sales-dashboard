@@ -1650,6 +1650,9 @@ img,video{max-width:100%;height:auto}
       // 외부 커미션(ext. commission) - SO별 수수료(부가세 별도). commissions.json은 재무 엑셀에서 추출한 참조 데이터.
       const [commissions, setCommissions] = useState({});
       const [applyCommission, setApplyCommission] = useState(false);
+      // 장비별 대수 표에만 쓰는 기준. SC·ACT를 따로 보거나 같이 볼 수 있게 한다.
+      // 패널의 금액 값들은 이 토글과 무관하게 항상 SC + ACT(일반)이다.
+      const [unitBasis, setUnitBasis] = useState({ sc: true, act: true });
       const [showMemberPicker, setShowMemberPicker] = useState(false);
       const [showDealerPage, setShowDealerPage] = useState(false);
       const [candidatesFilters, setCandidatesFilters] = useState({ team: [], member: [], product: [], quarter: [] });
@@ -2265,10 +2268,15 @@ img,video{max-width:100%;height:auto}
         const usd = (n) => '$ ' + Math.round(n / activeER).toLocaleString();
 
         // 장비별 대수 - 줄 하나가 장비 한 대다(계약 단위로 묶지 않는다).
-        // 기준은 이 패널의 다른 값들과 같은 SC + ACT(일반). 시나리오 클릭에 따라
-        // 흔들리면 '총 대수'로 읽기 어려워서 시나리오 기준은 쓰지 않는다.
+        // SC·ACT 버튼으로 기준을 바꿀 수 있다. 시나리오(클릭) 기준은 쓰지 않는다 -
+        // 행을 클릭할 때마다 '총 대수'가 흔들려 읽기 어렵다.
+        const unitSrc = currentQData.filter(d =>
+          (unitBasis.sc && isShipConfirm(d)) || (unitBasis.act && isActNormal(d)));
+        const unitLabel = unitBasis.sc && unitBasis.act ? 'SC + ACT(일반)'
+                        : unitBasis.sc ? 'Ship Confirm만'
+                        : unitBasis.act ? 'ACT(일반)만' : '선택 없음';
         const unitCount = {};
-        revRows.forEach(d => {
+        unitSrc.forEach(d => {
           const k = String(d.product || '').trim() || '미지정';
           unitCount[k] = (unitCount[k] || 0) + 1;
         });
@@ -2431,7 +2439,7 @@ img,video{max-width:100%;height:auto}
             <div style={{marginTop:'10px'}}>
               <div style={{fontSize:'10px', fontWeight:'800', color:'#334155', marginBottom:'3px'}}>
                 장비별 대수
-                <span style={{fontWeight:'700', color:'#94a3b8', marginLeft:'4px'}}>SC + ACT(일반)</span>
+                <span style={{fontWeight:'700', color:'#94a3b8', marginLeft:'4px'}}>{unitLabel}</span>
               </div>
               <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed'}}>
                 <colgroup><col style={{width:'47%'}}/><col/></colgroup>
@@ -2450,6 +2458,24 @@ img,video{max-width:100%;height:auto}
                   </tr>
                 </tbody>
               </table>
+              {/* 기준 버튼 - 둘 다 켜면 합쳐서, 하나만 켜면 그것만 본다.
+                  마지막 하나는 끌 수 없다(둘 다 끄면 빈 표가 되어 의미가 없다). */}
+              <div style={{display:'flex', gap:'4px', marginTop:'4px'}}>
+                {[['sc','SC','Ship Confirm'],['act','ACT','ACT(일반) · Try & Buy 제외']].map(([key,text,tip]) => {
+                  const on = unitBasis[key];
+                  const last = on && !['sc','act'].some(k => k !== key && unitBasis[k]);
+                  return (
+                    <button key={key} title={last ? '최소 하나는 켜져 있어야 합니다' : tip}
+                      onClick={() => { if (last) return; setUnitBasis({ ...unitBasis, [key]: !on }); }}
+                      style={{flex:1, padding:'3px 0', fontSize:'10px', fontWeight:'800', borderRadius:'4px',
+                              cursor: last ? 'default' : 'pointer',
+                              border:`1px solid ${on ? '#1d4ed8' : '#cbd5e1'}`,
+                              background: on ? '#1d4ed8' : '#fff',
+                              color: on ? '#fff' : '#64748b',
+                              opacity: last ? 0.85 : 1}}>{text}</button>
+                  );
+                })}
+              </div>
             </div>
 
             {scenarioCount > 0 && (
