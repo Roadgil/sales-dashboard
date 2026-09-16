@@ -1668,10 +1668,14 @@ img,video{max-width:100%;height:auto}
         const v = parseInt(localStorage.getItem('fcstPanelW') || '', 10);
         return (v >= PANEL_MIN && v <= PANEL_MAX) ? v : PANEL_W0;
       });
+      // 함수형 갱신을 쓴다. panelW를 클로저에서 읽으면 ＋를 연달아 누를 때
+      // 두 번이 같은 값을 기준으로 계산해 한 번이 사라진다.
       const setPanelWidth = (w) => {
-        const v = Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, w)));
-        setPanelW(v);
-        try { localStorage.setItem('fcstPanelW', String(v)); } catch {}
+        setPanelW(prev => {
+          const v = Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, typeof w === 'function' ? w(prev) : w)));
+          try { localStorage.setItem('fcstPanelW', String(v)); } catch {}
+          return v;
+        });
       };
       // 손잡이를 잡고 왼쪽으로 끌면 넓어진다(패널이 오른쪽에 붙어 있으므로 부호가 반대).
       const startPanelDrag = (e) => {
@@ -2522,8 +2526,8 @@ img,video{max-width:100%;height:auto}
             )}
             <div style={{marginTop:'6px', display:'flex', gap:'4px', alignItems:'center', fontSize:'9px', fontWeight:'700', color:'#94a3b8'}}>
               <span>크기 {Math.round(panelW / PANEL_W0 * 100)}%</span>
-              <button onClick={() => setPanelWidth(panelW + 60)} title="크게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>＋</button>
-              <button onClick={() => setPanelWidth(panelW - 60)} title="작게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>－</button>
+              <button onClick={() => setPanelWidth(p => p + 60)} title="크게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>＋</button>
+              <button onClick={() => setPanelWidth(p => p - 60)} title="작게" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'800', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#334155', cursor:'pointer'}}>－</button>
               {panelW !== PANEL_W0 && <button onClick={() => setPanelWidth(PANEL_W0)} title="기본 크기로" style={{padding:'1px 6px', fontSize:'10px', fontWeight:'700', border:'1px solid #cbd5e1', borderRadius:'3px', background:'#fff', color:'#64748b', cursor:'pointer'}}>기본</button>}
               <span style={{marginLeft:'auto'}}>왼쪽 테두리를 끌어도 됩니다</span>
             </div>
