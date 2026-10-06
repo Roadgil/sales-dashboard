@@ -546,7 +546,7 @@ img,video{max-width:100%;height:auto}
     const DEAL_TYPES = ['D-거래처', 'D-홀딩스', 'In-direct'];
     // 딜러관리에서 이 이름을 다시 바꾸면 여기도 같이 바꿔야 한다(306feb6에서 '병원'->'병원(direct)'로 통일).
     const DIRECT_DEALER_NAME = '병원(direct)';
-    // 신규/기존 거래 구분 - 보고용 분류라 필수는 아니다.
+    // 신규/기존 거래 구분 - 거래 구분과 같이 필수.
     const BIZ_STAGES = ['신규', '기존'];
   </script>
 </head>
@@ -856,6 +856,7 @@ img,video{max-width:100%;height:auto}
         valSalesType:      lang==='ko' ? 'Sales Type을 선택해주세요.' : 'Please select a Sales Type.',
         valDealer:         lang==='ko' ? 'Dealer Name을 선택해주세요.' : 'Please select a Dealer Name.',
         valDealType:       lang==='ko' ? '거래 구분(D-거래처/D-홀딩스/In-direct)을 선택해주세요.' : 'Please select a deal type.',
+        valBizStage:       lang==='ko' ? '신규/기존 구분을 선택해주세요.' : 'Please select New/Existing business.',
         valSido:           lang==='ko' ? "지역 (시/도)를 선택해주세요. 아직 개원 전이면 '개원예정'을 선택하세요." : 'Please select a region (Province/City).',
         valSigungu:        lang==='ko' ? '지역 (시/군/구)를 선택해주세요.' : 'Please select a region (District).',
         valDelivery:       lang==='ko' ? "납품예정일을 입력해주세요. 날짜가 아직 안 정해졌으면 '미정'을 체크하세요." : 'Please enter a Delivery Date, or check "TBD".',
@@ -1280,6 +1281,7 @@ img,video{max-width:100%;height:auto}
         if (!form.deliveryDate && !form.deliveryTBD)         { errors.push(T.valDelivery);  bad.push('deliveryDate'); }
         if (!form.dealType)                                  { errors.push(T.valDealType);  bad.push('dealType'); }
         if (!form.dealerName)                                { errors.push(T.valDealer);    bad.push('dealerName'); }
+        if (!form.bizStage)                                  { errors.push(T.valBizStage);  bad.push('bizStage'); }
         if (!form.chainType)                                 { errors.push(T.valChainType); bad.push('chainType'); }
         if (!form.clinicType)                                { errors.push(T.valClinicType);bad.push('clinicType'); }
         if (!form.sido)                                      { errors.push(T.valSido);      bad.push('sido'); }
@@ -4212,17 +4214,16 @@ img,video{max-width:100%;height:auto}
                             <option value="">{T.selectRequired}</option>
                             {DEAL_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">신규/기존 구분</label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                            <option value="">선택</option>
-                            {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
-                          </select></div>
-                          <div></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span>{form.dealType==='D-거래처' && <span className="ml-1 text-[10px] font-normal text-gray-400">(거래구분에 따라 자동)</span>}</label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} disabled={form.dealType==='D-거래처'} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700 disabled:bg-gray-100 disabled:text-gray-400">
                             <option value="">{T.selectRequired}</option>
                             {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                           </select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                            <option value="">{T.selectRequired}</option>
+                            {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                             <option value="">{T.selectRequired}</option>
                             {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -4231,6 +4232,7 @@ img,video{max-width:100%;height:auto}
                             <option value="">{T.selectRequired}</option>
                             {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
+                          <div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
@@ -4325,17 +4327,16 @@ img,video{max-width:100%;height:auto}
                         <option value="">{T.selectRequired}</option>
                         {DEAL_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">신규/기존 구분</label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                        <option value="">선택</option>
-                        {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select></div>
-                      <div></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span>{form.dealType==='D-거래처' && <span className="ml-1 text-[10px] font-normal text-gray-400">(거래구분에 따라 자동)</span>}</label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} disabled={form.dealType==='D-거래처'} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700 disabled:bg-gray-100 disabled:text-gray-400">
                         <option value="">{T.selectRequired}</option>
                         {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                       </select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        <option value="">{T.selectRequired}</option>
+                        {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                         <option value="">{T.selectRequired}</option>
                         {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -4344,6 +4345,7 @@ img,video{max-width:100%;height:auto}
                         <option value="">{T.selectRequired}</option>
                         {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
+                      <div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
