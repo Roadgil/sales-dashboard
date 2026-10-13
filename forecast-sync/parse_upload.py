@@ -342,13 +342,21 @@ def build_candidates(df, prev_to, new_to, from_fixed):
             price_krw = round(float(rows["Total Price"].fillna(0).sum()))
             price_usd = round(float(rows["Total Price (converted)"].fillna(0).sum()), 2)
 
-            if product == "GMPP":
+            main_rows = rows[rows["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())]
+            if product == "GMPP" and len(main_rows):
                 # 후보 id는 예전부터 GMPP 메인 라인의 Product Code로 만들어 왔다 - 이미 등록된
                 # 후보/매출과 id가 어긋나지 않도록 그대로 유지한다.
-                product_code = str(rows[rows["Product Code"].astype(str).isin(MAIN_PRODUCT_CODES.keys())]
-                                   .iloc[0]["Product Code"])
+                product_code = str(main_rows.iloc[0]["Product Code"])
                 id_key = product_code
                 line_type_hint = MAIN_PRODUCT_CODES[product_code]
+                acc_type = compute_acc_type(rows)
+            elif product == "GMPP":
+                # 본체 없이 GMPP 옵션킷만 추가 구매한 계약(예: "DoctorEvers Clinic_Incheon AIO Hp,
+                # Cryo7_26YR" - AIO(DCD)/AIO(ACC) 킷 + Cryo7). 메인 라인이 없으니 다른 제품처럼
+                # 버킷 이름을 id로 쓴다. 예전엔 여기서 IndexError가 나서 동기화 전체가 멈췄다
+                # (2026-09-17 ~ 10-01 매주 실패).
+                id_key = product.upper()
+                line_type_hint = ""
                 acc_type = compute_acc_type(rows)
             else:
                 id_key = product.upper()
