@@ -174,6 +174,26 @@ html,body{overflow-x:hidden;max-width:100vw;}
 .utab td.na{color:#cbd5e1;}
 .utab tr.live td{background:#eff6ff;}
 .utab td.total,.utab th.total{font-weight:800;border-left:1px solid var(--border);}
+/* 도넛 묶음 (슬라이드 15~18) */
+.donut-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+.donut-item{display:flex;flex-direction:column;min-width:0;}
+.donut-cap{text-align:center;font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;font-variant-numeric:tabular-nums;}
+.donut-sub{text-align:center;font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+.chart-box.donut-box{height:190px;}
+.donut-legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;margin-top:10px;font-size:11px;font-weight:600;color:var(--muted);}
+.donut-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+.cust-row{margin-bottom:14px;}
+.cust-tiles{display:flex;align-items:stretch;gap:8px;margin-bottom:10px;}
+.cust-tile{flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center;}
+.cust-tile .lb{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em;}
+.cust-tile .vl{font-size:24px;font-weight:800;color:#1e293b;font-family:var(--num-mono);font-variant-numeric:tabular-nums;line-height:1.25;}
+.cust-tile .sb{font-size:10px;color:var(--muted);font-weight:600;}
+.cust-tile.delta{background:#eff6ff;border-color:#bfdbfe;} .cust-tile.delta .vl{color:#1d4ed8;}
+.cust-op{align-self:center;font-size:18px;font-weight:800;color:var(--muted);}
+.cust-insight{margin-top:10px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:var(--text);}
+.cust-insight small{display:block;font-weight:600;color:var(--muted);font-size:11px;margin-top:2px;}
+.cust-warn{font-size:11px;color:#b45309;font-weight:600;margin-top:6px;}
+.chart-box.chart-box--short{height:150px;}
 .cust-head{font-size:12px;font-weight:700;color:var(--text);margin:-4px 0 8px;min-height:18px;font-variant-numeric:tabular-nums;}
 .cust-head small{font-weight:600;color:var(--muted);font-size:10px;margin-left:4px;}
 /* 발표 모드: 그래프·표 카드를 클릭하면 크게 띄운다(← → 이동, Esc 닫기) */
@@ -189,6 +209,15 @@ html,body{overflow-x:hidden;max-width:100vw;}
 .zoom-btn:hover{border-color:var(--accent);color:var(--accent);}
 .zoom-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;}
 .zoom-chart{position:relative;flex:1;min-height:320px;}
+.zoom-body .chart-box{height:auto;flex:1;min-height:260px;}
+.zoom-body .donut-grid{flex:1;min-height:0;grid-template-rows:1fr;}
+.zoom-body .donut-item{min-height:0;}
+.zoom-body .chart-box.donut-box{flex:1;height:auto;min-height:240px;}
+.zoom-body .donut-cap{font-size:22px;} .zoom-body .donut-sub{font-size:15px;} .zoom-body .donut-legend{font-size:16px;}
+.zoom-body .donut-legend i{width:14px;height:14px;}
+.zoom-body .cust-tile .vl{font-size:40px;} .zoom-body .cust-tile .lb,.zoom-body .cust-tile .sb{font-size:14px;}
+.zoom-body .cust-op{font-size:28px;}
+.zoom-body .cust-insight{font-size:18px;} .zoom-body .cust-insight small{font-size:15px;} .zoom-body .cust-warn{font-size:14px;}
 .zoom-body .cust-head{font-size:20px;margin:0;}
 .zoom-body .cust-head small,.zoom-body .cust-head .dim{font-size:14px;}
 .zoom-body table{font-size:17px;}
@@ -294,17 +323,20 @@ html,body{overflow-x:hidden;max-width:100vw;}
   <div class="card compact"><div class="ctitle" id="ct-unitMix">대수 구성비</div><div class="chart-box chart-box--tall"><canvas id="unitMixChart"></canvas></div></div>
   <div class="card compact"><div class="ctitle" id="ct-yearCmp">연도별 제품 대수 비교</div><div class="chart-box chart-box--tall"><canvas id="yearCmpChart"></canvas></div></div>
 </div>
+<!-- 슬라이드 15: 연도별 금액 구성 도넛 -->
+<div class="card compact" style="margin-bottom:14px">
+  <div class="ctitle" id="ct-volDonut">연도별 금액 구성</div>
+  <div class="donut-grid" id="volDonuts"></div>
+  <div class="donut-legend" id="volDonutLegend"></div>
+</div>
 <div class="card compact" style="margin-bottom:14px">
   <div class="ctitle" id="ct-volShare">연도별 제품 금액 비중</div>
   <div id="volShareTable" style="overflow-x:auto"></div>
 </div>
 
+<!-- 슬라이드 16~18: 분석마다 한 줄 - 왼쪽 요약(전→후, 비율 막대, 인사이트) / 오른쪽 연도별 도넛 -->
 <div class="section-title"><b id="st-cust-ko" style="font-weight:800">고객 분석</b> <span>Account &amp; Customer</span></div>
-<div class="g g111">
-  <div class="card compact"><div class="ctitle" id="ct-user">신규(Non-user) / 기존(User)</div><div class="cust-head" id="hd-user"></div><div class="chart-box"><canvas id="custUserChart"></canvas></div></div>
-  <div class="card compact"><div class="ctitle" id="ct-agp">AGP / DER</div><div class="cust-head" id="hd-agp"></div><div class="chart-box"><canvas id="custAgpChart"></canvas></div></div>
-  <div class="card compact"><div class="ctitle" id="ct-chain">체인 / 논체인</div><div class="cust-head" id="hd-chain"></div><div class="chart-box"><canvas id="custChainChart"></canvas></div></div>
-</div>
+<div id="custRows"></div>
 
 <!-- ④ 담당자별 상세 - 여기부터는 한 화면 밖. 필요할 때 내려보는 영역이다 -->
 <div class="section-title">담당자별 상세 <span>Rep Detail</span></div>
@@ -731,13 +763,65 @@ function quarterSeries(salesData){
   const keys=Object.keys(map).sort();
   return {keys,map,cur,labels:keys.map(q=>qShort(q)+(q===cur?'*':''))};
 }
+// 제품 색은 순위가 아니라 제품에 고정 - 연도가 바뀌어도 같은 제품은 같은 색
+const PROD_COLOR={GMPP:'#5b4fcf',VBP:'#e84d6f',Picoway:'#0faaa0',Cryo7:'#e09c10',GMP:'#8b7ff0',Nordlys:'#0fa878','Nordlys Mini':'#3ecfc9',
+  Profound:'#94a3b8','Frax Pro':'#f07a96',Glase:'#c4b5fd',Prima:'#fda4af','Hand Piece':'#cbd5e1'};
+const pc=k=>PROD_COLOR[k]||'#cbd5e1';
+const lum=hex=>{const h=String(hex||'#ffffff').replace('#','');return (0.299*parseInt(h.slice(0,2),16)+0.587*parseInt(h.slice(2,4),16)+0.114*parseInt(h.slice(4,6),16))/255;};
+// 도넛 가운데 큰 숫자 (슬라이드 16의 68% / 72% / 76%)
+const centerTextPlugin={id:'centerText',afterDraw(ch,_a,o){
+  if(!o||!o.text) return; const a=ch.chartArea, r=Math.min(a.width,a.height), ctx=ch.ctx;
+  ctx.save(); ctx.font=`800 ${Math.max(12,Math.round(r/6.5))}px 'Pretendard Variable',sans-serif`; ctx.fillStyle='#1e293b';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(o.text,(a.left+a.right)/2,(a.top+a.bottom)/2); ctx.restore();
+}};
+// 도넛 조각 위 라벨 (슬라이드 15·17·18의 'AGP 69%' 같은 표기). 작은 조각은 생략.
+const segLabelPlugin={id:'segLabels',afterDatasetsDraw(ch,_a,o){
+  if(!o||o.display===false) return;
+  const meta=ch.getDatasetMeta(0), dset=ch.data.datasets[0], tot=dset.data.reduce((s,v)=>s+(+v||0),0); if(!tot) return;
+  const ctx=ch.ctx; ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+  meta.data.forEach((arc,i)=>{
+    const v=+dset.data[i]||0; if(v/tot<(o.min||0.06)||!ch.getDataVisibility(i)) return;
+    const p=arc.tooltipPosition(), fs=Math.max(10,Math.round(arc.outerRadius/8.5));
+    const bg=Array.isArray(dset.backgroundColor)?dset.backgroundColor[i]:dset.backgroundColor;
+    ctx.fillStyle=lum(bg)<0.62?'#ffffff':'#1e293b'; ctx.font=`800 ${fs}px 'Pretendard Variable',sans-serif`;
+    const pct=Math.round(v/tot*100)+'%';
+    if(o.names===false) ctx.fillText(pct,p.x,p.y);
+    else { ctx.fillText(String(ch.data.labels[i]),p.x,p.y-fs*0.6); ctx.fillText(pct,p.x,p.y+fs*0.6); }
+  });
+  ctx.restore();
+}};
+function donutCfg(labels,data,colors,{center='',min=0.06,names=true,tip}={}){
+  const tot=data.reduce((s,v)=>s+(+v||0),0);
+  return {type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderColor:'#fff',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',layout:{padding:4},
+      plugins:{legend:{display:false},centerText:{text:center},segLabels:{min,names},
+        tooltip:{...TT,callbacks:{label:c=>tip?tip(c,tot):` ${c.label}: ${c.raw} (${tot?(c.raw/tot*100).toFixed(1):0}%)`}}}},
+    plugins:[centerTextPlugin,segLabelPlugin]};
+}
+// 차트 개수가 줄어들 때 남은 옛 차트 정리
+function dropCharts(prefix,keep){Object.keys(CI).forEach(id=>{if(id.startsWith(prefix)&&+id.slice(prefix.length)>=keep){CI[id].destroy();delete CI[id];delete CFG[id];}});}
+
+// 선형 추세선(최소제곱). 진행 중인 마지막 분기는 덜 찬 값이라 기울기 계산에서 뺀다.
+function trendDs(vals){
+  const fitN=_partialLast?vals.length-1:vals.length, xs=[], ys=[];
+  for(let i=0;i<fitN;i++){ const v=vals[i]; if(v!=null&&isFinite(v)){xs.push(i);ys.push(+v);} }
+  if(xs.length<2) return null;
+  const mx=sumBy(xs,x=>x)/xs.length, my=sumBy(ys,y=>y)/ys.length;
+  let sxy=0,sxx=0; xs.forEach((x,i)=>{sxy+=(x-mx)*(ys[i]-my);sxx+=(x-mx)**2;});
+  const b=sxx?sxy/sxx:0, a=my-b*mx, sg=b>=0?'+':'';
+  return {label:t(`추세선 (분기당 ${sg}${b.toFixed(2)}대)`,`Trend (${sg}${b.toFixed(2)} units/qtr)`),
+    data:vals.map((_,i)=>+(a+b*i).toFixed(2)),borderColor:'#475569',backgroundColor:'#475569',borderWidth:1.5,borderDash:[6,5],
+    pointRadius:0,pointHoverRadius:0,pointStyle:'line',tension:0,fill:false,_trend:true};
+}
+const withTrend=(series)=>{const tr=trendDs(series.data);return tr?[series,tr]:[series];};
+
 let _partialLast=false;   // 마지막 분기가 진행 중이면 그 구간을 점선으로 - 급락처럼 읽히지 않게
 function lineCfg(labels,datasets,{legend=true}={}){
   const n=labels.length;
   datasets.forEach(d=>{ if(_partialLast) d.segment={borderDash:c=>c.p1DataIndex===n-1?[3,4]:(d.borderDash||undefined)}; });
   return {type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    plugins:{legend:{display:legend,position:'top',labels:{usePointStyle:true,padding:12}},tooltip:{...TT,callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}${t('대',' units')}`}}},
-    scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:16}},y:{beginAtZero:true,grid:{color:'#f0f1f5'},ticks:{precision:0}}}}};
+    plugins:{legend:{display:legend,position:'top',labels:{usePointStyle:true,padding:12}},tooltip:{...TT,filter:i=>!i.dataset._trend,callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}${t('대',' units')}`}}},
+    scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:16}},y:{beginAtZero:true,min:0,grid:{color:'#f0f1f5'},ticks:{precision:0}}}}};   // 대수는 음수가 없다 - 추세선이 0 아래로 내려가도 축은 0부터
 }
 const ds=(label,data,c,ps='circle',extra={})=>({label,data,borderColor:c,backgroundColor:c,pointBackgroundColor:c,pointStyle:ps,borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.25,...extra});
 
@@ -763,10 +847,11 @@ function renderUnits(salesData){
     ds('Picoway',col('Picoway'),SERIES.Picoway.c,SERIES.Picoway.ps),
     ds(t('3종 합계','Total (3)'),keys.map(q=>map[q].Gentle+map[q].VBP+map[q].Picoway),'#334155','circle',{borderDash:[5,4],pointRadius:2})
   ]));
-  mkChart('qtrAllChart',lineCfg(labels,[ds(t('전체 대수','All units'),col('All'),'#1d4ed8','circle',{fill:true,backgroundColor:'rgba(29,78,216,.08)'})],{legend:false}));
-  mkChart('qtrGentleChart',lineCfg(labels,[ds('Gentle',col('Gentle'),SERIES.Gentle.c,SERIES.Gentle.ps)],{legend:false}));
-  mkChart('qtrVbpChart',lineCfg(labels,[ds('VBP',col('VBP'),SERIES.VBP.c,SERIES.VBP.ps)],{legend:false}));
-  mkChart('qtrPicoChart',lineCfg(labels,[ds('Picoway',col('Picoway'),SERIES.Picoway.c,SERIES.Picoway.ps)],{legend:false}));
+  // 추세선: 단일 시리즈 그래프에만 (Gentle/VBP/Picoway 묶음 그래프는 선이 많아 제외 - 2026-11-02 요청)
+  mkChart('qtrAllChart',lineCfg(labels,withTrend(ds(t('전체 대수','All units'),col('All'),'#1d4ed8','circle',{fill:true,backgroundColor:'rgba(29,78,216,.08)'}))));
+  mkChart('qtrGentleChart',lineCfg(labels,withTrend(ds('Gentle',col('Gentle'),SERIES.Gentle.c,SERIES.Gentle.ps))));
+  mkChart('qtrVbpChart',lineCfg(labels,withTrend(ds('VBP',col('VBP'),SERIES.VBP.c,SERIES.VBP.ps))));
+  mkChart('qtrPicoChart',lineCfg(labels,withTrend(ds('Picoway',col('Picoway'),SERIES.Picoway.c,SERIES.Picoway.ps))));
 
   // 연도별 분기 평균 타일 (슬라이드 8): 첫 해 + 최근 3개 연도. 진행 중 분기는 평균에서 뺀다.
   const tiles=document.getElementById('avgQtrTiles');
@@ -789,7 +874,7 @@ function renderMix(salesData){
   const selQs=selectedQuarters();
   const sc=salesData.filter(d=>selQs.includes(d.quarter)&&d.status==='Ship Confirm'&&isUnit(d));
   const u=Object.entries(countBy(sc,d=>d.product)).sort((a,b)=>b[1]-a[1]), uTot=sumBy(u,([,v])=>v);
-  mkChart('unitMixChart',{type:'doughnut',data:{labels:u.map(([k])=>prodLabel(k)),datasets:[{data:u.map(([,v])=>v),backgroundColor:COLORS,borderColor:'#fff',borderWidth:3,hoverOffset:8}]},
+  mkChart('unitMixChart',{type:'doughnut',data:{labels:u.map(([k])=>prodLabel(k)),datasets:[{data:u.map(([,v])=>v),backgroundColor:u.map(([k])=>pc(k)),borderColor:'#fff',borderWidth:3,hoverOffset:8}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#64748b',usePointStyle:true,pointStyle:'circle',padding:10,
       generateLabels:ch=>Chart.overrides.doughnut.plugins.legend.labels.generateLabels(ch).map((l,i)=>({...l,text:`${l.text}  ${u[i][1]}${t('대','')} · ${uTot?Math.round(u[i][1]/uTot*100):0}%`}))}},
       tooltip:{...TT,callbacks:{label:c=>` ${c.label}: ${c.raw}${t('대',' units')} (${uTot?(c.raw/uTot*100).toFixed(1):0}%)`}}}}});
@@ -817,51 +902,109 @@ function renderMix(salesData){
     ${rows.map(k=>`<tr><td>${prodLabel(k)}</td>${vp.map(p=>p.v[k]?`<td${p.live?' style="background:#eff6ff"':''}><span class="mono" style="font-weight:700">${fmtPct(p.v[k]/p.tot,0)}</span> <span class="dim">${fmtA(p.v[k])}</span></td>`:`<td class="na">–</td>`).join('')}</tr>`).join('')}
     <tr><td class="total" style="border-left:none">Total</td>${vp.map(p=>`<td class="mono total" style="border-left:none">${fmtA(p.tot)}</td>`).join('')}</tr>
     </tbody></table>`:`<div style="padding:20px;text-align:center;color:var(--muted)">${t('데이터 없음','No data')}</div>`;
+
+  // 연도별 금액 구성 도넛 (슬라이드 15)
+  const vt=document.getElementById('ct-volDonut'); if(vt) vt.textContent=t('연도별 금액 구성','Volume mix by year');
+  const vd=document.getElementById('volDonuts'), vl=document.getElementById('volDonutLegend');
+  dropCharts('volDonut',vp.length);
+  if(vd){
+    vd.innerHTML=vp.map((p,i)=>`<div class="donut-item"><div class="donut-cap">${p.label}</div><div class="chart-box donut-box"><canvas id="volDonut${i}"></canvas></div><div class="donut-sub">${fmtA(p.tot)}</div></div>`).join('');
+    vp.forEach((p,i)=>{
+      const ks=rows.filter(k=>p.v[k]>0);
+      mkChart(`volDonut${i}`,donutCfg(ks,ks.map(k=>p.v[k]),ks.map(pc),{min:0.05,tip:(c,tot)=>` ${c.label}: ${fmtA(c.raw)} (${(c.raw/tot*100).toFixed(1)}%)`}));
+    });
+  }
+  if(vl) vl.innerHTML=rows.map(k=>`<span><i style="background:${pc(k)}"></i>${prodLabel(k)}</span>`).join('');
 }
 
 // ── 슬라이드 16~18: 신규/기존 · AGP/DER · 체인/논체인 ───────────────
+// 분석마다 한 줄: 왼쪽 = 처음→최근 비율 카드 + 연도별 비율 막대 + 인사이트 / 오른쪽 = 연도별 도넛
 function renderCustomers(salesData){
   const defs=[
-    {id:'custUserChart',hd:'hd-user',hk:'accountUser',cats:['Non-user','User'],
-     map:d=>d.bizStage==='신규'?'Non-user':d.bizStage==='기존'?'User':null,lab:{'Non-user':t('신규 (Non-user)','Non-user'),'User':t('기존 (User)','User')}},
-    {id:'custAgpChart',hd:'hd-agp',hk:'customerType',cats:['AGP','DER'],
-     map:d=>d.clinicType==='피부과'?'DER':(d.clinicType==='GP'||d.clinicType==='성형외과')?'AGP':null,lab:{AGP:'AGP',DER:'DER'}},
-    {id:'custChainChart',hd:'hd-chain',hk:'chainType',cats:['Chain','Non-chain'],
-     map:d=>d.chainType==='체인'?'Chain':d.chainType==='논체인'?'Non-chain':null,lab:{Chain:t('체인','Chain'),'Non-chain':t('논체인','Non-chain')}},
+    {id:'custUser',hk:'accountUser',cats:['Non-user','User'],title:t('신규(Non-user) / 기존(User)','Non-user / User'),
+     map:d=>d.bizStage==='신규'?'Non-user':d.bizStage==='기존'?'User':null,
+     lab:{'Non-user':t('신규 (Non-user)','Non-user'),'User':t('기존 (User)','User')},short:{'Non-user':t('신규','Non-user'),'User':t('기존','User')},
+     up:[t('신규(Non-user) 고객 비중이 매년 증가 → 신규 시장 기회 확대','Non-user accounts growing every year → expanding untapped market opportunity'),
+         n=>t(`신규 전환 대상 고객층이 ${n}년 연속 넓어지고 있음`,`New conversion target pool has widened for ${n} consecutive years`)]},
+    {id:'custAgp',hk:'customerType',cats:['AGP','DER'],title:'AGP / DER',
+     map:d=>d.clinicType==='피부과'?'DER':(d.clinicType==='GP'||d.clinicType==='성형외과')?'AGP':null,
+     lab:{AGP:t('AGP (피부과 외)','AGP'),DER:t('DER (피부과)','DER')},short:{AGP:'AGP',DER:'DER'}},
+    {id:'custChain',hk:'chainType',cats:['Chain','Non-chain'],title:t('체인 / 논체인','Chain / Non-chain'),
+     map:d=>d.chainType==='체인'?'Chain':d.chainType==='논체인'?'Non-chain':null,
+     lab:{Chain:t('체인','Chain'),'Non-chain':t('논체인','Non-chain')},short:{Chain:t('체인','Chain'),'Non-chain':t('논체인','Non-chain')}},
   ];
-  const MISS=t('미입력','Not entered');
-  defs.forEach(df=>{
+  const MISS=t('미입력','Not entered'), COLS=['#3b82f6','#cbd5e1','#fef3c7'];
+  const host=document.getElementById('custRows'); if(!host) return;
+  // 먼저 모든 줄의 뼈대를 만들고 나서 차트를 그린다 (innerHTML을 다시 쓰면 앞서 그린 캔버스가 사라지므로)
+  const built=defs.map(df=>{
     const ps=periodsFor(_hist[df.hk],salesData).map(p=>{
       if(p.hist) return {...p,c:Object.fromEntries(df.cats.map(k=>[k,+p.hist[k]||0])),miss:0};
-      const rows=p.rows.filter(isUnit), c=Object.fromEntries(df.cats.map(k=>[k,0])); let miss=0;
-      rows.forEach(d=>{const k=df.map(d);if(k)c[k]++;else miss++;});
+      const c=Object.fromEntries(df.cats.map(k=>[k,0])); let miss=0;
+      p.rows.filter(isUnit).forEach(d=>{const k=df.map(d);if(k)c[k]++;else miss++;});
       return {...p,c,miss};
     });
     const tot=p=>sumBy(df.cats,k=>p.c[k])+p.miss;
     const share=(p,k)=>{const n=sumBy(df.cats,x=>p.c[x]);return n?p.c[k]/n:NaN;};   // 비율은 입력된 건 기준
-    const hd=document.getElementById(df.hd);
-    if(hd){
-      const a=ps[0], b=ps[ps.length-1], k0=df.cats[0];
-      if(!b) hd.innerHTML='';
-      else if(!isFinite(share(b,k0))){ const lv=[...ps].reverse().find(p=>isFinite(share(p,k0)));
-        hd.innerHTML=lv?`${df.lab[k0]} ${fmtPct(share(lv,k0),0)} <small>${lv.label}</small>`:''; }
-      else if(a===b||!isFinite(share(a,k0))) hd.innerHTML=`${df.lab[k0]} ${fmtPct(share(b,k0),0)} <small>${b.label}</small>`;
-      else { const dp=(share(b,k0)-share(a,k0))*100;
-        hd.innerHTML=`${df.lab[k0]} ${fmtPct(share(a,k0),0)} → ${fmtPct(share(b,k0),0)} <span class="sld-badge sld-badge--neutral">${dp>=0?'+':''}${dp.toFixed(0)}%p</span><small>${a.label} → ${b.label}</small>`; }
-      const mi=ps.filter(p=>p.miss>0);
-      if(mi.length) hd.innerHTML+=`<div class="dim" style="margin-top:3px;color:#b45309">⚠ ${mi.map(p=>`${p.label} ${MISS} ${p.miss}/${tot(p)}${t('건','')}`).join(' · ')}</div>`;
+    const k0=df.cats[0], ok=ps.filter(p=>isFinite(share(p,k0))), a=ok[0], b=ok[ok.length-1];
+    // 전 → 후 = 변화 카드 (슬라이드 16 상단)
+    let tiles='';
+    if(b){
+      const tile=(p,cls='')=>`<div class="cust-tile ${cls}"><div class="lb">${p.label}</div><div class="vl">${fmtPct(share(p,k0),0)}</div><div class="sb">${df.short[k0]}</div></div>`;
+      if(a&&a!==b){ const dp=(share(b,k0)-share(a,k0))*100;
+        tiles=`${tile(a)}<span class="cust-op">→</span>${tile(b)}<span class="cust-op">=</span><div class="cust-tile delta"><div class="lb">${t('변화','Change')}</div><div class="vl">${dp>=0?'+':''}${dp.toFixed(0)}%p</div><div class="sb">${a.label} → ${b.label}</div></div>`; }
+      else tiles=tile(b);
     }
-    const colors=['#3b82f6','#cbd5e1'];
-    const sets=df.cats.map((k,i)=>({label:df.lab[k],data:ps.map(p=>tot(p)?+(p.c[k]/tot(p)*100).toFixed(1):0),raw:ps.map(p=>p.c[k]),backgroundColor:colors[i],borderColor:'#fff',borderWidth:{right:2},borderSkipped:false}));
-    if(ps.some(p=>p.miss)) sets.push({label:MISS,data:ps.map(p=>tot(p)?+(p.miss/tot(p)*100).toFixed(1):0),raw:ps.map(p=>p.miss),backgroundColor:'#fef3c7',borderColor:'#fff',borderWidth:{right:2},borderSkipped:false});
-    mkChart(df.id,{type:'bar',data:{labels:ps.map(p=>p.label),datasets:sets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'rect',padding:10}},tooltip:{...TT,callbacks:{label:c=>` ${c.dataset.label}: ${c.dataset.raw[c.dataIndex]}${t('대',' units')} (${c.raw}%)`}}},
-      scales:{x:{stacked:true,max:100,grid:{color:'#f0f1f5'},ticks:{callback:v=>v+'%'}},y:{stacked:true,grid:{display:false}}}}});
+    // 인사이트 문구: 매년 늘었는지/줄었는지를 데이터로 판단해서 쓴다
+    let insight='';
+    if(a&&b&&a!==b){
+      const sh=ok.map(p=>share(p,k0)), up=sh.every((v,i)=>!i||v>sh[i-1]), down=sh.every((v,i)=>!i||v<sh[i-1]);
+      const dp=(share(b,k0)-share(a,k0))*100, rng=`${fmtPct(share(a,k0),0)} → ${fmtPct(share(b,k0),0)}`;
+      if(up&&df.up) insight=`${df.up[0]}<small>${df.up[1](ok.length)} (${rng})</small>`;
+      else if(up) insight=`${df.lab[k0]} ${t('비중 매년 증가','share up every year')}<small>${rng} (${dp>=0?'+':''}${dp.toFixed(0)}%p)</small>`;
+      else if(down) insight=`${df.lab[k0]} ${t('비중 매년 감소','share down every year')}<small>${rng} (${dp.toFixed(0)}%p)</small>`;
+      else insight=`${df.lab[k0]} ${t('비중','share')} ${rng}<small>${ok.map(p=>`${p.label} ${fmtPct(share(p,k0),0)}`).join(' · ')}</small>`;
+    }
+    const mi=ps.filter(p=>p.miss>0);
+    const warn=mi.length?`<div class="cust-warn">⚠ ${mi.map(p=>`${p.label} ${MISS} ${p.miss}/${tot(p)}${t('건','')}`).join(' · ')}</div>`:'';
+    const legend=[...df.cats.map((k,i)=>`<span><i style="background:${COLS[i]}"></i>${df.lab[k]}</span>`),...(mi.length?[`<span><i style="background:${COLS[2]}"></i>${MISS}</span>`]:[])].join('');
+    const html=`<div class="g g12 cust-row">
+      <div class="card compact"><div class="ctitle">${df.title}</div>
+        ${tiles?`<div class="cust-tiles">${tiles}</div>`:''}
+        <div class="chart-box chart-box--short"><canvas id="${df.id}Bar"></canvas></div>
+        ${insight?`<div class="cust-insight">${insight}</div>`:''}${warn}</div>
+      <div class="card compact"><div class="ctitle">${t('연도별 구성','Composition by year')} · ${df.title}</div>
+        <div class="donut-grid">${ps.map((p,i)=>`<div class="donut-item"><div class="donut-cap">${p.label}</div><div class="chart-box donut-box"><canvas id="${df.id}D${i}"></canvas></div><div class="donut-sub">${tot(p)}${t('대',' units')}</div></div>`).join('')}</div>
+        <div class="donut-legend">${legend}</div></div>
+    </div>`;
+    return {df,ps,tot,share,html};
+  });
+  defs.forEach(df=>{dropCharts(df.id+'D',0);});
+  host.innerHTML=built.map(x=>x.html).join('');
+  built.forEach(({df,ps,tot,share})=>{
+    // 연도별 비율 막대 (슬라이드 16 NON-USER RATIO BY YEAR)
+    const sets=df.cats.map((k,i)=>({label:df.lab[k],data:ps.map(p=>tot(p)?p.c[k]/tot(p)*100:0),raw:ps.map(p=>p.c[k]),backgroundColor:COLS[i],borderColor:'#fff',borderWidth:{right:2},borderSkipped:false}));
+    if(ps.some(p=>p.miss)) sets.push({label:MISS,data:ps.map(p=>tot(p)?p.miss/tot(p)*100:0),raw:ps.map(p=>p.miss),backgroundColor:COLS[2],borderColor:'#fff',borderWidth:{right:2},borderSkipped:false});
+    mkChart(df.id+'Bar',{type:'bar',data:{labels:ps.map(p=>p.label),datasets:sets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.dataset.label}: ${c.dataset.raw[c.dataIndex]}${t('대',' units')} (${(+c.raw).toFixed(1)}%)`}}},
+      scales:{x:{stacked:true,max:100,grid:{color:'#f0f1f5'},ticks:{callback:v=>v+'%'}},y:{stacked:true,grid:{display:false}}}},
+      plugins:[{id:'barPct',afterDatasetsDraw(ch){   // 첫 구간 안에 비율 표기 (슬라이드 16의 68% / 72% / 76%)
+        const m=ch.getDatasetMeta(0), ctx=ch.ctx; ctx.save(); ctx.fillStyle='#fff'; ctx.textBaseline='middle';
+        ctx.font=`800 ${Math.max(11,Math.round(m.data[0]?.height/2.6||11))}px 'Pretendard Variable',sans-serif`;
+        m.data.forEach((bar,i)=>{const v=ch.data.datasets[0].data[i]; if(v>=12) ctx.fillText((+v).toFixed(0)+'%',bar.base+8,bar.y);});
+        ctx.restore();}}]});
+    // 연도별 도넛 (슬라이드 16 COMPOSITION BY YEAR, 17·18 도넛)
+    ps.forEach((p,i)=>{
+      const vals=[...df.cats.map(k=>p.c[k]),...(p.miss?[p.miss]:[])];
+      const labs=[...df.cats.map(k=>df.short[k]),...(p.miss?[MISS]:[])];
+      const sh=share(p,df.cats[0]);
+      mkChart(`${df.id}D${i}`,donutCfg(labs,vals,COLS.slice(0,vals.length),{center:df.id==='custUser'&&isFinite(sh)?fmtPct(sh,0):'',min:df.id==='custUser'?1.01:0.08,
+        tip:(c,tt)=>` ${c.label}: ${c.raw}${t('대',' units')} (${(c.raw/tt*100).toFixed(1)}%)`}));
+    });
   });
 }
 
 // ═══ 발표 모드 (그래프·표 크게 보기) ═════════════════════════════════
-let _zoomList=[], _zoomIdx=-1, _zoomChart=null;
+let _zoomList=[], _zoomIdx=-1, _zoomCharts=[];
 const isZoomCard=c=>!!(c&&c.classList.contains('card')&&c.querySelector('canvas,table')&&!c.querySelector('.card')&&!c.closest('#zoomOverlay'));
 // 함수 참조(툴팁·점선 콜백)는 그대로 두고 객체/배열만 복사 - 원본 그래프 설정을 건드리지 않기 위해
 function cloneCfg(v){
@@ -897,28 +1040,30 @@ function openZoom(card){
 }
 function renderZoom(){
   const card=_zoomList[_zoomIdx]; if(!card) return closeZoom();
-  if(_zoomChart){_zoomChart.destroy();_zoomChart=null;}
+  _zoomCharts.forEach(c=>c.destroy()); _zoomCharts=[];
   document.getElementById('zoomTitle').textContent=zoomTitleFor(card)+' · '+periodLabel();
   document.getElementById('zoomCount').textContent=`${_zoomIdx+1} / ${_zoomList.length}`;
   document.getElementById('zoomHint').textContent=t('← → 다음 그래프 · Esc 닫기 · 바깥 클릭 닫기','← → next · Esc / click outside to close');
   const body=document.getElementById('zoomBody'); body.innerHTML='';
+  // 카드 구조를 그대로 복제하고, 안의 캔버스(여러 개일 수 있음 - 연도별 도넛)마다 큰 그래프를 새로 그린다
   [...card.children].forEach(ch=>{
     if(ch.classList.contains('ctitle')) return;
-    const cv=ch.matches('canvas')?ch:ch.querySelector('canvas');
-    if(cv){
-      const cfg=CFG[cv.id]; if(!cfg) return;
-      const box=document.createElement('div'); box.className='zoom-chart';
-      const c2=document.createElement('canvas'); box.appendChild(c2); body.appendChild(box);
-      _zoomChart=new Chart(c2,{type:cfg.type,data:cloneCfg(cfg.data),options:bigOptions(cloneCfg(cfg.options))});
-    } else {
-      const cl=ch.cloneNode(true); cl.removeAttribute('id'); cl.querySelectorAll('[id]').forEach(e=>e.removeAttribute('id'));
-      cl.style.maxHeight='none'; cl.style.overflow='visible'; body.appendChild(cl);
-    }
+    const orig=ch.matches('canvas')?[ch]:[...ch.querySelectorAll('canvas')];
+    const cl=ch.cloneNode(true);
+    const clCv=cl.matches('canvas')?[cl]:[...cl.querySelectorAll('canvas')];
+    const fresh=clCv.map(c=>{const n=document.createElement('canvas');c.replaceWith(n);return n;});   // 작은 그래프의 크기 흔적 제거
+    cl.removeAttribute('id'); cl.querySelectorAll('[id]').forEach(e=>e.removeAttribute('id'));
+    cl.style.maxHeight='none'; cl.style.overflow=orig.length?'':'visible';
+    body.appendChild(cl);
+    orig.forEach((cv,i)=>{
+      const cfg=CFG[cv.id]; if(!cfg||!fresh[i]) return;
+      _zoomCharts.push(new Chart(fresh[i],{type:cfg.type,data:cloneCfg(cfg.data),options:bigOptions(cloneCfg(cfg.options)),plugins:cfg.plugins||[]}));
+    });
   });
 }
 function zoomStep(d){ if(!_zoomList.length) return; _zoomIdx=(_zoomIdx+d+_zoomList.length)%_zoomList.length; renderZoom(); }
 function closeZoom(){
-  if(_zoomChart){_zoomChart.destroy();_zoomChart=null;}
+  _zoomCharts.forEach(c=>c.destroy()); _zoomCharts=[];
   document.getElementById('zoomOverlay').classList.remove('open');
   document.body.style.overflow=''; _zoomIdx=-1;
 }
