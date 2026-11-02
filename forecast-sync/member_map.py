@@ -4,8 +4,7 @@
 #   Team 2: Baek SC, Lee GR, Kim BW
 #   Team 3: Lim YC, GG Park
 # Kim BW = "Kim Byungwook" (2026-08-27 확인).
-# GG Park 의 Salesforce Owner 풀네임은 아직 확인되지 않아 비어 있음 - 해당 이름의 Opportunity가
-# 나타나면 스크립트가 경고하고 건너뛰므로, 그때 아래 dict에 추가할 것.
+# GG Park = "Park Gookgi", Jeong IY = "Jeong Ilyeong" (둘 다 Team 3, 2026-11-02 확인).
 # 2026-08-27 기준 미매핑으로 남아 경고에 찍히는 owner: Park Yuna, Bang Yunseong.
 
 OWNER_TO_MEMBER = {
@@ -13,9 +12,11 @@ OWNER_TO_MEMBER = {
     "Oh Sang Geol": "Oh SG",
     "Baek Seung Chul": "Baek SC",
     "Lee Garam": "Lee GR",
-    "Lim Yong Chul": "Lim YC",
+    "Lim Yong Chul": "YC lim",   # 대시보드 표기와 통일(2026-11-02). "Lim YC"는 팀 설정에 없어 후보 등록 시 고아 멤버가 됐음
     "Yoon Dongjun": "Yoon DJ",
     "Kim Byungwook": "Kim BW",
+    "Park Gookgi": "GG Park",    # 2026-11-02 사용자 확인
+    "Jeong Ilyeong": "Jeong IY", # 2026-11-02 사용자 확인 (Team 3)
 }
 
 OWNER_TO_TEAM = {
@@ -26,4 +27,6 @@ OWNER_TO_TEAM = {
     "Lim Yong Chul": "Team 3",
     "Yoon Dongjun": "Team 1",
     "Kim Byungwook": "Team 2",
+    "Park Gookgi": "Team 3",
+    "Jeong Ilyeong": "Team 3",
 }

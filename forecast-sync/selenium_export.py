@@ -9,6 +9,8 @@ From=고정값 / To=계산된 날짜로 맞추고 Excel(.xls, Korean 인코딩)�
 """
 import socket
 import subprocess
+import shutil
+from pathlib import Path
 import time
 
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -128,14 +130,29 @@ def export_xls(driver):
     return wait_for_new_file(before)
 
 
+USER_DOWNLOADS = Path.home() / "Downloads"
+
+
 def wait_for_new_file(before_names, timeout=90):
-    deadline = time.time() + timeout
+    started = time.time()
+    deadline = started + timeout
     while time.time() < deadline:
         current = list(config.DOWNLOAD_DIR.glob("*"))
         new_files = [p for p in current if p.name not in before_names and not p.name.endswith(".crdownload")]
         if new_files:
             newest = max(new_files, key=lambda p: p.stat().st_mtime)
             return newest
+        # 안전망: 다운로드 경로 지정이 안 먹고 Edge 기본 Downloads로 떨어진 경우(10/22, 11/2 실측)
+        # 이번 실행 이후 생긴 리포트 파일을 찾아 DOWNLOAD_DIR로 옮겨온다.
+        stray = [p for p in USER_DOWNLOADS.glob("KS_251219*.xls")
+                 if p.stat().st_mtime >= started - 5]
+        if stray:
+            src = max(stray, key=lambda p: p.stat().st_mtime)
+            time.sleep(2)  # 쓰기 마무리 대기
+            dst = config.DOWNLOAD_DIR / src.name
+            shutil.move(str(src), str(dst))
+            print(f"  (기본 Downloads 폴더로 받아져서 옮겨옴: {src.name})")
+            return dst
         time.sleep(1)
     raise TimeoutError(f"{config.DOWNLOAD_DIR} 에서 새 다운로드 파일을 찾지 못했습니다 ({timeout}초 대기).")
 
@@ -144,10 +161,24 @@ def close_stray_tabs(driver):
     """오래 켜두는 전용 프로필 특성상 실패한 이전 실행의 탭이 계속 쌓일 수 있어,
     매 실행 시작 시 다른 탭을 전부 닫고 하나만 남긴다(그 탭은 새 작업용 탭을 만들기
     전까지 about:blank로 정리) - 배경 탭 포커스 문제로 클릭이 씹히는 걸 방지."""
+    # edge://downloads-hub 같은 내부 페이지 탭은 WebDriver close가 20초 멈춘 뒤 실패한다
+    # (2026-11-02 실측) → DevTools HTTP 엔드포인트로 먼저 닫는다.
+    try:
+        import json, urllib.request
+        base = f"http://127.0.0.1:{config.EDGE_DEBUG_PORT}/json"
+        for t in json.load(urllib.request.urlopen(base + "/list", timeout=5)):
+            if t.get("type") == "page" and str(t.get("url", "")).startswith("edge://"):
+                urllib.request.urlopen(f"{base}/close/{t['id']}", timeout=5).read()
+                print(f"  (Edge 내부 탭 닫음: {t.get('url')})")
+    except Exception as e:
+        print(f"  (Edge 내부 탭 정리 실패, 계속 진행: {e.__class__.__name__})")
     handles = driver.window_handles
     for h in handles[1:]:
-        driver.switch_to.window(h)
-        driver.close()
+        try:
+            driver.switch_to.window(h)
+            driver.close()
+        except Exception as e:
+            print(f"  (남은 탭 닫기 실패, 계속 진행: {e.__class__.__name__})")
     driver.switch_to.window(driver.window_handles[0])
     driver.get("about:blank")
 
@@ -160,10 +191,13 @@ def run_export(from_date, to_date):
     # ensure_edge_running()은 subprocess.Popen으로 그냥 띄우기만 해서 Selenium의
     # download.default_directory prefs가 적용 안 됨 - CDP로 이 세션의 다운로드 경로를
     # 직접 지정해야 기본 Downloads 폴더가 아니라 config.DOWNLOAD_DIR로 떨어진다.
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-        "behavior": "allow",
-        "downloadPath": str(config.DOWNLOAD_DIR),
-    })
+    # 2026-10-22/11-02: Page.setDownloadBehavior(탭 단위, deprecated)만으로는 가끔 기본
+    # Downloads 폴더로 떨어져 90초 타임아웃 → 브라우저 전체 설정도 같이 건다.
+    for cmd in ("Browser.setDownloadBehavior", "Page.setDownloadBehavior"):
+        try:
+            driver.execute_cdp_cmd(cmd, {"behavior": "allow", "downloadPath": str(config.DOWNLOAD_DIR)})
+        except Exception as e:
+            print(f"  ({cmd} 설정 실패: {e.__class__.__name__} - 다른 방식으로 계속)")
     try:
         print("1) 리포트 페이지 여는 중...")
         open_report(driver)
