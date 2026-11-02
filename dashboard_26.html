@@ -279,6 +279,12 @@ html,body{overflow-x:hidden;max-width:100vw;}
   .tab-pane .card{padding:10px!important;} .tab-pane td{padding:4px 8px;}
   .tab-pane [style*="height:150px"]{height:120px!important;}
   .tab-pane{margin-bottom:8px;padding-bottom:8px;}
+  /* 어떤 경우에도 종이 밖으로 삐져나가거나 스크롤바가 찍히지 않게 */
+  .card,[style*="overflow-x:auto"],[style*="overflow-x: auto"]{overflow:visible!important;}
+  .g>*,.kpi-row>*{min-width:0;}
+  .wrap,.g,.kpi-row,.card{max-width:100%;}
+  table{width:100%!important;table-layout:auto;}
+  .achv th,.achv td,.utab th,.utab td{padding-left:5px;padding-right:5px;}
 }
 .pane-name{display:none;align-items:center;gap:8px;font-size:15px;font-weight:800;color:#702C63;margin:0 0 10px;}
 .pane-name::before{content:'';width:4px;height:14px;background:#702C63;border-radius:2px;}
