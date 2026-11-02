@@ -650,7 +650,8 @@ function renderAchv(salesData){
   const sc=salesData.filter(d=>selQs.includes(d.quarter)&&d.status==='Ship Confirm');
   const groups=[], seen=new Set();
   const grp=tm=>{let g=groups.find(x=>x.team===tm);if(!g){g={team:tm,members:[]};groups.push(g);}return g;};
-  Object.entries(_teams||{}).forEach(([tm,ms])=>{const g=grp(tm);(ms||[]).forEach(m=>{if(!seen.has(nk(m))){seen.add(nk(m));g.members.push(m);}});});
+  const rostered=new Set();   // 팀 설정에 있는 사람은 목표·실적이 0이어도 항상 보인다
+  Object.entries(_teams||{}).forEach(([tm,ms])=>{const g=grp(tm);(ms||[]).forEach(m=>{if(!seen.has(nk(m))){seen.add(nk(m));rostered.add(nk(m));g.members.push(m);}});});
   sc.forEach(d=>{if(d.member&&!seen.has(nk(d.member))){seen.add(nk(d.member));grp(d.team||'Other').members.push(d.member);}});
   selQs.forEach(q=>Object.entries(_targets[q]||{}).forEach(([m,v])=>{if((Number(v)||0)>0&&!seen.has(nk(m))){seen.add(nk(m));grp('Other').members.push(m);}}));
   const tgtOf=m=>selQs.reduce((s,q)=>s+Object.entries(_targets[q]||{}).filter(([k])=>nk(k)===nk(m)).reduce((a,[,v])=>a+(Number(v)||0),0),0);
@@ -659,7 +660,7 @@ function renderAchv(salesData){
   const totA=sumBy(sc,d=>d.priceKRW||0);
   const amt=v=>v?(_lang==='en'?`$ ${Math.round(v/_er).toLocaleString()}`:fmt억(v)):'-';
   const ach=(a,tg)=>{if(!tg)return '<span class="dim">-</span>';const r=a/tg;const z=r>=1.2?3:r>=1?2:1;return `<span class="mono zone-${z}" style="font-weight:800">${fmtPct(r,2)}</span>`;};
-  const live=groups.map(g=>({...g,rows:g.members.map(m=>({m,tg:tgtOf(m),a:actOf(m)})).filter(r=>r.tg>0||r.a>0)})).filter(g=>g.rows.length);
+  const live=groups.map(g=>({...g,rows:g.members.map(m=>({m,tg:tgtOf(m),a:actOf(m)})).filter(r=>rostered.has(nk(r.m))||r.tg>0||r.a>0)})).filter(g=>g.rows.length);
   if(!live.length){el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted)">${t('데이터 없음','No data')}</div>`;return;}
   let html=`<table class="achv"><thead><tr><th>${t('팀','Team')}</th><th>${t('담당자','Sales Rep')}</th><th>${t('팀 비중','Team Share')}</th><th>${t('목표 비중','TGT Share')}</th><th>${t('실적 비중','ACT Share')}</th><th>${t('목표','TGT')}</th><th>${t('실적','ACT')}</th><th>${t('달성률','Achievement')}</th><th>${t('팀 달성률','Team Achv.')}</th></tr></thead><tbody>`;
   live.forEach(g=>{
