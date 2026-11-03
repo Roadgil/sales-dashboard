@@ -211,6 +211,9 @@ html,body{overflow-x:hidden;max-width:100vw;}
 .zoom-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;}
 .zoom-chart{position:relative;flex:1;min-height:320px;}
 .zoom-body .chart-box{height:auto;flex:1;min-height:260px;}
+.zoom-body > .g{flex:1;min-height:0;margin:0;grid-template-rows:1fr;align-items:stretch;}
+.zoom-body > .g > .chart-box{height:auto;min-height:260px;}
+.zoom-body .dealer-chips{flex:none;}
 .zoom-body .donut-grid{flex:1;min-height:0;grid-template-rows:1fr;}
 .zoom-body .donut-item{min-height:0;}
 .zoom-body .chart-box.donut-box{flex:1;height:auto;min-height:240px;}
@@ -680,9 +683,19 @@ function _donutPad(chart,lgR){
   const ds=chart.data.datasets[0]||{data:[]}, tot=(ds.data||[]).reduce((a,v)=>a+(+v||0),0);
   const seg=chart.config.options&&chart.config.options.plugins&&chart.config.options.plugins.segLabels;
   const thr=seg?(seg.min>1?-1:(seg.min||0.06)):0.06;
-  const hasSmall=tot>0&&(ds.data||[]).some(v=>+v>0&&(+v)/tot<thr);
-  if(!hasSmall) return 4;
-  const side=Math.min(92,Math.round((chart.width||300)*0.18));
+  const small=tot>0?(ds.data||[]).map((v,i)=>({v:+v,i})).filter(o=>o.v>0&&o.v/tot<thr):[];
+  if(!small.length) return 4;
+  // 바깥 라벨 글자 크기는 도넛 반지름에 비례하므로(확대 화면에선 커짐) 실제 글자 폭을 재서 자리를 잡는다
+  const W=chart.width||300, H=chart.height||200, ctx=chart.ctx;
+  const texts=small.map(o=>`${chart.data.labels[o.i]} ${Math.round(o.v/tot*100)}%`);
+  let side=60;
+  for(let k=0;k<3;k++){
+    const r=Math.max(20,Math.min(W-2*side,H-16)/2);
+    const fs=Math.max(9,Math.round(r/9),Math.min(14,Math.round(W/75))-1);
+    ctx.save(); ctx.font=`700 ${fs}px 'Pretendard Variable',sans-serif`;
+    const tw=Math.max(...texts.map(t=>ctx.measureText(t).width)); ctx.restore();
+    side=Math.min(Math.round(W*0.32),Math.round(tw+28));
+  }
   return {left:side,right:lgR?8:side,top:8,bottom:8};
 }
 const valueLabelPlugin={id:'valueLabels',
@@ -974,7 +987,7 @@ function dealTypeOf(d){
   return 'D-홀딩스';
 }
 let _indirectSel=new Set();
-function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q) renderDealType(_sales); }
+function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
 function renderDealType(salesData){
   const setT=(id,ko,en)=>{const el=document.getElementById(id);if(el)el.textContent=t(ko,en);};
   setT('st-deal-ko','거래 구분별 실적','Deal Type');
