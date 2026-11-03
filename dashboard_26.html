@@ -602,9 +602,32 @@ const TT={backgroundColor:'#fff',borderColor:'#e4e6eb',borderWidth:1,padding:10,
 let _showValues=(()=>{try{return localStorage.getItem('showValues')==='1';}catch(e){return false;}})();
 const _lumHex=hex=>{const h=String(hex||'#ffffff').replace('#','');if(h.length<6)return 1;return (0.299*parseInt(h.slice(0,2),16)+0.587*parseInt(h.slice(2,4),16)+0.114*parseInt(h.slice(4,6),16))/255;};
 const _numFmt=v=>{const n=+v;if(!isFinite(n))return '';if(Number.isInteger(n))return n.toLocaleString();return Math.abs(n)>=100?Math.round(n).toLocaleString():Math.abs(n)>=10?n.toFixed(1):n.toFixed(2);};
+// 도넛의 작은 조각 라벨을 바깥으로 빼서 지시선과 함께 그린다. items=[{arc,text}]
+function _drawOutsideArcLabels(ch,items,fs){
+  if(!items.length) return;
+  const ctx=ch.ctx, a=ch.chartArea, cx=(a.left+a.right)/2, cy=(a.top+a.bottom)/2;
+  const pts=items.map(it=>{const p=it.arc.getProps(['startAngle','endAngle','outerRadius'],true);
+    const mid=(p.startAngle+p.endAngle)/2, r=p.outerRadius;
+    // 12시 근처 작은 조각이 위로 몰리므로, 라벨은 도넛 좌·우 바깥 세로 줄에 세운다
+    const right=Math.cos(mid)>=0;
+    return {...it,mid,r,x0:cx+Math.cos(mid)*r,y0:cy+Math.sin(mid)*r,x1:cx+(right?1:-1)*(r+12),y:cy+Math.sin(mid)*(r+6),right};});
+  ['L','R'].forEach(side=>{   // 같은 쪽 라벨끼리 세로 간격 확보
+    const arr=pts.filter(p=>(side==='R')===p.right).sort((u,v)=>u.y-v.y);
+    for(let i=1;i<arr.length;i++) if(arr[i].y-arr[i-1].y<fs+3) arr[i].y=arr[i-1].y+fs+3;
+    const over=arr.length?arr[arr.length-1].y-(a.bottom-fs/2):0; if(over>0) arr.forEach(p=>p.y-=over);   // 아래로 넘치면 전체를 올림
+  });
+  ctx.save(); ctx.font=`700 ${fs}px 'Pretendard Variable',sans-serif`; ctx.textBaseline='middle'; ctx.lineWidth=1;
+  pts.forEach(p=>{
+    const xEnd=p.x1+(p.right?6:-6);
+    ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.moveTo(p.x0,p.y0); ctx.lineTo(p.x1,p.y); ctx.lineTo(xEnd,p.y); ctx.stroke();
+    ctx.fillStyle='#1e293b'; ctx.textAlign=p.right?'left':'right'; ctx.fillText(p.text,xEnd+(p.right?3:-3),p.y);
+  });
+  ctx.restore();
+}
 const valueLabelPlugin={id:'valueLabels',
   afterDatasetsDraw(ch,_a,opts){
     if(!_showValues||(opts&&opts.display===false)) return;
+    ch.$sideY={};
     const ctx=ch.ctx, fs=Math.max(9,Math.min(14,Math.round((ch.width||400)/75)));
     const fmtOf=ds=>ds._fmt||(opts&&opts.fmt)||_numFmt;
     ctx.save(); ctx.font=`700 ${fs}px 'Pretendard Variable',sans-serif`;
@@ -614,10 +637,12 @@ const valueLabelPlugin={id:'valueLabels',
       if(meta.type==='doughnut'||meta.type==='pie'){
         if((ch.config.plugins||[]).some(pl=>pl&&pl.id==='segLabels')) return;   // 자체 라벨 있음
         const tot=ds.data.reduce((a,v)=>a+(+v||0),0); if(!tot) return;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        meta.data.forEach((arc,i)=>{const v=+ds.data[i]; if(!v||v/tot<0.04||!ch.getDataVisibility(i)) return;
+        ctx.textAlign='center'; ctx.textBaseline='middle'; const outside=[];
+        meta.data.forEach((arc,i)=>{const v=+ds.data[i]; if(!v||!ch.getDataVisibility(i)) return;
+          if(v/tot<0.06){ outside.push({arc,text:`${ch.data.labels[i]} ${fmt(v,i)}`}); return; }   // 작은 조각은 바깥으로
           const bg=Array.isArray(ds.backgroundColor)?ds.backgroundColor[i]:ds.backgroundColor;
           ctx.fillStyle=_lumHex(bg)<0.62?'#fff':'#1e293b'; const pt=arc.tooltipPosition(); ctx.fillText(fmt(v,i),pt.x,pt.y);});
+        ctx.restore(); _drawOutsideArcLabels(ch,outside,Math.max(9,fs-1)); ctx.save(); ctx.font=`700 ${fs}px 'Pretendard Variable',sans-serif`;
         return;
       }
       const horiz=ch.options.indexAxis==='y', sc=ch.options.scales||{};
@@ -629,7 +654,16 @@ const valueLabelPlugin={id:'valueLabels',
           if(stacked){
             const pr=el.getProps(['width','height','base','x','y'],true);
             const size=horiz?Math.abs(pr.x-pr.base):Math.abs(pr.base-pr.y);
-            if(size<fs+4) return;
+            if(size<fs+4){   // 칸이 좁으면 막대 오른쪽 바깥에 작은 글씨로 (같은 막대 안에서 겹치지 않게 아래로 밀기)
+              const c=el.getCenterPoint(), sfs=Math.max(8,fs-2), half=(pr.width||el.width||0)/2;
+              ch.$sideY=ch.$sideY||{}; const key=di+'|'+i, col='c'+i; let y=c.y;
+              const last=ch.$sideY[col]; if(last!==undefined&&Math.abs(last-y)<sfs+2) y=last-(sfs+2);
+              ch.$sideY[col]=y;
+              ctx.save(); ctx.font=`700 ${sfs}px 'Pretendard Variable',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+              ctx.fillStyle=(typeof bg==='string'&&bg.startsWith('#'))?bg.slice(0,7):'#1e293b';
+              if(!horiz) ctx.fillText(fmt(+v,i),c.x+half+3,y); else { ctx.textAlign='center'; ctx.fillText(fmt(+v,i),c.x,c.y-(pr.height||10)/2-sfs/2-1); }
+              ctx.restore(); return;
+            }
             const c=el.getCenterPoint(); ctx.textAlign='center'; ctx.textBaseline='middle';
             const faded=typeof bg==='string'&&bg.length===9;   // 대리점 선택 시 흐리게 한 구간(#rrggbbaa)은 진한 글씨
             ctx.fillStyle=(faded||(typeof bg==='string'&&bg.startsWith('#')&&_lumHex(bg)>=0.62))?'#1e293b':'#fff'; ctx.fillText(fmt(+v,i),c.x,c.y);
@@ -639,7 +673,9 @@ const valueLabelPlugin={id:'valueLabels',
             else {ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(fmt(+v,i),el.x,el.y-3);}
           }
         } else if(meta.type==='line'){
-          ctx.textAlign='center'; ctx.textBaseline='bottom';
+          const withBars=ch.data.datasets.some((d2,j)=>ch.getDatasetMeta(j).type==='bar');
+          ctx.textAlign='center'; ctx.textBaseline=withBars?'top':'bottom';
+          if(withBars){ ctx.fillStyle=(typeof ds.borderColor==='string'&&ds.borderColor.startsWith('#'))?ds.borderColor:'#1e293b'; ctx.fillText(fmt(+v,i),el.x,el.y+7); return; }
           ctx.fillStyle=(typeof ds.borderColor==='string'&&ds.borderColor.startsWith('#'))?ds.borderColor:'#1e293b';
           ctx.fillText(fmt(+v,i),el.x,el.y-6);
         }
@@ -652,12 +688,15 @@ Chart.defaults.scales.linear.grace='8%';   // 막대 위 수치가 잘리지 않
 function _syncValBtn(){const b=document.getElementById('valToggleBtn'); if(b){b.classList.toggle('on',_showValues); b.textContent=_showValues?t('🔢 수치 켜짐','🔢 Values on'):t('🔢 수치 표시','🔢 Show values');}}
 function toggleValues(){
   _showValues=!_showValues; try{localStorage.setItem('showValues',_showValues?'1':'0');}catch(e){}
-  _syncValBtn(); Object.values(Chart.instances||{}).forEach(c=>{try{c.update('none');}catch(e){}});
+  _syncValBtn();
+  if(_loaded&&_loaded.s&&_loaded.t&&_loaded.q){ render(_sales,_targets,_qTargets); return; }   // 설정이 데이터에 따라 달라지는 그래프까지 새로
+  Object.values(Chart.instances||{}).forEach(c=>{try{c.update('none');}catch(e){}});
 }
 Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable', ui-sans-serif, system-ui, sans-serif";Chart.defaults.font.size=11;
 const CI={};
 const CFG={};   // 발표 모드에서 같은 그래프를 크게 다시 그리려고 설정을 보관
-function mkChart(id,cfg){CFG[id]=cfg;if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
+function mkChart(id,cfg){if(cfg&&(cfg.type==='doughnut'||cfg.type==='pie')){const o=cfg.options||(cfg.options={});const lgR=o.plugins&&o.plugins.legend&&o.plugins.legend.display!==false&&o.plugins.legend.position==='right';   // 범례가 오른쪽이면 오른쪽 여백은 범례 몫
+  o.layout={...(o.layout||{}),padding:_showValues?{left:92,right:lgR?8:92,top:10,bottom:10}:4};}CFG[id]=cfg;if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
 
 function render(salesData,memberTargets,qTargets){
   const SC=['Ship Confirm'];
@@ -985,8 +1024,10 @@ const segLabelPlugin={id:'segLabels',afterDatasetsDraw(ch,_a,o){
   if(!o||o.display===false) return;
   const meta=ch.getDatasetMeta(0), dset=ch.data.datasets[0], tot=dset.data.reduce((s,v)=>s+(+v||0),0); if(!tot) return;
   const ctx=ch.ctx; ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+  const outside=[];
   meta.data.forEach((arc,i)=>{
-    const v=+dset.data[i]||0; if(v/tot<(o.min||0.06)||!ch.getDataVisibility(i)) return;
+    const v=+dset.data[i]||0; if(!v||!ch.getDataVisibility(i)) return;
+    if(v/tot<(o.min||0.06)){ if(_showValues&&o.min<=1) outside.push({arc,text:`${ch.data.labels[i]} ${Math.round(v/tot*100)}%`}); return; }
     const p=arc.tooltipPosition(), fs=Math.max(10,Math.round(arc.outerRadius/8.5));
     const bg=Array.isArray(dset.backgroundColor)?dset.backgroundColor[i]:dset.backgroundColor;
     ctx.fillStyle=lum(bg)<0.62?'#ffffff':'#1e293b'; ctx.font=`800 ${fs}px 'Pretendard Variable',sans-serif`;
@@ -995,6 +1036,7 @@ const segLabelPlugin={id:'segLabels',afterDatasetsDraw(ch,_a,o){
     else { ctx.fillText(String(ch.data.labels[i]),p.x,p.y-fs*0.6); ctx.fillText(pct,p.x,p.y+fs*0.6); }
   });
   ctx.restore();
+  _drawOutsideArcLabels(ch,outside,Math.max(9,Math.round((meta.data[0]?.outerRadius||80)/9)));
 }};
 function donutCfg(labels,data,colors,{center='',min=0.06,names=true,tip}={}){
   const tot=data.reduce((s,v)=>s+(+v||0),0);
@@ -1204,7 +1246,7 @@ function renderCustomers(salesData){
       const vals=[...df.cats.map(k=>p.c[k]),...(p.miss?[p.miss]:[])];
       const labs=[...df.cats.map(k=>df.short[k]),...(p.miss?[MISS]:[])];
       const sh=share(p,df.cats[0]);
-      mkChart(`${df.id}D${i}`,donutCfg(labs,vals,COLS.slice(0,vals.length),{center:df.id==='custUser'&&isFinite(sh)?fmtPct(sh,0):'',min:df.id==='custUser'?1.01:0.08,
+      mkChart(`${df.id}D${i}`,donutCfg(labs,vals,COLS.slice(0,vals.length),{center:df.id==='custUser'&&isFinite(sh)?fmtPct(sh,0):'',min:df.id==='custUser'?(_showValues?0.08:1.01):0.08,
         tip:(c,tt)=>` ${c.label}: ${c.raw}${t('대',' units')} (${(c.raw/tt*100).toFixed(1)}%)`}));
     });
   });
