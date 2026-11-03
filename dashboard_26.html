@@ -666,6 +666,7 @@ function _drawOutsideArcLabels(ch,items,fs){
     return {...it,mid,r,x0:cx+Math.cos(mid)*r,y0:cy+Math.sin(mid)*r,x1:cx+(right?1:-1)*(r+12),y:cy+Math.sin(mid)*(r+6),right};});
   ['L','R'].forEach(side=>{   // 같은 쪽 라벨끼리 세로 간격 확보
     const arr=pts.filter(p=>(side==='R')===p.right).sort((u,v)=>u.y-v.y);
+    if(arr.length&&arr[0].y<fs/2+2) arr[0].y=fs/2+2;   // 맨 위 라벨이 캔버스 위로 잘리지 않게
     for(let i=1;i<arr.length;i++) if(arr[i].y-arr[i-1].y<fs+3) arr[i].y=arr[i-1].y+fs+3;
     const over=arr.length?arr[arr.length-1].y-(a.bottom-fs/2):0; if(over>0) arr.forEach(p=>p.y-=over);   // 아래로 넘치면 전체를 올림
   });
@@ -687,16 +688,20 @@ function _donutPad(chart,lgR){
   if(!small.length) return 4;
   // 바깥 라벨 글자 크기는 도넛 반지름에 비례하므로(확대 화면에선 커짐) 실제 글자 폭을 재서 자리를 잡는다
   const W=chart.width||300, H=chart.height||200, ctx=chart.ctx;
-  const texts=small.map(o=>`${chart.data.labels[o.i]} ${Math.round(o.v/tot*100)}%`);
-  let side=60;
+  // 조각은 12시부터 시계 방향 - 각 작은 조각의 가운데 각도로 라벨이 왼쪽/오른쪽 어디에 붙을지 미리 계산
+  let cum=0; const sideOf={};
+  (ds.data||[]).forEach((v,i)=>{const f=tot?(+v||0)/tot:0; const mid=-Math.PI/2+2*Math.PI*(cum+f/2); sideOf[i]=Math.cos(mid)>=0?'R':'L'; cum+=f;});
+  const texts={L:[],R:[]};
+  small.forEach(o=>texts[sideOf[o.i]].push(`${chart.data.labels[o.i]} ${Math.round(o.v/tot*100)}%`));
+  let L=texts.L.length?60:8, R=texts.R.length?60:8;
   for(let k=0;k<3;k++){
-    const r=Math.max(20,Math.min(W-2*side,H-16)/2);
+    const r=Math.max(20,Math.min(W-L-R,H-16)/2);
     const fs=Math.max(9,Math.round(r/9),Math.min(14,Math.round(W/75))-1);
     ctx.save(); ctx.font=`700 ${fs}px 'Pretendard Variable',sans-serif`;
-    const tw=Math.max(...texts.map(t=>ctx.measureText(t).width)); ctx.restore();
-    side=Math.min(Math.round(W*0.32),Math.round(tw+28));
+    const w=arr=>arr.length?Math.min(Math.round(W*0.32),Math.round(Math.max(...arr.map(t=>ctx.measureText(t).width))+28)):8;
+    L=w(texts.L); R=w(texts.R); ctx.restore();
   }
-  return {left:side,right:lgR?8:side,top:8,bottom:8};
+  return {left:L,right:lgR?8:R,top:8,bottom:8};
 }
 const valueLabelPlugin={id:'valueLabels',
   afterDatasetsDraw(ch,_a,opts){
