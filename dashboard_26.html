@@ -286,6 +286,56 @@ html,body{overflow-x:hidden;max-width:100vw;}
   table{width:100%!important;table-layout:auto;}
   .achv th,.achv td,.utab th,.utab td{padding-left:5px;padding-right:5px;}
 }
+
+/* 인쇄 직전(_preparePrint)에 화면을 인쇄와 같은 폭·배치로 바꿔 두고 그래프를 다시 그린다.
+   인쇄 중에도 이 클래스가 유지되므로 그래프를 늘이거나 줄이지 않아 찌그러지지 않는다. */
+body.print-layout .wrap{width:1040px!important;max-width:1040px!important;margin:0 auto!important;padding:0!important;}
+body.print-layout .wrap{max-width:none;padding:0;}
+body.print-layout .back-link,body.print-layout .view-toggle,body.print-layout #langToggleBtn,body.print-layout #erDisplay,body.print-layout #printBtn,body.print-layout #valToggleBtn,body.print-layout #zoomOverlay,body.print-layout .tab-nav{display:none!important;}
+body.print-layout header{margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #702C63;}
+body.print-layout .hbadge::before{animation:none;}
+body.print-layout .print-only{display:block!important;}
+body.print-layout .section-title{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid;margin-top:0;padding-bottom:8px;border-bottom:2px solid #702C63;}
+body.print-layout .card,body.print-layout .kpi,body.print-layout .qbreak-card,body.print-layout .cust-row,body.print-layout .g,body.print-layout .kpi-row,body.print-layout .qbreak-grid,body.print-layout table,body.print-layout tr{break-inside:avoid;page-break-inside:avoid;}
+body.print-layout .card,body.print-layout .kpi,body.print-layout .qbreak-card,body.print-layout .sr-kpi,body.print-layout .cust-tile{box-shadow:none!important;border-color:#dcdce2!important;}
+body.print-layout .card{cursor:default;}
+body.print-layout .panel-box{max-height:none!important;overflow:visible!important;}
+body.print-layout canvas{max-width:100%!important;}
+body.print-layout .tab-pane{display:block!important;margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed #dcdce2;}
+body.print-layout .tab-pane:last-child{border-bottom:none;}
+body.print-layout .pane-name{display:flex!important;}
+body.print-layout .data-note{margin-bottom:12px;}
+body.print-layout footer{break-inside:avoid;margin-top:16px;}
+body.print-layout .g111{grid-template-columns:repeat(3,1fr)!important;}
+body.print-layout .g11{grid-template-columns:1fr 1fr!important;}
+body.print-layout .g12{grid-template-columns:1fr 2fr!important;}
+body.print-layout .g21{grid-template-columns:2fr 1fr!important;}
+body.print-layout .kpi-4,body.print-layout .qbreak-grid{grid-template-columns:repeat(4,1fr)!important;}
+body.print-layout .kpi-5{grid-template-columns:repeat(5,1fr)!important;}
+body.print-layout .kpi-3,body.print-layout .sr-kpis{grid-template-columns:repeat(3,1fr)!important;}
+body.print-layout .kpi-row,body.print-layout .g{margin-bottom:10px;gap:10px;}
+body.print-layout .card{padding:12px;}
+body.print-layout .card.compact{padding:10px;}
+body.print-layout .tab-pane{break-inside:avoid;page-break-inside:avoid;}
+body.print-layout .cust-row{margin-bottom:8px;}
+body.print-layout .chart-box.donut-box{height:150px!important;}
+body.print-layout .chart-box.chart-box--short{height:112px!important;}
+body.print-layout .cust-tiles{margin-bottom:6px;}
+body.print-layout .cust-tile{padding:6px 8px;}
+body.print-layout .cust-tile .vl{font-size:20px;}
+body.print-layout .cust-insight{margin-top:6px;padding:6px 10px;}
+body.print-layout .donut-legend{margin-top:4px;}
+body.print-layout .tab-pane .sr-kpis{margin-bottom:8px;}
+body.print-layout .tab-pane .sr-kpi{padding:8px 12px;}
+body.print-layout .tab-pane .card{padding:10px!important;}
+body.print-layout .tab-pane td{padding:4px 8px;}
+body.print-layout .tab-pane [style*="height:150px"]{height:120px!important;}
+body.print-layout .tab-pane{margin-bottom:8px;padding-bottom:8px;}
+body.print-layout .card,body.print-layout [style*="overflow-x:auto"],body.print-layout [style*="overflow-x: auto"]{overflow:visible!important;}
+body.print-layout .g>*,body.print-layout .kpi-row>*{min-width:0;}
+body.print-layout .wrap,body.print-layout .g,body.print-layout .kpi-row,body.print-layout .card{max-width:100%;}
+body.print-layout table{width:100%!important;table-layout:auto;}
+body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th,body.print-layout .utab td{padding-left:5px;padding-right:5px;}
 .dealer-chips{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 10px;align-items:center;}
 .dchip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1.5px solid var(--border);background:var(--surf);font-family:inherit;font-size:11px;font-weight:700;color:var(--text);cursor:pointer;}
 .dchip i{width:9px;height:9px;border-radius:2px;display:inline-block;}
@@ -624,6 +674,17 @@ function _drawOutsideArcLabels(ch,items,fs){
   });
   ctx.restore();
 }
+// 도넛 여백: 수치 표시가 꺼져 있거나 바깥으로 뺄 작은 조각이 없으면 여백 없음
+function _donutPad(chart,lgR){
+  if(!_showValues) return 4;
+  const ds=chart.data.datasets[0]||{data:[]}, tot=(ds.data||[]).reduce((a,v)=>a+(+v||0),0);
+  const seg=chart.config.options&&chart.config.options.plugins&&chart.config.options.plugins.segLabels;
+  const thr=seg?(seg.min>1?-1:(seg.min||0.06)):0.06;
+  const hasSmall=tot>0&&(ds.data||[]).some(v=>+v>0&&(+v)/tot<thr);
+  if(!hasSmall) return 4;
+  const side=Math.min(92,Math.round((chart.width||300)*0.18));
+  return {left:side,right:lgR?8:side,top:8,bottom:8};
+}
 const valueLabelPlugin={id:'valueLabels',
   afterDatasetsDraw(ch,_a,opts){
     if(!_showValues||(opts&&opts.display===false)) return;
@@ -696,7 +757,7 @@ Chart.defaults.color='#64748b';Chart.defaults.font.family="'Pretendard Variable'
 const CI={};
 const CFG={};   // 발표 모드에서 같은 그래프를 크게 다시 그리려고 설정을 보관
 function mkChart(id,cfg){if(cfg&&(cfg.type==='doughnut'||cfg.type==='pie')){const o=cfg.options||(cfg.options={});const lgR=o.plugins&&o.plugins.legend&&o.plugins.legend.display!==false&&o.plugins.legend.position==='right';   // 범례가 오른쪽이면 오른쪽 여백은 범례 몫
-  o.layout={...(o.layout||{}),padding:_showValues?{left:92,right:lgR?8:92,top:10,bottom:10}:4};}CFG[id]=cfg;if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
+  o.layout={...(o.layout||{}),padding:c=>_donutPad(c.chart,lgR)};}CFG[id]=cfg;if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
 
 function render(salesData,memberTargets,qTargets){
   const SC=['Ship Confirm'];
@@ -1199,7 +1260,7 @@ function renderCustomers(salesData){
     let tiles='';
     if(b){
       const tile=(p,cls='')=>`<div class="cust-tile ${cls}"><div class="lb">${p.label}</div><div class="vl">${fmtPct(share(p,k0),0)}</div><div class="sb">${df.short[k0]}</div></div>`;
-      if(a&&a!==b){ const dp=(share(b,k0)-share(a,k0))*100;
+      if(a&&a!==b){ const dp=Math.round(share(b,k0)*100)-Math.round(share(a,k0)*100);
         tiles=`${tile(a)}<span class="cust-op">→</span>${tile(b)}<span class="cust-op">=</span><div class="cust-tile delta"><div class="lb">${t('변화','Change')}</div><div class="vl">${dp>=0?'+':''}${dp.toFixed(0)}%p</div><div class="sb">${a.label} → ${b.label}</div></div>`; }
       else tiles=tile(b);
     }
@@ -1207,7 +1268,7 @@ function renderCustomers(salesData){
     let insight='';
     if(a&&b&&a!==b){
       const sh=ok.map(p=>share(p,k0)), up=sh.every((v,i)=>!i||v>sh[i-1]), down=sh.every((v,i)=>!i||v<sh[i-1]);
-      const dp=(share(b,k0)-share(a,k0))*100, rng=`${fmtPct(share(a,k0),0)} → ${fmtPct(share(b,k0),0)}`;
+      const dp=Math.round(share(b,k0)*100)-Math.round(share(a,k0)*100), rng=`${fmtPct(share(a,k0),0)} → ${fmtPct(share(b,k0),0)}`;
       if(up&&df.up) insight=`${df.up[0]}<small>${df.up[1](ok.length)} (${rng})</small>`;
       else if(up) insight=`${df.lab[k0]} ${t('비중 매년 증가','share up every year')}<small>${rng} (${dp>=0?'+':''}${dp.toFixed(0)}%p)</small>`;
       else if(down) insight=`${df.lab[k0]} ${t('비중 매년 감소','share down every year')}<small>${rng} (${dp.toFixed(0)}%p)</small>`;
@@ -1344,10 +1405,13 @@ function switchMTab(id,btn){
 function _resizeAllCharts(){ Object.values(Chart.instances||{}).forEach(c=>{ try{ c.resize(); c.update('none'); }catch(e){} }); }
 function _preparePrint(){
   if(typeof closeZoom==='function') closeZoom();
+  document.body.classList.add('print-layout');
   document.querySelectorAll('#memberTabContent .tab-pane').forEach(p=>p.classList.add('print-show'));
-  _resizeAllCharts();
+  void document.body.offsetHeight;   // 배치를 먼저 확정시킨 뒤
+  _resizeAllCharts();                // 그 크기로 그래프를 다시 그린다
 }
 function _restoreAfterPrint(){
+  document.body.classList.remove('print-layout');
   document.querySelectorAll('#memberTabContent .tab-pane').forEach(p=>p.classList.remove('print-show'));
   _resizeAllCharts();
 }
