@@ -1621,6 +1621,56 @@ img,video{max-width:100%;height:auto}
           .catch(() => alert(lang==='ko' ? '실패했습니다' : 'Failed'));
       };
 
+      // 2026 Q4로 등록됐는데 납품일이 분기 밖(4~9월)으로 잘못 찍혀 Detail Report 월별
+      // 집계가 안 맞던 27건(2026-11-10 확인) - 세일즈포스 Closed Won 날짜로 전부
+      // 대조 확인했고, 등록 분기(Q4)가 맞고 이 납품일 쪽이 틀렸다. SFDC 날짜로 고정
+      // 교체하는 일회성 보정(docId -> 올바른 납품일).
+      const DELIVERY_DATE_FIX_2026Q4 = {
+        '03774ae5-9dfb-4a2e-8f9c-790697a2360d': '2026-10-06', // 리원피부과의원 강남
+        '1776134794765':                        '2026-10-12', // 로체의원 광진
+        '1776649348996':                        '2026-10-22', // 필스토리의원 전주
+        '1776742237323':                        '2026-10-13', // 뷰티온의원 내포신도시(GMPP)
+        '1776750937913':                        '2026-10-15', // 뷰티온의원 동작
+        '1776751098585':                        '2026-11-03', // 뷰티온의원 인천계양
+        '1776751195101':                        '2026-11-04', // 뷰티온의원 통영(GMPP)
+        '1776752253806':                        '2026-10-13', // 잇츠미의원 세종
+        '1776752454250':                         '2026-11-05', // 리쥬엘의원 동성로
+        '27c2f52a-344a-4de9-9705-d310febdedb0':  '2026-10-28', // 스노우의원 청주(Cryo7)
+        '30060928-fb26-4f11-ab36-1dcf38cd1e6a':  '2026-10-20', // 뷰티라운지의원 부천
+        '3947445d-19ae-41d1-b4e0-a1228114fae3':  '2026-10-13', // 뷰티온의원 내포신도시(Cryo7)
+        '5087543c-2ec2-4f03-8339-fa50558de348':  '2026-10-07', // 선샤인피부과의원 잠실
+        '57854d5a-bd13-4892-897e-e8580e34af79':  '2026-10-20', // 맑은윤의원 용인
+        '5d752e5b-42a4-478d-9d9c-1869f82b912f':  '2026-10-08', // 하이린부산(GMPP)
+        '6786072e-682f-4b80-b030-59b06b88d57b':  '2026-10-20', // 닥터에버스의원 광주(GMPP)
+        '74f57510-b0c5-471b-b98b-d2aca3da0cf6':  '2026-11-04', // 뷰티온의원 통영(Cryo7)
+        '916b5d86-febb-4f9e-abc0-5b72b89ead0e':  '2026-10-06', // 오가나셀피부과 명동(VBP)
+        'a629c119-ba88-487f-bece-4b134093cf0d':  '2026-10-15', // 닥터에버스의원 시흥(Cryo7)
+        'a8b5798c-68a9-44ee-9366-953e1420d1e0':  '2026-10-22', // 오가나셀피부과 명동(GMPP)
+        'ae957abd-c241-487a-a8f6-7ab59677449a':  '2026-10-16', // 해남뷰티스피부과 해남
+        'af549e85-399a-420d-b582-ce937bed2149':  '2026-10-22', // 제이린의원 대구
+        'b269471e-b26b-4483-96b2-fecf86cd1c23':  '2026-10-08', // 하이린부산(Cryo7)
+        'dbc32b99-4328-469a-82a5-507248f5da35':  '2026-10-15', // 닥터에버스의원 시흥(GMPP)
+        'e2ca3e26-8817-4b34-82a3-d9162aeaa54f':  '2026-10-09', // 르샤인의원 서초
+        'e3d7162b-f031-41c8-947c-036cfc1214d5':  '2026-10-20', // 닥터에버스의원 광주(Cryo7)
+        'eb61e663-cbbe-4d92-97cb-4aefbb1b9266':  '2026-10-28', // 스노우의원 청주(GMPP)
+      };
+      const fixDeliveryDateMismatch2026Q4 = () => {
+        if (!requireDealerAdmin()) return;
+        const ids = Object.keys(DELIVERY_DATE_FIX_2026Q4);
+        const rows = salesData.filter(d => ids.includes(String(d.id)));
+        if (!rows.length) { alert(lang==='ko' ? '대상 건이 없습니다(이미 다 고쳐졌을 수 있음).' : 'Nothing to fix.'); return; }
+        if (!window.confirm(lang==='ko'
+          ? `세일즈포스 Closed Won 날짜로 대조 확인된 ${rows.length}건의 납품일을 고칩니다. 계속할까요?`
+          : `Fix deliveryDate on ${rows.length} row(s) using confirmed SFDC Closed dates. Continue?`)) return;
+        const batch = db.batch();
+        rows.forEach(row => batch.update(db.collection("sales").doc(String(row.id)), {
+          deliveryDate: DELIVERY_DATE_FIX_2026Q4[String(row.id)], deliveryTBD: false,
+        }));
+        batch.commit()
+          .then(() => alert(lang==='ko' ? '보정 완료' : 'Done'))
+          .catch(() => alert(lang==='ko' ? '실패했습니다' : 'Failed'));
+      };
+
       // 이미 쓰인 딜러는 지우지 않는다 - 지우면 그 매출 행의 딜러명이 목록에 없는 값으로 남아
       // 드롭다운에서 선택 불가 상태가 되고, 나중에 수정할 때 조용히 빈칸으로 덮일 수 있다.
       const deleteDealer = (name) => {
@@ -3324,6 +3374,7 @@ img,video{max-width:100%;height:auto}
                     <span className="text-sm font-bold text-gray-600">등록된 딜러 {dealers.length}개</span>
                     <div className="flex gap-2">
                       {canEdit && <button onClick={backfillBillToSelf} title="billToSelf 자동판정 도입 전에 입력된 세븐유/이노메드 GMPP·Cryo7 건 보정" className="text-xs bg-purple-100 text-purple-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-purple-200 transition">자체구매 플래그 보정</button>}
+                      {canEdit && <button onClick={fixDeliveryDateMismatch2026Q4} title="2026 Q4 등록인데 납품일이 분기 밖으로 잘못 찍힌 27건을 세일즈포스 Closed 날짜로 보정" className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-orange-200 transition">납품일 보정(SFDC)</button>}
                       {canEdit
                         ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
                         : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
