@@ -983,13 +983,22 @@ const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#
 const INDIRECT_ORDER=['SEVEN U','Bill to SEVEN U','Innomed','Bill to Innomed','TMI','알펙스메디'];
 const INDIRECT_COLOR={'SEVEN U':'#702C63','Bill to SEVEN U':'#C4A0BC','Innomed':'#A6228C','Bill to Innomed':'#F0C6E2','TMI':'#8A8C8B','알펙스메디':'#3A1533'};
 const dealerDisp=d=>({'SEVEN U':t('SEVEN U (세븐유)','SEVEN U'),'Bill to SEVEN U':t('Bill to 세븐유','Bill to SEVEN U'),'Innomed':t('Innomed (이노메드)','Innomed'),'Bill to Innomed':t('Bill to 이노메드','Bill to Innomed')}[d]||d);
-// 거래 구분이 비어 있는 옛 건은 딜러명 규칙으로 분류(영업팀 기준: 직판=D-거래처, 세븐유·이노메드·TMI·알펙스=In-direct, 그 외=D-홀딩스)
+// 거래 구분이 비어 있는 옛 건은 딜러명 규칙으로 분류(2026-11-09 영업팀 이가람 요청):
+//   1. Dealer Name이 영업담당자 이름으로 들어간 경우 -> D-거래처
+//   2. SEVEN U/Innomed/TMI/알펙스메디 -> In-direct
+//   3. 그 외 등록된 딜러(티모티/Bori/Beauko/동안기획 등) -> D-홀딩스
+// 주의: '등록된 딜러 목록에 없으면 전부 D-홀딩스'로 두면 Dealer Name에 사람 이름이
+// 그대로 들어간 옛 건(실제로는 1번 케이스)이 전부 D-홀딩스로 잘못 떨어진다.
+// 그래서 '알려진 딜러 목록에 있을 때만' D-홀딩스로 보고, 그 외(=미등록 값, 사람 이름
+// 추정)는 D-거래처로 되돌린다.
+const KNOWN_HOLDINGS=['Beauko','Bori','Human','티모티','엘룩스코리아','동안기획','엠디마케팅','Seed Group','BBG','최강닥터'];
 function dealTypeOf(d){
   if(DEAL_ORDER.includes(d.dealType)) return d.dealType;
-  const n=String(d.dealerName||'');
+  const n=String(d.dealerName||'').trim();
   if(!n||n==='병원(direct)') return 'D-거래처';
   if(INDIRECT_ORDER.includes(n)) return 'In-direct';
-  return 'D-홀딩스';
+  if(KNOWN_HOLDINGS.includes(n)) return 'D-홀딩스';
+  return 'D-거래처';
 }
 let _indirectSel=new Set();
 function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
