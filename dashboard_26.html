@@ -376,6 +376,14 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
      Quarter / 상반기 / 하반기 / Full Year 중 하나만 골랐고, 분기는 드롭다운으로
      하나만 볼 수 있었다. 이제 2025+2026 처럼 연도를 겹치거나 Q1+Q3 처럼
      떨어진 분기를 함께 볼 수 있다. 분기를 하나도 안 고르면 그 연도 전체다. -->
+<!-- 대외용/내부용 - 페이지 전체에 걸친 보고 기준 전환이다(2026-11-10 이가람 요청).
+     지금은 '거래 구분별 실적'의 D-홀딩스 합산 방식만 다르지만, 앞으로 다른 섹션도
+     이 기준에 따라 완전히 다르게 보여줄 수 있어 맨 위 전역 컨트롤로 둔다. -->
+<div class="view-toggle">
+  <span class="vt-cap">보고 기준</span>
+  <button class="vt-btn active" id="reportViewExtBtn" onclick="setReportView('ext')" title="D-거래처/D-홀딩스/In-direct 3분류 그대로 (일본 발표용 등 외부 자료 기준)">대외용</button>
+  <button class="vt-btn" id="reportViewIntBtn" onclick="setReportView('int')" title="D-홀딩스를 영업사원 실적(다이렉트)으로 합산 (커미션/기여도 산정 기준)">내부용</button>
+</div>
 <div class="view-toggle">
   <span class="vt-cap">연도</span>
   <span id="yearBtns" style="display:flex;gap:6px;flex-wrap:wrap"></span>
@@ -427,10 +435,6 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
 <!-- 거래 구분별 실적 (2026-11-03 영업팀 Lee GR 요청): D-거래처 / D-홀딩스 / In-direct,
      In-direct는 대리점을 눌러 전체 구성 안에서 비교. 위 연도·분기 선택을 그대로 따른다. -->
 <div class="section-title"><b id="st-deal-ko" style="font-weight:800">거래 구분별 실적</b> <span>Deal Type</span></div>
-<div class="view-toggle" id="dealViewToggle">
-  <button class="vt-btn active" id="dealViewExtBtn" onclick="setDealView('ext');document.getElementById('dealViewExtBtn').classList.add('active');document.getElementById('dealViewIntBtn').classList.remove('active');" title="D-거래처/D-홀딩스/In-direct 3분류 (일본 발표용 등 외부 자료 기준)">대외용</button>
-  <button class="vt-btn" id="dealViewIntBtn" onclick="setDealView('int');document.getElementById('dealViewIntBtn').classList.add('active');document.getElementById('dealViewExtBtn').classList.remove('active');" title="D-홀딩스를 영업사원 실적(다이렉트)으로 합산 (커미션/기여도 산정 기준)">내부용</button>
-</div>
 <div class="kpi-row kpi-3" id="dealKpis"></div>
 <div class="g g12">
   <div class="card compact"><div class="ctitle" id="ct-dealShare">거래 구분 비중</div><div class="chart-box chart-box--tall"><canvas id="dealShareChart"></canvas></div></div>
@@ -554,6 +558,18 @@ let _availableQuarters=[];
 let _selYears = new Set([YR]);
 let _selQuars = new Set([QK]);
 const ALL_Q = ['Q1','Q2','Q3','Q4'];
+
+// 보고 기준(대외용/내부용) - 페이지 전체에 걸친 전역 상태(2026-11-10 이가람 요청).
+// 지금은 '거래 구분별 실적'에서 D-홀딩스 합산 방식만 다르지만, 앞으로 다른 섹션도
+// 이 기준에 따라 완전히 다르게 보여줄 수 있어 맨 위 전역 토글로 둔다.
+let _reportView='ext';
+function setReportView(v){
+  if(v===_reportView) return;
+  _reportView=v;
+  document.getElementById('reportViewExtBtn')?.classList.toggle('active', v==='ext');
+  document.getElementById('reportViewIntBtn')?.classList.toggle('active', v==='int');
+  if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); }
+}
 
 function availableYears(){
   const ys = new Set((_availableQuarters.length?_availableQuarters:[QUARTER]).map(q=>q.split(' ')[0]));
@@ -984,17 +1000,13 @@ function renderDeck(salesData){
 }
 
 // ── 거래 구분별 실적 (D-거래처 / D-홀딩스 / In-direct) ─────────────────
-// 대외용(ext) : D-거래처·D-홀딩스·In-direct 3분류 그대로 (일본 발표용 등 외부 자료 기준).
-// 내부용(int) : D-홀딩스는 영업사원 본인 실적으로 보고 D-거래처와 합쳐 '다이렉트' 1개로
-//   묶는다(2026-11-10 이가람 요청) - 커미션/기여도 산정은 이 기준을 쓴다. In-direct(세븐유·
-//   이노메드·TMI·알펙스메디)만 실제 딜러 기여로 본다.
-let _dealView='ext';
-function setDealView(v){ if(v===_dealView) return; _dealView=v; if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+// 전역 보고 기준(_reportView, 위 '기간 선택' 근처에 선언)에 따라 D-홀딩스를 D-거래처와
+// 합쳐 '다이렉트' 1개로 묶을지(내부용) 3분류 그대로 둘지(대외용) 결정한다.
 const DEAL_ORDER_EXT=['D-거래처','D-홀딩스','In-direct'];
 const DEAL_ORDER_INT=['다이렉트','In-direct'];
 const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#E07BB8','다이렉트':'#702C63'};
-const dealOrder=()=>_dealView==='int'?DEAL_ORDER_INT:DEAL_ORDER_EXT;
-const dealGroupOf=d=>{const k=dealTypeOf(d); return _dealView==='int'&&k!=='In-direct' ? '다이렉트' : k;};
+const dealOrder=()=>_reportView==='int'?DEAL_ORDER_INT:DEAL_ORDER_EXT;
+const dealGroupOf=d=>{const k=dealTypeOf(d); return _reportView==='int'&&k!=='In-direct' ? '다이렉트' : k;};
 // Dealer Name 자체는 순수하게 유지한다(SEVEN U/Innomed/TMI/알펙스메디). '딜러가 병원을
 // 소개한 게 아니라 자기가 직접 구매해간 건(제품 무관)'은 sales 레코드의 billToSelf
 // 플래그로 따로 들어오고, 여기(In-direct 대리점별 매출)에서만 'Bill to 세븐유/이노메드'라는
