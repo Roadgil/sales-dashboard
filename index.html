@@ -1574,6 +1574,33 @@ img,video{max-width:100%;height:auto}
         used.forEach(row => db.collection("sales").doc(String(row.id)).update({ dealerName: n }).catch(() => {}));
       };
 
+      // 딜러관리에 등록 안 된 이름이 매출에만 남아있을 때(오타 등) 그대로 정식 등록한다.
+      const registerExistingName = (name) => {
+        if (!requireDealerAdmin()) return;
+        if (dealers.includes(name)) return;
+        saveDealers([...dealers, name]);
+      };
+
+      // 예전에 Dealer Name 칸에 'Bill to SEVEN U'/'Bill to Innomed'라는 문자열을 그대로
+      // 저장해 둔 건(2026-11-10 이전) - 지금은 Dealer Name을 깨끗하게 두고 billToSelf
+      // 플래그로 분리하므로 한 번에 정리한다. 이 건들은 이미 'Bill to'로 확인된 과거
+      // 데이터라, 지금의 GMPP 자동판정 규칙과 무관하게 billToSelf를 true로 고정한다.
+      const cleanupBillToLegacy = (oldName, newName) => {
+        if (!requireDealerAdmin()) return;
+        const rows = salesData.filter(d => (d.dealerName || '') === oldName);
+        if (!rows.length) return;
+        if (!window.confirm(lang==='ko'
+          ? `'${oldName}' ${rows.length}건을 Dealer Name='${newName}' + 자체구매(Bill to)로 정리합니다. 계속할까요?`
+          : `Clean up ${rows.length} row(s): dealerName -> '${newName}', billToSelf=true. Continue?`)) return;
+        const batch = db.batch();
+        rows.forEach(row => batch.update(db.collection("sales").doc(String(row.id)), {
+          dealerName: newName, billToSelf: true, dealType: dealTypeOf(newName),
+        }));
+        batch.commit()
+          .then(() => alert(lang==='ko' ? '정리 완료' : 'Done'))
+          .catch(() => alert(lang==='ko' ? '실패했습니다' : 'Failed'));
+      };
+
       // 이미 쓰인 딜러는 지우지 않는다 - 지우면 그 매출 행의 딜러명이 목록에 없는 값으로 남아
       // 드롭다운에서 선택 불가 상태가 되고, 나중에 수정할 때 조용히 빈칸으로 덮일 수 있다.
       const deleteDealer = (name) => {
@@ -3333,7 +3360,20 @@ img,video{max-width:100%;height:auto}
                             <td className="py-2 px-2 font-bold text-amber-800">{dl} <span className="text-[10px] font-normal text-amber-600">목록에 없음</span></td>
                             {statQuarters.map(q => dualCell(q, countOf(dl, q), countDOf(dl, q)))}
                             {dualCell('tot', rowTotal(dl), rowTotalD(dl), {strong:true})}
-                            {canEdit && <td></td>}
+                            {canEdit && (
+                              <td className="py-2 px-2 text-right whitespace-nowrap">
+                                {dl === 'Bill to SEVEN U' ? (
+                                  <button onClick={() => cleanupBillToLegacy(dl, 'SEVEN U')} className="text-[11px] text-white bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded">SEVEN U로 정리</button>
+                                ) : dl === 'Bill to Innomed' ? (
+                                  <button onClick={() => cleanupBillToLegacy(dl, 'Innomed')} className="text-[11px] text-white bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded">Innomed로 정리</button>
+                                ) : (
+                                  <>
+                                    <button onClick={() => registerExistingName(dl)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border">등록</button>
+                                    <button onClick={() => renameDealer(dl)} className="text-[11px] text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded border ml-1">이름 수정</button>
+                                  </>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         ))}
                         <tr className="border-t-2 border-gray-300 bg-gray-50">
