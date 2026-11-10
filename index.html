@@ -937,7 +937,7 @@ img,video{max-width:100%;height:auto}
       // 같은 오퍼튜니티에서 같이 딸려온 동반 시스템 후보(예: GMPP 옆의 Cryo7) - 저장 시 같은 상태/날짜/Dealer로 함께 sales에 생성됨
       const [companionCandidates, setCompanionCandidates] = useState([]);
 
-      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', deliveryTBD: false, so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '', chainType: '', clinicType: '', dealType: '', bizStage: '', billToSelf: false };
+      const initialForm = { status: 'ACT', contractType: '일반', contractDate: '', deliveryDate: '', deliveryTBD: false, so: '', account: '', product: 'GMPP', accType: '', priceKRW: '', priceUSD: '', dealerName: '', sido: '', sigungu: '', chainType: '', clinicType: '', dealType: '', bizStage: '', billToSelf: false, scConfirmedDate: '' };
       const [form, setForm]         = useState(initialForm);
       const [editingId, setEditingId] = useState(null);
       const [isSaving, setIsSaving]   = useState(false);
@@ -1336,6 +1336,9 @@ img,video{max-width:100%;height:auto}
           // 세븐유/이노메드일 때만 의미 있는 값. 저장 시점에 한 번 더 걸러서, 거래구분을
           // D-거래처로 바꾼 뒤 저장하는 등의 경로로 엉뚱한 딜러에 true가 남지 않게 한다.
           billToSelf:   BILL_TO_ELIGIBLE.includes(form.dealerName) ? !!form.billToSelf : false,
+          // Ship Confirm 전환 시 '반영 분기가 맞다'고 확인한 날짜(없으면 빈 값 - Ship
+          // Confirm이 아닌 건이거나, 이 기능 도입 전에 이미 Ship Confirm이던 건).
+          scConfirmedDate: String(form.scConfirmedDate || ''),
           priceKRW:     finalKRW,
           priceUSD:     parseFloat((finalKRW / (currentER || 1389)).toFixed(2)),
           id:           editingId ? String(editingId) : (convertingCandidateId || crypto.randomUUID()),
@@ -1709,6 +1712,19 @@ img,video{max-width:100%;height:auto}
         } else if (name === 'product') {
           // Product를 바꿔도 같은 규칙표로 '자체구매'를 다시 자동 계산한다.
           setForm({ ...form, product: value, billToSelf: billToSelfDefault(form.dealerName, value) });
+        } else if (name === 'status') {
+          // Ship Confirm으로 바뀌는 순간만 한 번 더 확인한다 - 등록 분기(quarter 필드)와
+          // 실제 납품일이 분기 밖으로 어긋난 건이 있어서 Detail Report 월별 집계가
+          // 안 맞아 보이는 사고가 있었다(2026-11-10). 확인한 날짜도 같이 남겨서
+          // 나중에 어떤 건이 언제 반영 확인됐는지 추적할 수 있게 한다.
+          if (value === 'Ship Confirm' && form.status !== 'Ship Confirm') {
+            if (!window.confirm(lang === 'ko'
+              ? `반영일이 ${selectedQuarter} 분기가 맞습니까?`
+              : `Confirm this ships in ${selectedQuarter}?`)) return;
+            setForm({ ...form, status: value, scConfirmedDate: new Date().toISOString().slice(0, 10) });
+          } else {
+            setForm({ ...form, status: value });
+          }
         } else {
           setForm({ ...form, [name]: value });
         }
