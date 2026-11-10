@@ -1773,7 +1773,7 @@ img,video{max-width:100%;height:auto}
             if (!window.confirm(lang === 'ko'
               ? `반영일이 ${selectedQuarter} 분기가 맞습니까?`
               : `Confirm this ships in ${selectedQuarter}?`)) return;
-            setForm({ ...form, status: value, scConfirmedDate: new Date().toISOString().slice(0, 10) });
+            setForm({ ...form, status: value, scConfirmedDate: new Date().toISOString().slice(0, 7) });
           } else {
             setForm({ ...form, status: value });
           }
@@ -4360,7 +4360,7 @@ img,video{max-width:100%;height:auto}
                           {form.status === 'Ship Confirm' && (
                             <div className="mt-1">
                               <label className="block text-[10px] font-bold text-gray-500 mb-0.5">확인일 <span className="font-normal text-gray-400">(Ship Confirm 반영월 수정)</span></label>
-                              <input type="date" name="scConfirmedDate" value={form.scConfirmedDate || ''} onChange={handleInputChange} className="w-full p-1.5 border border-gray-300 rounded text-xs"/>
+                              <input type="month" name="scConfirmedDate" value={form.scConfirmedDate ? form.scConfirmedDate.slice(0, 7) : (form.deliveryDate ? form.deliveryDate.slice(0, 7) : '')} onChange={handleInputChange} className="w-full p-1.5 border border-gray-300 rounded text-xs"/>
                             </div>
                           )}
                           </div>
