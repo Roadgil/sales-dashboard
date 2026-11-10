@@ -377,12 +377,14 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
      하나만 볼 수 있었다. 이제 2025+2026 처럼 연도를 겹치거나 Q1+Q3 처럼
      떨어진 분기를 함께 볼 수 있다. 분기를 하나도 안 고르면 그 연도 전체다. -->
 <!-- 대외용/내부용 - 페이지 전체에 걸친 보고 기준 전환이다(2026-11-10 이가람 요청).
-     지금은 '거래 구분별 실적'의 D-홀딩스 합산 방식만 다르지만, 앞으로 다른 섹션도
-     이 기준에 따라 완전히 다르게 보여줄 수 있어 맨 위 전역 컨트롤로 둔다. -->
+     내부용(기본값): D-거래처/D-홀딩스/In-direct 3분류 그대로, 딜러명·홀딩스명별 breakdown까지.
+     대외용: GMPP·Cryo7를 세븐유/이노메드로 판 건만 '딜러', 나머지는 전부 '논딜러' -
+     이름별로 더 쪼갤 필요가 없다. 지금은 '거래 구분별 실적' 섹션만 이 기준을 쓰지만,
+     앞으로 다른 섹션도 달라질 수 있어 맨 위 전역 컨트롤로 둔다. -->
 <div class="view-toggle">
   <span class="vt-cap">보고 기준</span>
-  <button class="vt-btn active" id="reportViewExtBtn" onclick="setReportView('ext')" title="D-거래처/D-홀딩스/In-direct 3분류 그대로 (일본 발표용 등 외부 자료 기준)">대외용</button>
-  <button class="vt-btn" id="reportViewIntBtn" onclick="setReportView('int')" title="D-홀딩스를 영업사원 실적(다이렉트)으로 합산 (커미션/기여도 산정 기준)">내부용</button>
+  <button class="vt-btn" id="reportViewExtBtn" onclick="setReportView('ext')" title="GMPP·Cryo7를 세븐유/이노메드로 판 건만 '딜러', 나머지는 전부 '논딜러' (일본 발표용 등 외부 자료 기준, 이름별 breakdown 없음)">대외용</button>
+  <button class="vt-btn active" id="reportViewIntBtn" onclick="setReportView('int')" title="D-거래처/D-홀딩스/In-direct 3분류 그대로, 딜러명·홀딩스명별 breakdown도 표시 (커미션/기여도 산정 기준)">내부용</button>
 </div>
 <div class="view-toggle">
   <span class="vt-cap">연도</span>
@@ -440,6 +442,9 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
   <div class="card compact"><div class="ctitle" id="ct-dealShare">거래 구분 비중</div><div class="chart-box chart-box--tall"><canvas id="dealShareChart"></canvas></div></div>
   <div class="card compact"><div class="ctitle" id="ct-dealMonth">월별 거래 구분 매출</div><div class="chart-box chart-box--tall"><canvas id="dealMonthChart"></canvas></div></div>
 </div>
+<!-- 딜러명·홀딩스명별 breakdown - 내부용 전용(대외용은 '딜러이름 나눌 필요 없이' 딜러/논딜러
+     2분류만 보므로 통째로 숨긴다, 2026-11-10 이가람 요청). renderDealType()에서 토글. -->
+<div id="dealerBreakdownWrap">
 <div class="card compact" style="margin-bottom:14px">
   <div class="ctitle" id="ct-indirect">In-direct 대리점별 매출</div>
   <div class="dealer-chips" id="indirectChips"></div>
@@ -447,6 +452,15 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
     <div class="chart-box chart-box--tall"><canvas id="indirectBarChart"></canvas></div>
     <div class="chart-box chart-box--tall"><canvas id="indirectMonthChart"></canvas></div>
   </div>
+</div>
+<div class="card compact" style="margin-bottom:14px">
+  <div class="ctitle" id="ct-holdings">D-홀딩스 사별 매출</div>
+  <div class="dealer-chips" id="holdingsChips"></div>
+  <div class="g g12" style="margin:0">
+    <div class="chart-box chart-box--tall"><canvas id="holdingsBarChart"></canvas></div>
+    <div class="chart-box chart-box--tall"><canvas id="holdingsMonthChart"></canvas></div>
+  </div>
+</div>
 </div>
 
 <div class="section-title"><b id="st-unit-ko" style="font-weight:800">판매 대수 추이</b> <span>Unit Sales Trend</span></div>
@@ -560,9 +574,11 @@ let _selQuars = new Set([QK]);
 const ALL_Q = ['Q1','Q2','Q3','Q4'];
 
 // 보고 기준(대외용/내부용) - 페이지 전체에 걸친 전역 상태(2026-11-10 이가람 요청).
-// 지금은 '거래 구분별 실적'에서 D-홀딩스 합산 방식만 다르지만, 앞으로 다른 섹션도
-// 이 기준에 따라 완전히 다르게 보여줄 수 있어 맨 위 전역 토글로 둔다.
-let _reportView='ext';
+// 내부용(기본값) : D-거래처/D-홀딩스/In-direct 3분류, 딜러명·홀딩스명별 breakdown까지.
+// 대외용         : GMPP·Cryo7를 세븐유/이노메드로 판 건만 '딜러', 나머지는 전부 '논딜러'.
+// 지금은 '거래 구분별 실적' 섹션만 이 기준을 쓰지만, 앞으로 다른 섹션도 이 기준에 따라
+// 완전히 다르게 보여줄 수 있어 맨 위 전역 토글로 둔다.
+let _reportView='int';
 function setReportView(v){
   if(v===_reportView) return;
   _reportView=v;
@@ -1000,13 +1016,15 @@ function renderDeck(salesData){
 }
 
 // ── 거래 구분별 실적 (D-거래처 / D-홀딩스 / In-direct) ─────────────────
-// 전역 보고 기준(_reportView, 위 '기간 선택' 근처에 선언)에 따라 D-홀딩스를 D-거래처와
-// 합쳐 '다이렉트' 1개로 묶을지(내부용) 3분류 그대로 둘지(대외용) 결정한다.
-const DEAL_ORDER_EXT=['D-거래처','D-홀딩스','In-direct'];
-const DEAL_ORDER_INT=['다이렉트','In-direct'];
-const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#E07BB8','다이렉트':'#702C63'};
-const dealOrder=()=>_reportView==='int'?DEAL_ORDER_INT:DEAL_ORDER_EXT;
-const dealGroupOf=d=>{const k=dealTypeOf(d); return _reportView==='int'&&k!=='In-direct' ? '다이렉트' : k;};
+// 전역 보고 기준(_reportView, 위 '기간 선택' 근처에 선언)에 따라 분류 자체가 달라진다.
+//  · 내부용(기본값) : dealTypeOf() 그대로 D-거래처/D-홀딩스/In-direct 3분류.
+//  · 대외용         : GMPP·Cryo7를 세븐유/이노메드로 판 건(billToKey가 'Bill to '로
+//    시작하는 건)만 '딜러', 나머지는 전부 '논딜러' - 다른 이름 구분은 없다.
+const DEAL_ORDER_INT=['D-거래처','D-홀딩스','In-direct'];
+const DEAL_ORDER_EXT=['딜러','논딜러'];
+const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#E07BB8','딜러':'#E07BB8','논딜러':'#702C63'};
+const dealOrder=()=>_reportView==='ext'?DEAL_ORDER_EXT:DEAL_ORDER_INT;
+const dealGroupOf=d=>_reportView==='ext' ? (billToKey(d).startsWith('Bill to ')?'딜러':'논딜러') : dealTypeOf(d);
 // Dealer Name 자체는 순수하게 유지한다(SEVEN U/Innomed/TMI/알펙스메디). '딜러가 병원을
 // 소개한 게 아니라 자기가 직접 구매해간 건(제품 무관)'은 sales 레코드의 billToSelf
 // 플래그로 따로 들어오고, 여기(In-direct 대리점별 매출)에서만 'Bill to 세븐유/이노메드'라는
@@ -1035,7 +1053,7 @@ function billToKey(d){
 // 추정)는 D-거래처로 되돌린다.
 const KNOWN_HOLDINGS=['Beauko','Bori','Human','티모티','엘룩스코리아','동안기획','엠디마케팅','Seed Group','BBG','최강닥터'];
 function dealTypeOf(d){
-  if(DEAL_ORDER_EXT.includes(d.dealType)) return d.dealType;
+  if(DEAL_ORDER_INT.includes(d.dealType)) return d.dealType;
   const n=String(d.dealerName||'').trim();
   if(!n||n==='병원(direct)') return 'D-거래처';
   if(INDIRECT_ORDER.includes(n)) return 'In-direct';
@@ -1044,12 +1062,18 @@ function dealTypeOf(d){
 }
 let _indirectSel=new Set();
 function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+let _holdingsSel=new Set();
+function toggleHoldings(name){ if(name===null) _holdingsSel.clear(); else if(_holdingsSel.has(name)) _holdingsSel.delete(name); else _holdingsSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+const HOLD_PALETTE=['#702C63','#A6228C','#C4A0BC','#8A8C8B','#3A1533','#E07BB8','#F0C6E2','#5B2150','#B98CAE','#4D4D4D'];
 function renderDealType(salesData){
   const setT=(id,ko,en)=>{const el=document.getElementById(id);if(el)el.textContent=t(ko,en);};
   setT('st-deal-ko','거래 구분별 실적','Deal Type');
   setT('ct-dealShare',`거래 구분 비중 · ${periodLabel()}`,`Deal type share · ${periodLabel()}`);
   setT('ct-dealMonth','월별 거래 구분 매출','Monthly revenue by deal type');
   setT('ct-indirect','In-direct 대리점별 매출 · 대리점을 누르면 전체 안에서 강조','In-direct by dealer · click a dealer to highlight it');
+  setT('ct-holdings','D-홀딩스 사별 매출 · 회사를 누르면 전체 안에서 강조','D-Holdings by company · click a company to highlight it');
+  const wrap=document.getElementById('dealerBreakdownWrap');
+  if(wrap) wrap.style.display = _reportView==='ext' ? 'none' : '';
   const selQs=selectedQuarters();
   const sc=salesData.filter(d=>selQs.includes(d.quarter)&&d.status==='Ship Confirm');
   const tot=sumBy(sc,d=>d.priceKRW||0);
@@ -1089,6 +1113,25 @@ function renderDealType(salesData){
       scales:{x:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},y:{grid:{display:false}}}}});
   mkChart('indirectMonthChart',bar(months.map(monthLabel),shown.map(n=>({label:dealerDisp(n),_fmt:v=>_numFmt(v),backgroundColor:dim(n)?fade(colorOf(n)):colorOf(n),borderRadius:3,
     data:months.map(m=>toChart(sumBy(ind.filter(d=>billToKey(d)===n&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
+  // D-홀딩스 사별 (내부용 전용 - 대외용일 땐 위에서 wrap을 숨겨서 아예 안 그려도 되지만,
+  // 토글을 왔다갔다 해도 데이터가 바로 보이도록 매번 계산해 둔다)
+  const hold=sc.filter(d=>dealTypeOf(d)==='D-홀딩스'), holdTot=sumBy(hold,d=>d.priceKRW||0);
+  const holdNames=[...new Set(hold.map(d=>String(d.dealerName||'').trim()))].filter(Boolean);
+  const holdAmtOf=n=>sumBy(hold.filter(d=>String(d.dealerName||'').trim()===n),d=>d.priceKRW||0);
+  const holdCntOf=n=>hold.filter(d=>String(d.dealerName||'').trim()===n).length;
+  const holdColorOf=n=>HOLD_PALETTE[holdNames.indexOf(n)%HOLD_PALETTE.length]||'#B5B5B5';
+  const holdDim=n=>_holdingsSel.size&&!_holdingsSel.has(n);
+  const holdChips=document.getElementById('holdingsChips');
+  if(holdChips) holdChips.innerHTML=holdNames.map(n=>{const a=holdAmtOf(n);return `<button class="dchip${_holdingsSel.has(n)?' on':''}" onclick="toggleHoldings(${JSON.stringify(n).replace(/"/g,'&quot;')})"><i style="background:${holdColorOf(n)}"></i>${n} <small>${a?fmtA(a):'-'} · ${holdTot?(a/holdTot*100).toFixed(0):0}%</small></button>`;}).join('')
+    +(_holdingsSel.size?`<button class="dchip clear" onclick="toggleHoldings(null)">${t('선택 해제','Clear')}</button>`:'')
+    +`<span class="dim" style="margin-left:6px">D-홀딩스 ${fmtA(holdTot)} · ${t('전체의','of total')} ${tot?(holdTot/tot*100).toFixed(1):0}%</span>`;
+  const holdShown=holdNames.filter(n=>holdAmtOf(n)>0||_holdingsSel.has(n));
+  mkChart('holdingsBarChart',{type:'bar',data:{labels:holdShown,datasets:[{label:t('매출','Revenue'),_fmt:v=>_numFmt(v)+unitSuffix(),
+      data:holdShown.map(n=>toChart(holdAmtOf(n))),backgroundColor:holdShown.map(n=>holdDim(n)?fade(holdColorOf(n)):holdColorOf(n)),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>{const n=holdShown[c.dataIndex];return ` ${fmtA(holdAmtOf(n))} · ${holdCntOf(n)}${t('건','')} · D-홀딩스 ${holdTot?(holdAmtOf(n)/holdTot*100).toFixed(1):0}%`;}}}},
+      scales:{x:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},y:{grid:{display:false}}}}});
+  mkChart('holdingsMonthChart',bar(months.map(monthLabel),holdShown.map(n=>({label:n,_fmt:v=>_numFmt(v),backgroundColor:holdDim(n)?fade(holdColorOf(n)):holdColorOf(n),borderRadius:3,
+    data:months.map(m=>toChart(sumBy(hold.filter(d=>String(d.dealerName||'').trim()===n&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
 }
 
 // ── 슬라이드 3: 팀/담당자 목표 대비 실적 ─────────────────────────────
