@@ -552,14 +552,20 @@ img,video{max-width:100%;height:auto}
     //  · D-거래처  : 병원(direct) 자동 고정 (기존 그대로)
     const INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
     const HOLDINGS_EXCLUDED = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
-    // 세븐유·이노메드는 '딜러가 병원을 소개한 진짜 In-direct 건'과 '딜러 자신이 GMPP·Cryo7·
-    // Picoway 등을 직접 구매한 건'이 같은 Dealer Name 안에 섞인다(2026-11-09 확인: 같은 딜러·
-    // 같은 제품도 건별로 Direct/In-direct가 갈린다 - 제품이나 담당자로는 자동 구분이 안 된다).
-    // 예전엔 이걸 Dealer Name에 'Bill to SEVEN U'라는 별도 문자열로 적어 넣었는데, 그러면
-    // 통합데이터·딜러관리·커미션 매칭에서 '세븐유'와 'Bill to 세븐유'가 서로 다른 딜러로
-    // 쪼개져 보였다. 그래서 Dealer Name은 그대로 두고 별도 체크박스(billToSelf)로 뺀다 -
-    // Detail Report에서만 이 플래그로 'Bill to 세븐유/이노메드'를 구분해 보여준다.
+    // 세븐유·이노메드는 '딜러가 병원을 소개한 진짜 In-direct 건'과 '딜러 자신이 직접
+    // 구매해간 건'이 같은 Dealer Name 안에 섞인다. 예전엔 이걸 Dealer Name에
+    // 'Bill to SEVEN U'라는 별도 문자열로 적어 넣었는데, 그러면 통합데이터·딜러관리·
+    // 커미션 매칭에서 '세븐유'와 'Bill to 세븐유'가 서로 다른 딜러로 쪼개져 보였다.
+    // 그래서 Dealer Name은 그대로 두고 별도 플래그(billToSelf)로 뺀다 - Detail
+    // Report에서만 이 플래그로 'Bill to 세븐유/이노메드'를 구분해 보여준다.
     const BILL_TO_ELIGIBLE = ['SEVEN U', 'Innomed'];
+    // Dealer Name이 세븐유/이노메드이고 Product가 아래 목록이면 '자체구매'로 보는 게
+    // 영업팀 확정 규칙이다(2026-11-10, 피코웨이만 확정 - 추가 제품은 이가람님이 추후 지정).
+    // Dealer Name·Product를 바꿀 때마다 이 규칙으로 billToSelf 기본값을 다시 맞추되,
+    // 규칙에 없는 제품은 체크박스로 직접 켜고 끌 수 있게 둔다(완전 자동화 아님, 안전판).
+    const BILL_TO_SELF_PRODUCTS = ['Picoway'];
+    const billToSelfDefault = (dealerName, product) =>
+      BILL_TO_ELIGIBLE.includes(dealerName) && BILL_TO_SELF_PRODUCTS.includes(product);
     // 이미 저장된 건을 수정할 때 예전 값이 목록에 없으면 빈칸처럼 보이므로, 현재 값은 맨 앞에 남겨 둔다.
     const dealerOptionsFor = (dealType, allDealers, current) => {
       const opts = dealType === 'In-direct' ? INDIRECT_DEALERS
@@ -1668,13 +1674,14 @@ img,video{max-width:100%;height:auto}
             dealerName: value === 'D-거래처' ? DIRECT_DEALER_NAME : (keep ? form.dealerName : '') });
           document.querySelector('[name="dealerName"]')?.classList.remove('field-invalid');
         } else if (name === 'billToSelf') {
-          // 체크박스 - value가 아니라 checked를 쓴다
+          // 체크박스 - value가 아니라 checked를 쓴다 (규칙표에 없는 제품을 수동으로 조정할 때)
           setForm({ ...form, billToSelf: e.target.checked });
         } else if (name === 'dealerName') {
-          // Dealer Name을 바꾸면 '자체구매' 체크는 항상 해제한다 - 세븐유 체크 상태에서
-          // 이노메드로 바꾸는 경우처럼, 둘 다 체크 대상이라 조건을 'BILL_TO_ELIGIBLE에
-          // 있으면 유지'로 느슨하게 두면 엉뚱한 딜러의 체크가 그대로 넘어간다.
-          setForm({ ...form, dealerName: value, billToSelf: false });
+          // Dealer Name을 바꾸면 '자체구매'는 규칙표(세븐유/이노메드 + Picoway 등)로 다시 맞춘다.
+          setForm({ ...form, dealerName: value, billToSelf: billToSelfDefault(value, form.product) });
+        } else if (name === 'product') {
+          // Product를 바꿔도 같은 규칙표로 '자체구매' 기본값을 다시 맞춘다.
+          setForm({ ...form, product: value, billToSelf: billToSelfDefault(form.dealerName, value) });
         } else {
           setForm({ ...form, [name]: value });
         }
