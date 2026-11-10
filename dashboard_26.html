@@ -84,6 +84,7 @@ h1 span{color:var(--accent);}
 .section-title span{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;}
 .kpi-row{display:grid;gap:12px;margin-bottom:16px;}
 .kpi-5{grid-template-columns:repeat(5,1fr);}
+.kpi-2{grid-template-columns:repeat(2,1fr);}
 .kpi-3{grid-template-columns:repeat(3,1fr);}
 .kpi-4{grid-template-columns:repeat(4,1fr);}
 @media(max-width:760px){.kpi-4{grid-template-columns:1fr 1fr;}}
@@ -268,6 +269,7 @@ html,body{overflow-x:hidden;max-width:100vw;}
   .kpi-4,.qbreak-grid{grid-template-columns:repeat(4,1fr)!important;}
   .kpi-5{grid-template-columns:repeat(5,1fr)!important;}
   .kpi-3,.sr-kpis{grid-template-columns:repeat(3,1fr)!important;}
+  .kpi-2{grid-template-columns:repeat(2,1fr)!important;}
   .kpi-row,.g{margin-bottom:10px;gap:10px;}
   .card{padding:12px;} .card.compact{padding:10px;}
   .tab-pane{break-inside:avoid;page-break-inside:avoid;}
@@ -425,6 +427,10 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
 <!-- 거래 구분별 실적 (2026-11-03 영업팀 Lee GR 요청): D-거래처 / D-홀딩스 / In-direct,
      In-direct는 대리점을 눌러 전체 구성 안에서 비교. 위 연도·분기 선택을 그대로 따른다. -->
 <div class="section-title"><b id="st-deal-ko" style="font-weight:800">거래 구분별 실적</b> <span>Deal Type</span></div>
+<div class="view-toggle" id="dealViewToggle">
+  <button class="vt-btn active" id="dealViewExtBtn" onclick="setDealView('ext');document.getElementById('dealViewExtBtn').classList.add('active');document.getElementById('dealViewIntBtn').classList.remove('active');" title="D-거래처/D-홀딩스/In-direct 3분류 (일본 발표용 등 외부 자료 기준)">대외용</button>
+  <button class="vt-btn" id="dealViewIntBtn" onclick="setDealView('int');document.getElementById('dealViewIntBtn').classList.add('active');document.getElementById('dealViewExtBtn').classList.remove('active');" title="D-홀딩스를 영업사원 실적(다이렉트)으로 합산 (커미션/기여도 산정 기준)">내부용</button>
+</div>
 <div class="kpi-row kpi-3" id="dealKpis"></div>
 <div class="g g12">
   <div class="card compact"><div class="ctitle" id="ct-dealShare">거래 구분 비중</div><div class="chart-box chart-box--tall"><canvas id="dealShareChart"></canvas></div></div>
@@ -978,8 +984,17 @@ function renderDeck(salesData){
 }
 
 // ── 거래 구분별 실적 (D-거래처 / D-홀딩스 / In-direct) ─────────────────
-const DEAL_ORDER=['D-거래처','D-홀딩스','In-direct'];
-const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#E07BB8'};
+// 대외용(ext) : D-거래처·D-홀딩스·In-direct 3분류 그대로 (일본 발표용 등 외부 자료 기준).
+// 내부용(int) : D-홀딩스는 영업사원 본인 실적으로 보고 D-거래처와 합쳐 '다이렉트' 1개로
+//   묶는다(2026-11-10 이가람 요청) - 커미션/기여도 산정은 이 기준을 쓴다. In-direct(세븐유·
+//   이노메드·TMI·알펙스메디)만 실제 딜러 기여로 본다.
+let _dealView='ext';
+function setDealView(v){ if(v===_dealView) return; _dealView=v; if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+const DEAL_ORDER_EXT=['D-거래처','D-홀딩스','In-direct'];
+const DEAL_ORDER_INT=['다이렉트','In-direct'];
+const DEAL_COLOR={'D-거래처':'#702C63','D-홀딩스':'#C4A0BC','In-direct':'#E07BB8','다이렉트':'#702C63'};
+const dealOrder=()=>_dealView==='int'?DEAL_ORDER_INT:DEAL_ORDER_EXT;
+const dealGroupOf=d=>{const k=dealTypeOf(d); return _dealView==='int'&&k!=='In-direct' ? '다이렉트' : k;};
 // Dealer Name 자체는 순수하게 유지한다(SEVEN U/Innomed/TMI/알펙스메디). '딜러가 병원을
 // 소개한 게 아니라 자기가 직접 구매해간 건(제품 무관)'은 sales 레코드의 billToSelf
 // 플래그로 따로 들어오고, 여기(In-direct 대리점별 매출)에서만 'Bill to 세븐유/이노메드'라는
@@ -1008,7 +1023,7 @@ function billToKey(d){
 // 추정)는 D-거래처로 되돌린다.
 const KNOWN_HOLDINGS=['Beauko','Bori','Human','티모티','엘룩스코리아','동안기획','엠디마케팅','Seed Group','BBG','최강닥터'];
 function dealTypeOf(d){
-  if(DEAL_ORDER.includes(d.dealType)) return d.dealType;
+  if(DEAL_ORDER_EXT.includes(d.dealType)) return d.dealType;
   const n=String(d.dealerName||'').trim();
   if(!n||n==='병원(direct)') return 'D-거래처';
   if(INDIRECT_ORDER.includes(n)) return 'In-direct';
@@ -1026,20 +1041,24 @@ function renderDealType(salesData){
   const selQs=selectedQuarters();
   const sc=salesData.filter(d=>selQs.includes(d.quarter)&&d.status==='Ship Confirm');
   const tot=sumBy(sc,d=>d.priceKRW||0);
-  const by={}; DEAL_ORDER.forEach(k=>by[k]={amt:0,cnt:0});
-  sc.forEach(d=>{const k=dealTypeOf(d); by[k].amt+=d.priceKRW||0; by[k].cnt++;});
+  const order=dealOrder();
+  const by={}; order.forEach(k=>by[k]={amt:0,cnt:0});
+  sc.forEach(d=>{const k=dealGroupOf(d); by[k].amt+=d.priceKRW||0; by[k].cnt++;});
   const kp=document.getElementById('dealKpis');
-  if(kp) kp.innerHTML=DEAL_ORDER.map(k=>`<div class="kpi deal-kpi" style="border-top:3px solid ${DEAL_COLOR[k]}"><div class="klabel">${k}</div><div class="kval">${fmtA(by[k].amt)}</div><div class="ksub">${by[k].cnt}${t('건',' deals')} · ${tot?(by[k].amt/tot*100).toFixed(1):0}%</div></div>`).join('');
+  if(kp){
+    kp.className=`kpi-row kpi-${order.length}`;
+    kp.innerHTML=order.map(k=>`<div class="kpi deal-kpi" style="border-top:3px solid ${DEAL_COLOR[k]}"><div class="klabel">${k}</div><div class="kval">${fmtA(by[k].amt)}</div><div class="ksub">${by[k].cnt}${t('건',' deals')} · ${tot?(by[k].amt/tot*100).toFixed(1):0}%</div></div>`).join('');
+  }
   // 비중 도넛
-  const ks=DEAL_ORDER.filter(k=>by[k].amt>0);
+  const ks=order.filter(k=>by[k].amt>0);
   mkChart('dealShareChart',donutCfg(ks,ks.map(k=>by[k].amt),ks.map(k=>DEAL_COLOR[k]),{min:0.04,tip:(c,tt)=>` ${c.label}: ${fmtA(c.raw)} (${(c.raw/tt*100).toFixed(1)}%)`}));
   // 월별 누적 막대
   const months=selectedMonthKeys(), getM=s=>s?String(s).slice(0,7):'';
   const bar=(labels,sets,{horiz=false}={})=>({type:'bar',data:{labels,datasets:sets},options:{responsive:true,maintainAspectRatio:false,indexAxis:horiz?'y':'x',
     plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'rect',padding:10}},tooltip:{...TT,mode:horiz?'nearest':'index',callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}${unitSuffix()}`}}},
     scales:{x:{stacked:!horiz,grid:{display:horiz,color:'#f0f1f5'}},y:{stacked:!horiz,grid:{display:!horiz,color:'#f0f1f5'},ticks:horiz?{}:{callback:v=>`${v}${unitSuffix()}`}}}}});
-  mkChart('dealMonthChart',bar(months.map(monthLabel),DEAL_ORDER.map(k=>({label:k,_fmt:v=>_numFmt(v),backgroundColor:DEAL_COLOR[k],borderRadius:3,
-    data:months.map(m=>toChart(sumBy(sc.filter(d=>dealTypeOf(d)===k&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
+  mkChart('dealMonthChart',bar(months.map(monthLabel),order.map(k=>({label:k,_fmt:v=>_numFmt(v),backgroundColor:DEAL_COLOR[k],borderRadius:3,
+    data:months.map(m=>toChart(sumBy(sc.filter(d=>dealGroupOf(d)===k&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
   // In-direct 대리점
   const ind=sc.filter(d=>dealTypeOf(d)==='In-direct'), indTot=sumBy(ind,d=>d.priceKRW||0);
   const names=[...INDIRECT_ORDER,...[...new Set(ind.map(billToKey))].filter(n=>!INDIRECT_ORDER.includes(n))];
