@@ -1602,6 +1602,22 @@ img,video{max-width:100%;height:auto}
           .catch(() => alert(lang==='ko' ? '실패했습니다' : 'Failed'));
       };
 
+      // billToSelf 자동판정 기능(2026-11-10) 이전에 세븐유/이노메드로 GMPP·Cryo7를
+      // 입력해 둔 건은 billToSelf 필드 자체가 없어 자동판정이 안 걸려 있다 - 한 번에 보정한다.
+      const backfillBillToSelf = () => {
+        if (!requireDealerAdmin()) return;
+        const rows = salesData.filter(d => BILL_TO_ELIGIBLE.includes(d.dealerName) && BILL_TO_SELF_PRODUCTS.includes(d.product) && !d.billToSelf);
+        if (!rows.length) { alert(lang==='ko' ? '보정할 건이 없습니다.' : 'Nothing to backfill.'); return; }
+        if (!window.confirm(lang==='ko'
+          ? `세븐유/이노메드 + GMPP/Cryo7인데 자체구매(Bill to) 표시가 안 된 ${rows.length}건을 전부 billToSelf=true로 보정합니다. 계속할까요?`
+          : `Backfill billToSelf=true on ${rows.length} row(s). Continue?`)) return;
+        const batch = db.batch();
+        rows.forEach(row => batch.update(db.collection("sales").doc(String(row.id)), { billToSelf: true }));
+        batch.commit()
+          .then(() => alert(lang==='ko' ? '보정 완료' : 'Done'))
+          .catch(() => alert(lang==='ko' ? '실패했습니다' : 'Failed'));
+      };
+
       // 이미 쓰인 딜러는 지우지 않는다 - 지우면 그 매출 행의 딜러명이 목록에 없는 값으로 남아
       // 드롭다운에서 선택 불가 상태가 되고, 나중에 수정할 때 조용히 빈칸으로 덮일 수 있다.
       const deleteDealer = (name) => {
@@ -3290,9 +3306,12 @@ img,video{max-width:100%;height:auto}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
                   <div className="flex justify-between items-center mb-1 flex-wrap gap-2">
                     <span className="text-sm font-bold text-gray-600">등록된 딜러 {dealers.length}개</span>
-                    {canEdit
-                      ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
-                      : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
+                    <div className="flex gap-2">
+                      {canEdit && <button onClick={backfillBillToSelf} title="billToSelf 자동판정 도입 전에 입력된 세븐유/이노메드 GMPP·Cryo7 건 보정" className="text-xs bg-purple-100 text-purple-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-purple-200 transition">자체구매 플래그 보정</button>}
+                      {canEdit
+                        ? <button onClick={addDealer} className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-200 transition">+ 딜러 추가</button>
+                        : <button onClick={requestDealer} className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-amber-200 transition">+ 딜러 추가 요청</button>}
+                    </div>
                   </div>
                   {/* 안내는 이 한 곳에만 둔다. 표 위·아래로 나눠 놓으니 같은 얘기가 두 군데서
                       각각 여러 줄로 늘어나 읽히지 않았다. */}
