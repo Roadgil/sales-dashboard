@@ -559,10 +559,10 @@ img,video{max-width:100%;height:auto}
     // Report에서만 이 플래그로 'Bill to 세븐유/이노메드'를 구분해 보여준다.
     const BILL_TO_ELIGIBLE = ['SEVEN U', 'Innomed'];
     // Dealer Name이 세븐유/이노메드이고 Product가 아래 목록이면 '자체구매'로 보는 게
-    // 영업팀 확정 규칙이다(2026-11-10, 피코웨이만 확정 - 추가 제품은 이가람님이 추후 지정).
+    // 영업팀 확정 규칙이다(2026-11-10, GMPP만 확정 - 추가 제품은 이가람님이 추후 지정).
     // Dealer Name·Product를 바꿀 때마다 이 규칙으로 billToSelf 기본값을 다시 맞추되,
     // 규칙에 없는 제품은 체크박스로 직접 켜고 끌 수 있게 둔다(완전 자동화 아님, 안전판).
-    const BILL_TO_SELF_PRODUCTS = ['Picoway'];
+    const BILL_TO_SELF_PRODUCTS = ['GMPP'];
     const billToSelfDefault = (dealerName, product) =>
       BILL_TO_ELIGIBLE.includes(dealerName) && BILL_TO_SELF_PRODUCTS.includes(product);
     // 신규/기존 거래 구분 - 거래 구분과 같이 필수.
