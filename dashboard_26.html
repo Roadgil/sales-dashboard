@@ -454,7 +454,7 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
   </div>
 </div>
 <div class="card compact" style="margin-bottom:14px">
-  <div class="ctitle" id="ct-holdings">D-홀딩스 사별 매출</div>
+  <div class="ctitle" id="ct-holdings">홀딩스 사별 매출</div>
   <div class="dealer-chips" id="holdingsChips"></div>
   <div class="g g12" style="margin:0">
     <div class="chart-box chart-box--tall"><canvas id="holdingsBarChart"></canvas></div>
@@ -1069,7 +1069,7 @@ function renderDealType(salesData){
   setT('ct-dealShare',`거래 구분 비중 · ${periodLabel()}`,`Deal type share · ${periodLabel()}`);
   setT('ct-dealMonth','월별 거래 구분 매출','Monthly revenue by deal type');
   setT('ct-indirect','딜러 대리점별 매출 · 대리점을 누르면 전체 안에서 강조','Dealer revenue by company · click a dealer to highlight it');
-  setT('ct-holdings','D-홀딩스 사별 매출 · 회사를 누르면 전체 안에서 강조','D-Holdings by company · click a company to highlight it');
+  setT('ct-holdings','홀딩스 사별 매출 · 회사를 누르면 전체 안에서 강조','Holdings by company · click a company to highlight it');
   const wrap=document.getElementById('dealerBreakdownWrap');
   if(wrap) wrap.style.display = _reportView==='ext' ? 'none' : '';
   const selQs=selectedQuarters();
@@ -1091,8 +1091,13 @@ function renderDealType(salesData){
   const bar=(labels,sets,{horiz=false}={})=>({type:'bar',data:{labels,datasets:sets},options:{responsive:true,maintainAspectRatio:false,indexAxis:horiz?'y':'x',
     plugins:{legend:{position:'top',labels:{usePointStyle:true,pointStyle:'rect',padding:10}},tooltip:{...TT,mode:horiz?'nearest':'index',callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}${unitSuffix()}`}}},
     scales:{x:{stacked:!horiz,grid:{display:horiz,color:'#f0f1f5'}},y:{stacked:!horiz,grid:{display:!horiz,color:'#f0f1f5'},ticks:horiz?{}:{callback:v=>`${v}${unitSuffix()}`}}}}});
-  mkChart('dealMonthChart',bar(months.map(monthLabel),order.map(k=>({label:dealLabel(k),_fmt:v=>_numFmt(v),backgroundColor:DEAL_COLOR[k],borderRadius:3,
-    data:months.map(m=>toChart(sumBy(sc.filter(d=>dealGroupOf(d)===k&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
+  // 분기(quarter 필드, 상단 연도·분기 선택과 같은 기준) 안에 있어도 납품일이 그 분기의
+  // 달력월(10~12월 등) 밖인 건이 있다(등록분기≠납품월, 2026-11-10 확인) - 월별 막대에서
+  // 조용히 빠지면 합계(KPI 카드)와 안 맞아 보이니 '기타' 칸에 모아서 반드시 다 보이게 한다.
+  const monthsExt=[...months,'__other__'], monthLabelsExt=[...months.map(monthLabel), t('기타','Other')];
+  const monthKeyOf=d=>{const mk=getM(d.deliveryDate); return months.includes(mk)?mk:'__other__';};
+  mkChart('dealMonthChart',bar(monthLabelsExt,order.map(k=>({label:dealLabel(k),_fmt:v=>_numFmt(v),backgroundColor:DEAL_COLOR[k],borderRadius:3,
+    data:monthsExt.map(m=>toChart(sumBy(sc.filter(d=>dealGroupOf(d)===k&&monthKeyOf(d)===m),d=>d.priceKRW||0)))}))));
   // 딜러(세븐유/이노메드/TMI/알펙스메디) 대리점별 - 내부용은 GMPP Bill-to 여부와 무관하게
   // 딜러 하나당 매출을 전부 합쳐서 보여준다('Bill to 세븐유' 같은 쪼개기는 대외용 전용 개념이라
   // 여기선 안 쓴다, 2026-11-10 이가람 요청).
@@ -1112,8 +1117,8 @@ function renderDealType(salesData){
       data:shown.map(n=>toChart(amtOf(n))),backgroundColor:shown.map(n=>dim(n)?fade(colorOf(n)):colorOf(n)),borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>{const n=shown[c.dataIndex];return ` ${fmtA(amtOf(n))} · ${cntOf(n)}${t('건','')} · 딜러 ${indTot?(amtOf(n)/indTot*100).toFixed(1):0}%`;}}}},
       scales:{x:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},y:{grid:{display:false}}}}});
-  mkChart('indirectMonthChart',bar(months.map(monthLabel),shown.map(n=>({label:dealerDisp(n),_fmt:v=>_numFmt(v),backgroundColor:dim(n)?fade(colorOf(n)):colorOf(n),borderRadius:3,
-    data:months.map(m=>toChart(sumBy(ind.filter(d=>dealerKey(d)===n&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
+  mkChart('indirectMonthChart',bar(monthLabelsExt,shown.map(n=>({label:dealerDisp(n),_fmt:v=>_numFmt(v),backgroundColor:dim(n)?fade(colorOf(n)):colorOf(n),borderRadius:3,
+    data:monthsExt.map(m=>toChart(sumBy(ind.filter(d=>dealerKey(d)===n&&monthKeyOf(d)===m),d=>d.priceKRW||0)))}))));
   // D-홀딩스 사별 (내부용 전용 - 대외용일 땐 위에서 wrap을 숨겨서 아예 안 그려도 되지만,
   // 토글을 왔다갔다 해도 데이터가 바로 보이도록 매번 계산해 둔다)
   const hold=sc.filter(d=>dealTypeOf(d)==='D-홀딩스'), holdTot=sumBy(hold,d=>d.priceKRW||0);
@@ -1125,14 +1130,14 @@ function renderDealType(salesData){
   const holdChips=document.getElementById('holdingsChips');
   if(holdChips) holdChips.innerHTML=holdNames.map(n=>{const a=holdAmtOf(n);return `<button class="dchip${_holdingsSel.has(n)?' on':''}" onclick="toggleHoldings(${JSON.stringify(n).replace(/"/g,'&quot;')})"><i style="background:${holdColorOf(n)}"></i>${n} <small>${a?fmtA(a):'-'} · ${holdTot?(a/holdTot*100).toFixed(0):0}%</small></button>`;}).join('')
     +(_holdingsSel.size?`<button class="dchip clear" onclick="toggleHoldings(null)">${t('선택 해제','Clear')}</button>`:'')
-    +`<span class="dim" style="margin-left:6px">D-홀딩스 ${fmtA(holdTot)} · ${t('전체의','of total')} ${tot?(holdTot/tot*100).toFixed(1):0}%</span>`;
+    +`<span class="dim" style="margin-left:6px">홀딩스 ${fmtA(holdTot)} · ${t('전체의','of total')} ${tot?(holdTot/tot*100).toFixed(1):0}%</span>`;
   const holdShown=holdNames.filter(n=>holdAmtOf(n)>0||_holdingsSel.has(n));
   mkChart('holdingsBarChart',{type:'bar',data:{labels:holdShown,datasets:[{label:t('매출','Revenue'),_fmt:v=>_numFmt(v)+unitSuffix(),
       data:holdShown.map(n=>toChart(holdAmtOf(n))),backgroundColor:holdShown.map(n=>holdDim(n)?fade(holdColorOf(n)):holdColorOf(n)),borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>{const n=holdShown[c.dataIndex];return ` ${fmtA(holdAmtOf(n))} · ${holdCntOf(n)}${t('건','')} · D-홀딩스 ${holdTot?(holdAmtOf(n)/holdTot*100).toFixed(1):0}%`;}}}},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>{const n=holdShown[c.dataIndex];return ` ${fmtA(holdAmtOf(n))} · ${holdCntOf(n)}${t('건','')} · 홀딩스 ${holdTot?(holdAmtOf(n)/holdTot*100).toFixed(1):0}%`;}}}},
       scales:{x:{grid:{color:'#f0f1f5'},ticks:{callback:v=>`${v}${unitSuffix()}`}},y:{grid:{display:false}}}}});
-  mkChart('holdingsMonthChart',bar(months.map(monthLabel),holdShown.map(n=>({label:n,_fmt:v=>_numFmt(v),backgroundColor:holdDim(n)?fade(holdColorOf(n)):holdColorOf(n),borderRadius:3,
-    data:months.map(m=>toChart(sumBy(hold.filter(d=>String(d.dealerName||'').trim()===n&&getM(d.deliveryDate)===m),d=>d.priceKRW||0)))}))));
+  mkChart('holdingsMonthChart',bar(monthLabelsExt,holdShown.map(n=>({label:n,_fmt:v=>_numFmt(v),backgroundColor:holdDim(n)?fade(holdColorOf(n)):holdColorOf(n),borderRadius:3,
+    data:monthsExt.map(m=>toChart(sumBy(hold.filter(d=>String(d.dealerName||'').trim()===n&&monthKeyOf(d)===m),d=>d.priceKRW||0)))}))));
 }
 
 // ── 슬라이드 3: 팀/담당자 목표 대비 실적 ─────────────────────────────
