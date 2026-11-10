@@ -745,6 +745,7 @@ img,video{max-width:100%;height:auto}
           openKey={openKey} onToggleOpen={()=>onToggleOpen('status')} filterArr={filters.status} onToggleValue={val=>onToggleValue('status',val)} onClear={()=>onClear('status')}/>
         <th className="p-2 md:p-3">{T.contractDate}</th>
         <th className="p-2 md:p-3">{T.deliveryDate}</th>
+        <th className="p-2 md:p-3" title="Ship Confirm 전환 시 '반영 분기가 맞다'고 확인한 날짜">{T.scConfirmedDate}</th>
         <MemberFilterTh tableKey={tableKey} col="contractType" label={T.contract} get={r=>r.contractType||'일반'} rows={rows}
           openKey={openKey} onToggleOpen={()=>onToggleOpen('contractType')} filterArr={filters.contractType} onToggleValue={val=>onToggleValue('contractType',val)} onClear={()=>onClear('contractType')}/>
         <MemberFilterTh tableKey={tableKey} col="dealer" label="Dealer" get={r=>r.dealerName||'-'} rows={rows}
@@ -847,6 +848,7 @@ img,video{max-width:100%;height:auto}
         deliveryStatus:    lang==='ko' ? '✅ 납품 완료 현황 (ACT)'      : '✅ Delivery Completed (ACT)',
         deliveryDate:      lang==='ko' ? '납품일'                      : 'Del. Date',
         contractDate:      lang==='ko' ? '계약일'                      : 'Cont. Date',
+        scConfirmedDate:   lang==='ko' ? '확인일'                      : 'Confirmed',
         contract:          lang==='ko' ? '계약'                        : 'Contract',
         actions:           lang==='ko' ? '관리'                        : 'Actions',
         noDelivery:        lang==='ko' ? '등록된 납품 데이터가 없습니다.' : 'No delivery data registered.',
@@ -2867,6 +2869,7 @@ img,video{max-width:100%;height:auto}
           <td className="p-2 md:p-3 font-bold select-none"><span className="inline-block mr-1 text-gray-300 cursor-grab" title="드래그하여 순서 변경">⠿</span>{row.status}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.contractDate||'-'}</td>
           <td className="p-2 md:p-3 text-gray-600">{row.deliveryDate || (row.deliveryTBD ? <span className="text-amber-600 font-bold">미정</span> : '-')}</td>
+          <td className="p-2 md:p-3 text-gray-500">{row.scConfirmedDate||'-'}</td>
           <td className="p-2 md:p-3 font-semibold text-emerald-600">{row.contractType||'일반'}</td>
           <td className="p-2 md:p-3 font-bold text-purple-700">{row.dealerName||'-'}</td>
           <td className="p-2 md:p-3 font-mono text-gray-500">{row.so||'-'}</td>
@@ -4551,7 +4554,7 @@ img,video{max-width:100%;height:auto}
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                             <thead style={{background:'#1e3a8a'}} className="text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ShipConfirm')}/></thead>
                             <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : getOrderedRows('ShipConfirm',filteredRows).map(r=>renderTableRow(r,'ShipConfirm','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
+                              {filteredRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noShipConfirm}</td></tr> : getOrderedRows('ShipConfirm',filteredRows).map(r=>renderTableRow(r,'ShipConfirm','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-900',true))}
                             </tbody>
                           </table>
                         </div>
@@ -4582,7 +4585,7 @@ img,video{max-width:100%;height:auto}
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                             <thead className="bg-blue-800 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('ACT')}/></thead>
                             <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',filteredRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700'))}
+                              {filteredRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noDelivery}</td></tr> : getOrderedRows('ACT',filteredRows).map(r=>renderTableRow(r,'ACT','bg-green-50','bg-gray-200 hover:bg-gray-300 text-gray-700'))}
                             </tbody>
                           </table>
                         </div>
@@ -4613,7 +4616,7 @@ img,video{max-width:100%;height:auto}
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                             <thead className="bg-blue-700 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Pending')}/></thead>
                             <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',filteredRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800'))}
+                              {filteredRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noPending}</td></tr> : getOrderedRows('Pending',filteredRows).map(r=>renderTableRow(r,'Pending','bg-blue-50','bg-blue-200 hover:bg-blue-300 text-blue-800'))}
                             </tbody>
                           </table>
                         </div>
@@ -4644,7 +4647,7 @@ img,video{max-width:100%;height:auto}
                           <table className="min-w-full text-xs md:text-sm text-left whitespace-nowrap">
                             <thead className="bg-orange-500 text-white font-bold"><MemberTableHead rows={rawRows} {...memberTableHeadProps('Backup')}/></thead>
                             <tbody>
-                              {filteredRows.length===0 ? <tr><td colSpan="12" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',filteredRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800'))}
+                              {filteredRows.length===0 ? <tr><td colSpan="13" className="p-6 text-center text-gray-400">{T.noBackup}</td></tr> : getOrderedRows('Backup',filteredRows).map(r=>renderTableRow(r,'Backup','bg-orange-50','bg-orange-200 hover:bg-orange-300 text-orange-800'))}
                             </tbody>
                           </table>
                         </div>
