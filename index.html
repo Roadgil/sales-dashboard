@@ -539,19 +539,18 @@ img,video{max-width:100%;height:auto}
     const CHAIN_TYPES = ['체인', '논체인'];
     const CLINIC_TYPES = ['GP', '피부과', '성형외과'];
 
-    // 거래 구분 - 재무 커미션 Report의 Direct/In-direct 구분을 계약 입력 시점에 바로 잡아둔다.
-    //  · D-거래처 : 딜러 없이 병원에 직접 납품 -> Dealer Name을 DIRECT_DEALER_NAME으로 고정
-    //  · D-홀딩스 : 당사 홀딩스 법인을 통한 직판 (딜러 없음은 같지만 거래 주체가 다름)
-    //  · In-direct: 외부 딜러를 통한 판매 - 커미션 지급 대상, Dealer Name을 직접 고른다
-    const DEAL_TYPES = ['D-거래처', 'D-홀딩스', 'In-direct'];
+    // 거래 구분 - 재무 커미션 Report의 Direct/In-direct 구분. 더 이상 사람이 직접 고르지
+    // 않는다(2026-11-10 재설계) - Dealer Name을 고르면 아래 dealTypeOf()로 자동 유도된다.
+    //  · D-거래처 : 딜러 없이 병원에 직접 납품(영업사원 다이렉트) -> Dealer Name=DIRECT_DEALER_NAME
+    //  · In-direct: 세븐유·이노메드·TMI·알펙스메디 4개 딜러 경유
+    //  · D-홀딩스 : 그 외 등록된 딜러(당사 홀딩스 법인 등) 경유
     // 딜러관리에서 이 이름을 다시 바꾸면 여기도 같이 바꿔야 한다(306feb6에서 '병원'->'병원(direct)'로 통일).
     const DIRECT_DEALER_NAME = '병원(direct)';
-    // 거래 구분별 Dealer Name 선택지 (2026-11-03 영업팀 Lee GR 요청)
-    //  · In-direct : 아래 4개로 고정
-    //  · D-홀딩스  : 딜러 목록에서 In-direct 전용 딜러 4곳(세븐유·이노메드·TMI·알펙스메디)을 뺀 나머지
-    //  · D-거래처  : 병원(direct) 자동 고정 (기존 그대로)
     const INDIRECT_DEALERS = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
-    const HOLDINGS_EXCLUDED = ['SEVEN U', 'Innomed', 'TMI', '알펙스메디'];
+    const dealTypeOf = (dealerName) =>
+      dealerName === DIRECT_DEALER_NAME ? 'D-거래처' :
+      INDIRECT_DEALERS.includes(dealerName) ? 'In-direct' :
+      dealerName ? 'D-홀딩스' : '';
     // 세븐유·이노메드는 '딜러가 병원을 소개한 진짜 In-direct 건'과 '딜러 자신이 직접
     // 구매해간 건'이 같은 Dealer Name 안에 섞인다. 예전엔 이걸 Dealer Name에
     // 'Bill to SEVEN U'라는 별도 문자열로 적어 넣었는데, 그러면 통합데이터·딜러관리·
@@ -566,13 +565,6 @@ img,video{max-width:100%;height:auto}
     const BILL_TO_SELF_PRODUCTS = ['Picoway'];
     const billToSelfDefault = (dealerName, product) =>
       BILL_TO_ELIGIBLE.includes(dealerName) && BILL_TO_SELF_PRODUCTS.includes(product);
-    // 이미 저장된 건을 수정할 때 예전 값이 목록에 없으면 빈칸처럼 보이므로, 현재 값은 맨 앞에 남겨 둔다.
-    const dealerOptionsFor = (dealType, allDealers, current) => {
-      const opts = dealType === 'In-direct' ? INDIRECT_DEALERS
-                 : dealType === 'D-홀딩스' ? (allDealers || []).filter(d => !HOLDINGS_EXCLUDED.includes(d))
-                 : (allDealers || []);
-      return current && !opts.includes(current) ? [current, ...opts] : opts;
-    };
     // 신규/기존 거래 구분 - 거래 구분과 같이 필수.
     const BIZ_STAGES = ['신규', '기존'];
   </script>
@@ -1306,7 +1298,7 @@ img,video{max-width:100%;height:auto}
         if (!form.account.trim())                            { errors.push(T.valAccount);   bad.push('account'); }
         if (!form.status)                                    { errors.push(T.valStatus);    bad.push('status'); }
         if (!form.deliveryDate && !form.deliveryTBD)         { errors.push(T.valDelivery);  bad.push('deliveryDate'); }
-        if (!form.dealType)                                  { errors.push(T.valDealType);  bad.push('dealType'); }
+        // 거래구분은 Dealer Name에서 자동으로 채워지므로 Dealer Name만 검사하면 된다.
         if (!form.dealerName)                                { errors.push(T.valDealer);    bad.push('dealerName'); }
         if (!form.bizStage)                                  { errors.push(T.valBizStage);  bad.push('bizStage'); }
         if (!form.chainType)                                 { errors.push(T.valChainType); bad.push('chainType'); }
@@ -1663,22 +1655,15 @@ img,video{max-width:100%;height:auto}
         } else if (name === 'sido') {
           // 시·도를 바꾸면 이전 시·군·구는 그 지역에 없는 값이므로 같이 비운다
           setForm({ ...form, sido: value, sigungu: '' });
-        } else if (name === 'dealType') {
-          // D-거래처는 딜러 없이 병원에 직접 납품하는 거래라 Dealer Name을 자동으로 고정한다.
-          // 다른 구분으로 바꾸면, 자동으로 넣어둔 값만 지워서 다시 고르게 한다
-          // (사용자가 직접 고른 딜러는 그대로 둔다).
-          // 새 구분의 선택지에 없는 딜러면 비워서 다시 고르게 한다 (예: D-홀딩스로 바꿨는데 세븐유가 남아 있는 경우).
-          const keep = form.dealerName && form.dealerName !== DIRECT_DEALER_NAME
-                       && dealerOptionsFor(value, dealers).includes(form.dealerName);
-          setForm({ ...form, dealType: value,
-            dealerName: value === 'D-거래처' ? DIRECT_DEALER_NAME : (keep ? form.dealerName : '') });
-          document.querySelector('[name="dealerName"]')?.classList.remove('field-invalid');
         } else if (name === 'billToSelf') {
           // 체크박스 - value가 아니라 checked를 쓴다 (규칙표에 없는 제품을 수동으로 조정할 때)
           setForm({ ...form, billToSelf: e.target.checked });
         } else if (name === 'dealerName') {
-          // Dealer Name을 바꾸면 '자체구매'는 규칙표(세븐유/이노메드 + Picoway 등)로 다시 맞춘다.
-          setForm({ ...form, dealerName: value, billToSelf: billToSelfDefault(value, form.product) });
+          // 거래구분은 더 이상 직접 고르지 않는다 - Dealer Name 하나로 dealTypeOf()가 자동
+          // 결정한다. '자체구매'도 규칙표(세븐유/이노메드 + Picoway 등)로 같이 다시 맞춘다.
+          setForm({ ...form, dealerName: value, dealType: dealTypeOf(value),
+            billToSelf: billToSelfDefault(value, form.product) });
+          document.querySelector('[name="dealerName"]')?.classList.remove('field-invalid');
         } else if (name === 'product') {
           // Product를 바꿔도 같은 규칙표로 '자체구매' 기본값을 다시 맞춘다.
           setForm({ ...form, product: value, billToSelf: billToSelfDefault(form.dealerName, value) });
@@ -4251,13 +4236,9 @@ img,video{max-width:100%;height:auto}
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">거래 구분 <span className="text-red-500">*</span></label><select name="dealType" value={form.dealType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                             <option value="">{T.selectRequired}</option>
-                            {DEAL_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                          </select></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span>{form.dealType==='D-거래처' && <span className="ml-1 text-[10px] font-normal text-gray-400">(거래구분에 따라 자동)</span>}</label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} disabled={form.dealType==='D-거래처'} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700 disabled:bg-gray-100 disabled:text-gray-400">
-                            <option value="">{T.selectRequired}</option>
-                            {dealerOptionsFor(form.dealType, dealers, form.dealerName).map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                            {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                           </select>
                           {BILL_TO_ELIGIBLE.includes(form.dealerName) && (
                             <label className="flex items-center gap-1 mt-1 text-[10px] font-bold text-gray-600 cursor-pointer" title="딜러가 병원을 소개한 게 아니라 직접 구매해간 건(제품 무관). Detail Report에서만 'Bill to' 구분으로 쓰인다.">
@@ -4266,6 +4247,7 @@ img,video{max-width:100%;height:auto}
                             </label>
                           )}
                           </div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                             <option value="">{T.selectRequired}</option>
                             {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -4371,13 +4353,9 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">거래 구분 <span className="text-red-500">*</span></label><select name="dealType" value={form.dealType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
                         <option value="">{T.selectRequired}</option>
-                        {DEAL_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span>{form.dealType==='D-거래처' && <span className="ml-1 text-[10px] font-normal text-gray-400">(거래구분에 따라 자동)</span>}</label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} disabled={form.dealType==='D-거래처'} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700 disabled:bg-gray-100 disabled:text-gray-400">
-                        <option value="">{T.selectRequired}</option>
-                        {dealerOptionsFor(form.dealType, dealers, form.dealerName).map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
+                        {dealers.map(d => <option key={d} value={d}>{dealerLabel(d)}</option>)}
                       </select>
                       {BILL_TO_ELIGIBLE.includes(form.dealerName) && (
                         <label className="flex items-center gap-1 mt-1 text-[10px] font-bold text-gray-600 cursor-pointer" title="딜러가 병원을 소개한 게 아니라 직접 구매해간 건(제품 무관). Detail Report에서만 'Bill to' 구분으로 쓰인다.">
@@ -4386,6 +4364,7 @@ img,video{max-width:100%;height:auto}
                         </label>
                       )}
                       </div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                         <option value="">{T.selectRequired}</option>
                         {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
