@@ -348,6 +348,9 @@ body.print-layout .achv th,body.print-layout .achv td,body.print-layout .utab th
 .dchip.on{border-color:var(--accent);background:var(--brand-tint);}
 .dchip.clear{color:var(--muted);}
 .deal-kpi .kval{font-size:20px;}
+.deal-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .15s;}
+.deal-kpi-click:hover{box-shadow:0 2px 10px rgba(0,0,0,.08);}
+.deal-kpi-sel{box-shadow:0 0 0 2px var(--accent) inset;background:var(--brand-tint);}
 #valToggleBtn.on{background:#702C63!important;color:#fff!important;border-color:#702C63!important;}
 @media print{.dealer-chips .dchip.clear{display:none;}}
 .pane-name{display:none;align-items:center;gap:8px;font-size:15px;font-weight:800;color:#702C63;margin:0 0 10px;}
@@ -587,6 +590,21 @@ function setReportView(v){
   if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); }
 }
 
+// 거래구분(D-거래처/D-홀딩스/In-direct) KPI 카드를 누르면 Q1~Q4 분기 버튼처럼 리포트
+// 전체가 그 구분만으로 다시 그려진다(2026-11-03 이가람 요청) - render()의 최상단에서
+// salesData 자체를 걸러내므로 모든 섹션에 그대로 퍼진다. 내부용 전용(대외용은 이름별로
+// 쪼개 볼 필요가 없다는 요청이라 적용 안 함).
+let _dealTypeSel=null;
+function toggleDealTypeSel(key){
+  _dealTypeSel = (_dealTypeSel===key) ? null : key;
+  _indirectSel.clear(); _holdingsSel.clear();   // 상위 구분을 바꾸면 하위 딜러 선택은 초기화
+  if(_loaded.s&&_loaded.t&&_loaded.q) render(_sales,_targets,_qTargets);
+}
+function clearDealFilter(){
+  _dealTypeSel=null; _indirectSel.clear(); _holdingsSel.clear();
+  if(_loaded.s&&_loaded.t&&_loaded.q) render(_sales,_targets,_qTargets);
+}
+
 function availableYears(){
   const ys = new Set((_availableQuarters.length?_availableQuarters:[QUARTER]).map(q=>q.split(' ')[0]));
   ys.add(YR);                        // URL로 들어온 분기의 연도는 목록에 없어도 고를 수 있어야 한다
@@ -816,6 +834,14 @@ function mkChart(id,cfg){if(cfg&&(cfg.type==='doughnut'||cfg.type==='pie')){cons
   o.layout={...(o.layout||{}),padding:c=>_donutPad(c.chart,lgR)};}CFG[id]=cfg;if(CI[id])CI[id].destroy();const el=document.getElementById(id);if(el)CI[id]=new Chart(el,cfg);}
 
 function render(salesData,memberTargets,qTargets){
+  // 거래구분 KPI 카드·딜러/홀딩스 칩을 고르면 Q1~Q4 분기 버튼과 똑같이 리포트 전체를
+  // 그 조건으로만 다시 그린다(2026-11-03 이가람 요청, 내부용 전용) - 여기서 한 번만
+  // salesData를 걸러내면 아래 모든 섹션(renderDeck이 부르는 것들 포함)에 그대로 퍼진다.
+  if(_reportView==='int'){
+    if(_indirectSel.size) salesData=salesData.filter(d=>_indirectSel.has(String(d.dealerName||'').trim()));
+    else if(_holdingsSel.size) salesData=salesData.filter(d=>_holdingsSel.has(String(d.dealerName||'').trim()));
+    else if(_dealTypeSel) salesData=salesData.filter(d=>dealTypeOf(d)===_dealTypeSel);
+  }
   const SC=['Ship Confirm'];
   const selQs = selectedQuarters();
   const scData = salesData.filter(d => selQs.includes(d.quarter) && SC.includes(d.status));
@@ -837,9 +863,17 @@ function render(salesData,memberTargets,qTargets){
         </div>`;}).join('');
     }
   }
-  document.getElementById('dataNoteBar').textContent =
+  // 거래구분/딜러/홀딩스 필터가 걸려 있으면 눈에 띄게 알리고 바로 풀 수 있게 한다
+  // (2026-11-03 이가람 요청 기능 - 안 그러면 리포트 전체 숫자가 왜 줄었는지 알기 어렵다).
+  const dealFilterLabel = _reportView==='int'
+    ? (_indirectSel.size ? [...(_indirectSel)].map(dealerDisp).join(', ')
+       : _holdingsSel.size ? [...(_holdingsSel)].join(', ')
+       : _dealTypeSel ? dealLabel(_dealTypeSel) : '')
+    : '';
+  document.getElementById('dataNoteBar').innerHTML =
     t(`집계 기준: ${periodLabel()} · Ship Confirm만 (ACT · Pending · Back up 제외)`,
-      `Revenue basis: ${periodLabel()} · Ship Confirm only`);
+      `Revenue basis: ${periodLabel()} · Ship Confirm only`)
+    + (dealFilterLabel ? ` · <b>${t('필터','Filter')}: ${dealFilterLabel}</b> <a href="javascript:void(0)" onclick="clearDealFilter()" style="text-decoration:underline">${t('전체 보기','Show all')}</a>` : '');
 
   // 이 보고서는 분기가 끝난 뒤 결산으로 보는 화면이라 Ship Confirm만 집계한다.
   // ACT·Pending·Back up 합계도 계산해 뒀었는데, Target 달성 현황과 파이프라인 섹션을
@@ -1059,9 +1093,10 @@ function dealTypeOf(d){
   return 'D-거래처';
 }
 let _indirectSel=new Set();
-function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+// 딜러를 하나라도 고르면 Q1~Q4처럼 리포트 전체가 그 딜러만으로 다시 그려진다(render() 참고).
+function toggleIndirect(name){ if(name===null) _indirectSel.clear(); else if(_indirectSel.has(name)) _indirectSel.delete(name); else _indirectSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ render(_sales,_targets,_qTargets); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
 let _holdingsSel=new Set();
-function toggleHoldings(name){ if(name===null) _holdingsSel.clear(); else if(_holdingsSel.has(name)) _holdingsSel.delete(name); else _holdingsSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ renderDealType(_sales); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
+function toggleHoldings(name){ if(name===null) _holdingsSel.clear(); else if(_holdingsSel.has(name)) _holdingsSel.delete(name); else _holdingsSel.add(name); if(_loaded.s&&_loaded.t&&_loaded.q){ render(_sales,_targets,_qTargets); if(typeof _zoomIdx!=='undefined'&&_zoomIdx>=0) renderZoom(); } }
 const HOLD_PALETTE=['#702C63','#A6228C','#C4A0BC','#8A8C8B','#3A1533','#E07BB8','#F0C6E2','#5B2150','#B98CAE','#4D4D4D'];
 function renderDealType(salesData){
   const setT=(id,ko,en)=>{const el=document.getElementById(id);if(el)el.textContent=t(ko,en);};
@@ -1081,7 +1116,9 @@ function renderDealType(salesData){
   const kp=document.getElementById('dealKpis');
   if(kp){
     kp.className=`kpi-row kpi-${order.length}`;
-    kp.innerHTML=order.map(k=>`<div class="kpi deal-kpi" style="border-top:3px solid ${DEAL_COLOR[k]}"><div class="klabel">${dealLabel(k)}</div><div class="kval">${fmtA(by[k].amt)}</div><div class="ksub">${by[k].cnt}${t('건',' deals')} · ${tot?(by[k].amt/tot*100).toFixed(1):0}%</div></div>`).join('');
+    const clickable=_reportView==='int';
+    const clickAttr=k=>clickable?` onclick="toggleDealTypeSel(${JSON.stringify(k).replace(/"/g,'&quot;')})" title="${t('눌러서 이 구분만 보기(다시 누르면 해제)','Click to filter to this type')}"`:'';
+    kp.innerHTML=order.map(k=>`<div class="kpi deal-kpi${clickable?' deal-kpi-click':''}${clickable&&_dealTypeSel===k?' deal-kpi-sel':''}" style="border-top:3px solid ${DEAL_COLOR[k]}"${clickAttr(k)}><div class="klabel">${dealLabel(k)}</div><div class="kval">${fmtA(by[k].amt)}</div><div class="ksub">${by[k].cnt}${t('건',' deals')} · ${tot?(by[k].amt/tot*100).toFixed(1):0}%</div></div>`).join('');
   }
   // 비중 도넛
   const ks=order.filter(k=>by[k].amt>0);
