@@ -4247,13 +4247,14 @@ img,video{max-width:100%;height:auto}
                             </label>
                           )}
                           </div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                             <option value="">{T.selectRequired}</option>
                             {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                             <option value="">{T.selectRequired}</option>
                             {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -4262,16 +4263,15 @@ img,video{max-width:100%;height:auto}
                             <option value="">{T.selectRequired}</option>
                             {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                           </select></div>
-                          <div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                             <div className="flex gap-2">
                               <input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
                               <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
                             </div></div>
+                          <div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
@@ -4364,13 +4364,14 @@ img,video{max-width:100%;height:auto}
                         </label>
                       )}
                       </div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">신규/기존 구분 <span className="text-red-500">*</span></label><select name="bizStage" value={form.bizStage} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                         <option value="">{T.selectRequired}</option>
                         {BIZ_STAGES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">체인 구분 <span className="text-red-500">*</span></label><select name="chainType" value={form.chainType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
                         <option value="">{T.selectRequired}</option>
                         {CHAIN_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -4379,16 +4380,15 @@ img,video{max-width:100%;height:auto}
                         <option value="">{T.selectRequired}</option>
                         {CLINIC_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                       </select></div>
-                      <div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                         <div className="flex gap-2">
                           <input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
                           <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
                         </div></div>
+                      <div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
