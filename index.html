@@ -763,7 +763,6 @@ img,video{max-width:100%;height:auto}
     );
 
     const App = () => {
-      const SECRET_PASSWORD = "dladydcjf";
       // localStorage 캐시 버전 체크 - 구버전 데이터 자동 초기화
       const CACHE_VERSION = 'v6';
       if (safeLS.get('cacheVersion') !== CACHE_VERSION) {
@@ -1025,25 +1024,8 @@ img,video{max-width:100%;height:auto}
       const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
       const [summaryLocked, setSummaryLocked]           = useState(true);
-      const [showSummaryPwdModal, setShowSummaryPwdModal] = useState(false);
       const [showErModal, setShowErModal] = useState(false);
-      const [erPwdInput, setErPwdInput]   = useState('');
-      const [erPwdError, setErPwdError]   = useState(false);
       const [erInputVal, setErInputVal]   = useState('');
-      const [erUnlocked, setErUnlocked]   = useState(false);
-      const [summaryPwdInput, setSummaryPwdInput]       = useState('');
-      const [summaryPwdError, setSummaryPwdError]       = useState(false);
-
-      const handleSummaryUnlock = () => {
-        if (summaryPwdInput === SECRET_PASSWORD) { setSummaryLocked(false); setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }
-        else { setSummaryPwdError(true); setSummaryPwdInput(''); }
-      };
-
-      // ── Ship Confirm 수정/삭제 비밀번호 모달 ──
-      const [showScPwdModal, setShowScPwdModal] = useState(false);
-      const [scPwdInput, setScPwdInput]         = useState('');
-      const [scPwdError, setScPwdError]         = useState(false);
-      const [pendingScAction, setPendingScAction] = useState(null); // { type:'edit'|'delete', data }
 
       const unlockSummary = () => { if (requireTargetAdmin()) setSummaryLocked(false); };
 
@@ -1146,14 +1128,6 @@ img,video{max-width:100%;height:auto}
         if (!requireScAdmin()) return;
         if (type === 'edit')   handleEdit(data);
         if (type === 'delete') deleteSalesData(data.id);
-      };
-      const handleScUnlock = () => {
-        if (scPwdInput === SECRET_PASSWORD) {
-          setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false);
-          if (pendingScAction?.type === 'edit')   handleEdit(pendingScAction.data);
-          if (pendingScAction?.type === 'delete') deleteSalesData(pendingScAction.data.id);
-          setPendingScAction(null);
-        } else { setScPwdError(true); setScPwdInput(''); }
       };
       const setCardColor = (id, palette) => { const next = { ...cardColors, [id]: palette }; setCardColors(next); safeLS.set('summaryCardColors', JSON.stringify(next)); setColorPickerOpen(null); };
 
@@ -1431,10 +1405,6 @@ img,video{max-width:100%;height:auto}
       };
 
       const handleTargetChange  = (field, value) => { if (!requireTargetAdmin()) return; const val = value==='' ? '' : Number(value); const n = { ...quarterTargets, [selectedQuarter]: { ...quarterTargets[selectedQuarter], [field]: val } }; setQuarterTargets(n); db.collection("targets").doc("quarterTargets").set(n).catch(e => showToast((lang==='ko' ? '저장 실패: ' : 'Save failed: ') + e.message, 'error')); };
-      const handleErUnlock = () => {
-        if (erPwdInput === SECRET_PASSWORD) { setErUnlocked(true); setErPwdInput(''); setErPwdError(false); }
-        else { setErPwdError(true); setErPwdInput(''); }
-      };
       const handleErSave = () => {
         const v = parseFloat(erInputVal);
         if (!isNaN(v) && v > 0) { handleTargetChange('er', v); }
@@ -2945,7 +2915,7 @@ img,video{max-width:100%;height:auto}
 
       return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
-          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireTargetAdmin()) return; setErInputVal(String(activeER)); setErUnlocked(true); setShowErModal(true); }}
+          <LangBtn lang={lang} setLang={setLang} er={activeER} onErClick={() => { if (!requireTargetAdmin()) return; setErInputVal(String(activeER)); setShowErModal(true); }}
             user={currentUser} onLoginClick={() => setShowLoginModal(true)}
             onLogoutClick={() => { if (window.confirm(lang==='ko' ? '로그아웃 하시겠습니까?' : 'Sign out?')) handleLogout(); }} />
           {/* [FIX #10] 토스트 */}
@@ -3097,75 +3067,20 @@ img,video{max-width:100%;height:auto}
           {/* ER 환율 편집 모달 */}
           {showErModal && (
             <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowErModal(false); setErUnlocked(false); setErPwdInput(''); setErPwdError(false); }}>
+              onClick={() => { setShowErModal(false); setErInputVal(''); }}>
               <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',minWidth:'340px',maxWidth:'90vw',textAlign:'center'}}
                 onClick={e => e.stopPropagation()}>
                 <div style={{fontSize:'32px',marginBottom:'8px'}}>💱</div>
                 <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '환율 (ER) 수정' : 'Edit Exchange Rate'}</h3>
-                {!erUnlocked ? (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '환율을 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit the exchange rate.'}</p>
-                    <input type="password" autoFocus value={erPwdInput} onChange={e => { setErPwdInput(e.target.value); setErPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleErUnlock()} placeholder="Password"
-                      style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:erPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                    {erPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{'❌ ' + (lang==='ko' ? '비밀번호가 틀렸습니다.' : 'Incorrect password.')}</p>}
-                    <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErPwdInput(''); setErPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? ('새 환율 입력 (현재: ₩' + activeER.toLocaleString() + ')') : ('New exchange rate (current: ₩' + activeER.toLocaleString() + ')')}</p>
-                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',justifyContent:'center'}}>
-                      <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
-                      <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
-                        style={{width:'160px',padding:'10px 14px',borderRadius:'8px',border:'2px solid #93c5fd',fontFamily:'monospace',fontSize:'18px',fontWeight:'700',textAlign:'center',outline:'none',boxSizing:'border-box',color:'#1e3a5f'}} />
-                    </div>
-                    <div style={{display:'flex',gap:'8px'}}>
-                      <button onClick={() => { setShowErModal(false); setErUnlocked(false); setErInputVal(''); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                      <button onClick={handleErSave} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '저장' : 'Save'}</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 분기 요약 비밀번호 모달 */}
-          {showSummaryPwdModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🔐</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{lang==='ko' ? '수정 잠금 해제' : 'Unlock Editing'}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{lang==='ko' ? '분기 요약 지표를 수정하려면 비밀번호를 입력하세요.' : 'Enter password to edit Quarter Summary values.'}</p>
-                <input type="password" autoFocus value={summaryPwdInput} onChange={e => { setSummaryPwdInput(e.target.value); setSummaryPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleSummaryUnlock()} placeholder="Password"
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:summaryPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                {summaryPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
-                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                  <button onClick={() => { setShowSummaryPwdModal(false); setSummaryPwdInput(''); setSummaryPwdError(false); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleSummaryUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
+                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'16px'}}>{lang==='ko' ? ('새 환율 입력 (현재: ₩' + activeER.toLocaleString() + ')') : ('New exchange rate (current: ₩' + activeER.toLocaleString() + ')')}</p>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',justifyContent:'center'}}>
+                  <span style={{fontWeight:'700',color:'#1e293b',fontSize:'16px'}}>₩</span>
+                  <input type="number" autoFocus min="1" value={erInputVal} onChange={e => setErInputVal(e.target.value)} onKeyDown={e => e.key==='Enter' && handleErSave()} placeholder="예: 1389"
+                    style={{width:'160px',padding:'10px 14px',borderRadius:'8px',border:'2px solid #93c5fd',fontFamily:'monospace',fontSize:'18px',fontWeight:'700',textAlign:'center',outline:'none',boxSizing:'border-box',color:'#1e3a5f'}} />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Ship Confirm 수정/삭제 비밀번호 모달 */}
-          {showScPwdModal && (
-            <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}}
-              onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }}>
-              <div style={{background:'#fff',borderRadius:'16px',padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,0.22)',minWidth:'320px',maxWidth:'90vw',textAlign:'center'}}
-                onClick={e => e.stopPropagation()}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🚢</div>
-                <h3 style={{fontWeight:'800',fontSize:'18px',color:'#1e293b',marginBottom:'4px'}}>{T.shipConfirmPwdTitle}</h3>
-                <p style={{fontSize:'13px',color:'#64748b',marginBottom:'20px'}}>{T.shipConfirmPwdDesc}</p>
-                <input type="password" autoFocus value={scPwdInput} onChange={e => { setScPwdInput(e.target.value); setScPwdError(false); }} onKeyDown={e => e.key==='Enter' && handleScUnlock()} placeholder="Password"
-                  style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:scPwdError?'2px solid #ef4444':'2px solid #cbd5e1',fontFamily:'monospace',fontSize:'15px',letterSpacing:'4px',textAlign:'center',marginBottom:'8px',outline:'none',boxSizing:'border-box'}} />
-                {scPwdError && <p style={{color:'#ef4444',fontSize:'12px',marginBottom:'8px',fontWeight:'700'}}>{lang==='ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ Incorrect password.'}</p>}
-                <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                  <button onClick={() => { setShowScPwdModal(false); setScPwdInput(''); setScPwdError(false); setPendingScAction(null); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
-                  <button onClick={handleScUnlock} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#1e40af',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '확인' : 'Confirm'}</button>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <button onClick={() => { setShowErModal(false); setErInputVal(''); }} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid #cbd5e1',background:'#f8fafc',color:'#64748b',fontWeight:'700',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '취소' : 'Cancel'}</button>
+                  <button onClick={handleErSave} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#2563eb',color:'white',fontWeight:'800',cursor:'pointer',fontSize:'14px'}}>{lang==='ko' ? '저장' : 'Save'}</button>
                 </div>
               </div>
             </div>
@@ -4356,6 +4271,14 @@ img,video{max-width:100%;height:auto}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.accountLabel} <span className="text-red-500">*</span></label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345"/></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
+                            <div className="flex gap-2">
+                              <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
+                              <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
+                            </div></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option><option value="Return">Return (반품/환불)</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}>{form.contractType==='Return'?(<><option value="Ship Confirm">🚢 Return 완료 (매출 반영)</option><option value="Pending">Return 예정</option></>):(<><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></>)}</select>
                           {form.status === 'Ship Confirm' && (
                             <div className="mt-1">
@@ -4364,11 +4287,12 @@ img,video{max-width:100%;height:auto}
                             </div>
                           )}
                           </div>
+                          <div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option><option value="Return">Return (반품/환불)</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
+                          <div></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
@@ -4400,14 +4324,6 @@ img,video{max-width:100%;height:auto}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
-                            <div className="flex gap-2">
-                              <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
-                              <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
-                            </div></div>
-                          <div></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                             <option value="">선택 (필수)</option>
                             <option value={SIDO_TBD}>{SIDO_TBD}</option>
@@ -4417,7 +4333,6 @@ img,video{max-width:100%;height:auto}
                             <option value="">{!form.sido ? '시/도 먼저 선택' : form.sido===SIDO_TBD ? '선택 불필요' : !needsSigungu(form.sido) ? '하위 구역 없음' : '선택 (필수)'}</option>
                             {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
                           </select></div>
-                          <div></div>
                         </div>
                         <div className="flex gap-3 mt-2">
                           <button type="button" onClick={handleSave} disabled={isSaving} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded shadow transition flex items-center justify-center gap-2">
@@ -4479,12 +4394,28 @@ img,video{max-width:100%;height:auto}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.accountLabel} <span className="text-red-500">*</span></label><input type="text" name="account" value={form.account} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 샤인빔의원 강서"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">SO (Sales Order)</label><input type="text" name="so" value={form.so} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) SO-12345"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}>{form.contractType==='Return'?(<><option value="Ship Confirm">🚢 Return 완료 (매출 반영)</option><option value="Pending">Return 예정</option></>):(<><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></>)}</select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
+                        <div className="flex gap-2">
+                          <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
+                          <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
+                        </div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractLabel}</label><select name="contractType" value={form.contractType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="일반">일반 (Normal)</option><option value="Try & Buy">Try &amp; Buy</option><option value="Return">Return (반품/환불)</option></select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.statusLabel} <span className="text-red-500">*</span></label><select name="status" value={form.status} onChange={handleInputChange} className={`w-full p-2 border-2 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold ${form.status==='Ship Confirm'?'text-white bg-blue-900 border-blue-900':form.status==='Pending'?'text-blue-600 bg-blue-50 border-blue-300':form.status==='Back up'?'text-orange-600 bg-orange-50 border-orange-300':'text-green-600 bg-green-50 border-green-300'}`}>{form.contractType==='Return'?(<><option value="Ship Confirm">🚢 Return 완료 (매출 반영)</option><option value="Pending">Return 예정</option></>):(<><option value="Ship Confirm">🚢 Ship Confirm (매출 집계)</option><option value="ACT">ACT (납품완료)</option><option value="Pending">Pending (납품예정)</option><option value="Back up">Back up</option></>)}</select>
+                      {form.status === 'Ship Confirm' && (
+                        <div className="mt-1">
+                          <label className="block text-[10px] font-bold text-gray-500 mb-0.5">확인일 <span className="font-normal text-gray-400">(Ship Confirm 반영월 수정)</span></label>
+                          <input type="month" name="scConfirmedDate" value={form.scConfirmedDate ? form.scConfirmedDate.slice(0, 7) : (form.deliveryDate ? form.deliveryDate.slice(0, 7) : '')} onChange={handleInputChange} className="w-full p-1.5 border border-gray-300 rounded text-xs"/>
+                        </div>
+                      )}
+                      </div>
+                      <div></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.contractDateLabel}</label><input type="date" name="contractDate" value={form.contractDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">{T.deliveryLabel} <span className="text-red-500">*</span></label><div className="flex items-center gap-2"><input type="date" name="deliveryDate" value={form.deliveryDate} onChange={handleInputChange} disabled={form.deliveryTBD} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-400" style={{flex:'1 1 0', minWidth:0}}/><label className="flex items-center gap-1 text-xs font-bold text-gray-600 whitespace-nowrap cursor-pointer" title="납품일이 아직 안 정해졌을 때"><input type="checkbox" name="deliveryTBD" checked={!!form.deliveryTBD} onChange={handleInputChange} className="cursor-pointer"/>미정</label></div></div>
+                      <div></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Dealer Name <span className="text-red-500">*</span></label><select name="dealerName" value={form.dealerName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-purple-700">
@@ -4516,14 +4447,6 @@ img,video{max-width:100%;height:auto}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
-                        <div className="flex gap-2">
-                          <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
-                          <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
-                        </div></div>
-                      <div></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">지역 (시/도) <span className="text-red-500">*</span></label><select name="sido" value={form.sido} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                         <option value="">선택 (필수)</option>
                         <option value={SIDO_TBD}>{SIDO_TBD}</option>
@@ -4533,7 +4456,6 @@ img,video{max-width:100%;height:auto}
                         <option value="">{!form.sido ? '시/도 먼저 선택' : form.sido===SIDO_TBD ? '선택 불필요' : !needsSigungu(form.sido) ? '하위 구역 없음' : '선택 (필수)'}</option>
                         {(KR_REGIONS[form.sido]||[]).map(g => <option key={g} value={g}>{g}</option>)}
                       </select></div>
-                      <div></div>
                     </div>
                     <div className="mt-2 text-right">
                       <button type="button" onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold w-full py-3 rounded shadow transition flex items-center justify-center gap-2">
