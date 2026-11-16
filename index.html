@@ -884,7 +884,6 @@ img,video{max-width:100%;height:auto}
         valChainType:      lang==='ko' ? '체인/논체인을 선택해주세요.' : 'Please select Chain / Non-chain.',
         valClinicType:     lang==='ko' ? '병원 구분(GP/피부과/성형외과)을 선택해주세요.' : 'Please select GP / Dermatology / Plastic Surgery.',
         valPriceNaN:       lang==='ko' ? '가격(KRW)은 숫자만 입력 가능합니다.' : 'Price (KRW) must be a number.',
-        valPriceNeg:       lang==='ko' ? '가격(KRW)은 0 이상이어야 합니다.' : 'Price (KRW) must be 0 or greater.',
         valPriceBig:       lang==='ko' ? '가격(KRW)이 너무 큽니다. 단위를 확인해주세요.' : 'Price (KRW) seems too large. Please verify.',
         // [FIX #8] CSV 내보내기
         csvAll:            lang==='ko' ? '전체 분기 내보내기' : 'Export All Quarters',
@@ -1308,10 +1307,11 @@ img,video{max-width:100%;height:auto}
         if (!form.sido)                                      { errors.push(T.valSido);      bad.push('sido'); }
         // 개원예정이거나 세종처럼 하위 구역이 없는 시/도면 시/군/구는 받지 않는다
         else if (needsSigungu(form.sido) && !form.sigungu)   { errors.push(T.valSigungu);   bad.push('sigungu'); }
+        // 반품·환불은 마이너스 금액으로 입력한다 - 0 미만이라고 막지 않는다. 너무 큰 값(양수든
+        // 음수든 절댓값 100억 초과)만 오타로 보고 막는다.
         const krw = parseFloat(form.priceKRW);
         if (form.priceKRW !== '' && isNaN(krw))              { errors.push(T.valPriceNaN);  bad.push('priceKRW'); }
-        else if (!isNaN(krw) && krw < 0)                     { errors.push(T.valPriceNeg);  bad.push('priceKRW'); }
-        else if (!isNaN(krw) && krw > 10_000_000_000)        { errors.push(T.valPriceBig);  bad.push('priceKRW'); }
+        else if (!isNaN(krw) && Math.abs(krw) > 10_000_000_000) { errors.push(T.valPriceBig);  bad.push('priceKRW'); }
 
         if (errors.length > 0) { markInvalidFields(bad); alert(errors.join('\n')); return; }
         markInvalidFields([]);
@@ -4402,7 +4402,7 @@ img,video{max-width:100%;height:auto}
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                             <div className="flex gap-2">
-                              <input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
+                              <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
                               <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
                             </div></div>
                           <div></div>
@@ -4518,7 +4518,7 @@ img,video{max-width:100%;height:auto}
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Acc type</label><input type="text" name="accType" value={form.accType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="ex) 3, AIO(DCD)"/></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">System Price ₩ / $ <span className="text-red-500">*</span></label>
                         <div className="flex gap-2">
-                          <input type="number" min="0" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
+                          <input type="number" name="priceKRW" value={form.priceKRW} onChange={handleInputChange} title="반품·환불은 마이너스로 입력" style={{flex:'3 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 text-sm" placeholder={T.krwPlaceholder}/>
                           <input type="number" name="priceUSD" value={form.priceUSD} readOnly title="원화 입력 시 자동 계산" style={{flex:'2 1 0', minWidth:0}} className="p-2 border border-gray-300 rounded outline-none bg-gray-100 text-sm" placeholder={`$ ÷ ${currentER}`}/>
                         </div></div>
                       <div></div>
