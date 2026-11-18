@@ -461,7 +461,7 @@ img,video{max-width:100%;height:auto}
     // 건수를 셀 때 본체로 치지 않는 제품 - 본체에 얹어 파는 부속이다.
     // 매출에서는 Cryo7/Hand Piece도 각자 제품 버킷을 갖지만(forecast-sync의 SYSTEM_PATTERNS),
     // "몇 건 팔았나"에서는 본체가 아니므로 따로 세지 않는다.
-    const ADDON_PRODUCTS = ['Cryo7', 'Hand Piece', 'HP(GMPP)', 'HP(GMP)'];
+    const ADDON_PRODUCTS = ['Cryo7', 'Hand Piece', 'HP(GMPP)', 'HP(GMP)', 'HP(1550)'];
     const isAddonProduct = (d) => ADDON_PRODUCTS.includes(String(d.product || '').trim());
     // "몇 건 팔았나" - 줄 수가 아니라 계약 안의 본체 종류 수를 센다.
     //   GMPP + Cryo7 (한 계약) -> Cryo7은 부속이라 1건
@@ -2089,7 +2089,7 @@ img,video{max-width:100%;height:auto}
       // SC 기준 집계 데이터
       const scData = currentQData.filter(d => d.status === 'Ship Confirm');
 
-      const allProducts = ['GMPP','HP(GMPP)','Picoway','Cryo7','VBP','Nordlys','Nordlys Mini','GMP','HP(GMP)','Hand Piece'];
+      const allProducts = ['GMPP','HP(GMPP)','Picoway','Cryo7','VBP','Nordlys','Nordlys Mini','GMP','HP(GMP)','HP(1550)','Hand Piece'];
       const productStats = {};
       allProducts.forEach(p => productStats[p] = { count:0, sumKRW:0 });
       scData.forEach(cur => { if (productStats[cur.product]) { productStats[cur.product].count += 1; productStats[cur.product].sumKRW += (cur.priceKRW||0); }});
@@ -4305,7 +4305,7 @@ img,video{max-width:100%;height:auto}
                             </div>
                           )}
                           </div>
-                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                          <div><label className="block text-xs font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="HP(1550)">HP(1550)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                           <div><label className="block text-xs font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -4428,7 +4428,7 @@ img,video{max-width:100%;height:auto}
                         </div>
                       )}
                       </div>
-                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
+                      <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">Product</label><select name="product" value={form.product} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"><option value="GMPP">GMPP</option><option value="Picoway">Picoway</option><option value="Cryo7">Cryo7</option><option value="VBP">VBP</option><option value="HP(GMPP)">HP(GMPP)</option><option value="HP(GMP)">HP(GMP)</option><option value="HP(1550)">HP(1550)</option><option value="Nordlys">Nordlys</option><option value="Nordlys Mini">Nordlys Mini</option><option value="GMP">GMP</option></select></div>
                       <div><label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">거래 구분 <span className="ml-1 text-[10px] font-normal text-gray-400">(Dealer Name에 따라 자동)</span></label><input type="text" readOnly value={form.dealType || '—'} className="w-full p-2 border border-gray-300 rounded outline-none text-sm font-semibold bg-gray-100 text-gray-500"/></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
