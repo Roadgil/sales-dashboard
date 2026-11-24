@@ -1194,6 +1194,8 @@ function renderAchv(salesData){
   const totA=sumBy(sc,d=>d.priceKRW||0);
   const amt=v=>v?(_lang==='en'?`$ ${Math.round(v/_er).toLocaleString()}`:fmt억(v)):'-';
   const ach=(a,tg)=>{if(!tg)return '<span class="dim">-</span>';const r=a/tg;const z=r>=1.2?3:r>=1?2:1;return `<span class="mono zone-${z}" style="font-weight:800">${fmtPct(r,2)}</span>`;};
+  // 팀 순서 고정: Firestore는 map 키 순서를 보장하지 않으므로 Team 1 → 2 → 3 (숫자 순), Other는 맨 뒤
+  groups.sort((a,b)=>(a.team==='Other')-(b.team==='Other')||String(a.team).localeCompare(String(b.team),undefined,{numeric:true}));
   const live=groups.map(g=>({...g,rows:g.members.map(m=>({m,tg:tgtOf(m),a:actOf(m)})).filter(r=>rostered.has(nk(r.m))||r.tg>0||r.a>0)})).filter(g=>g.rows.length);
   if(!live.length){el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted)">${t('데이터 없음','No data')}</div>`;return;}
   let html=`<table class="achv"><thead><tr><th>${t('팀','Team')}</th><th>${t('담당자','Sales Rep')}</th><th>${t('팀 비중','Team Share')}</th><th>${t('목표 비중','TGT Share')}</th><th>${t('실적 비중','ACT Share')}</th><th>${t('목표','TGT')}</th><th>${t('실적','ACT')}</th><th>${t('달성률','Achievement')}</th><th>${t('팀 달성률','Team Achv.')}</th></tr></thead><tbody>`;
